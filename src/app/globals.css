@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f8f5ee;
+  --surface: #ffffff;
+  --ink: #102a3a;
+  --muted: #546b78;
+  --line: #e2ddd1;
+  --brand: #0b6e6a;
+  --brand-strong: #08504d;
+  --brand-soft: #e3f1ef;
+  --accent: #d9902a;
+  --accent-soft: #fbefdb;
+  --danger: #b4372f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0c1820;
+    --surface: #12232d;
+    --ink: #e9eef0;
+    --muted: #9db0ba;
+    --line: #23394a;
+    --brand: #3fb7ae;
+    --brand-strong: #6fd0c8;
+    --brand-soft: #143a3a;
+    --accent: #f0b35a;
+    --accent-soft: #3a2c15;
+    --danger: #ef7a70;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* خلفية شبكية خفيفة توحي بورقة الامتحان */
+.grid-paper {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}

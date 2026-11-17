@@ -1,0 +1,1013 @@
+// سُؤال AI — مخطط قاعدة البيانات (PostgreSQL)
+// ملاحظات عامة:
+// - المبالغ بالدينار العراقي كأعداد صحيحة (IQD لا يستخدم كسوراً).
+// - كل الرموز السرية (كلمات المرور، OTP، رموز الجلسات) تُخزَّن كـ hash فقط.
+// - بيانات المناهج (المراحل، الصفوف، المسارات، الفروع، المواد) قابلة للإدارة من لوحة التحكم.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum UserRole {
+  TEACHER
+  ADMIN_STAFF
+  SUPER_ADMIN
+}
+
+/// حالة الحساب نفسه (مستقلة عن الاشتراك)
+enum AccountStatus {
+  PENDING_VERIFICATION // مسجل ولم يتحقق من البريد والهاتف
+  ACTIVE // متحقق — الوصول للخدمات المدفوعة يعتمد على الاشتراك
+  SUSPENDED // موقوف
+  BANNED // محظور
+}
+
+enum Locale {
+  AR
+  EN
+}
+
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+  CONTACT_CHANGE
+  PASSWORD_RESET
+}
+
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  PENDING_APPROVAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD // Mastercard عبر بوابة دفع
+  CASH
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentRequestStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AdminPermission {
+  VIEW_DASHBOARD
+  MANAGE_USERS
+  MANAGE_SUBSCRIPTIONS
+  APPROVE_PAYMENTS
+  MANAGE_CURRICULUM
+  MANAGE_TEMPLATES
+  MANAGE_PLANS
+  MANAGE_SYSTEM_MESSAGES
+  MANAGE_STAFF
+  VIEW_AUDIT_LOG
+}
+
+/// عائلة المادة — تحدد أنواع الأسئلة المناسبة وأسلوب الصياغة والرموز
+enum SubjectFamily {
+  MATHEMATICS
+  PHYSICS
+  CHEMISTRY
+  BIOLOGY
+  GENERAL_SCIENCE
+  ARABIC
+  ENGLISH
+  ISLAMIC
+  SOCIAL_STUDIES
+  COMPUTER
+  OTHER_LANGUAGE
+  OTHER
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  FILL_BLANK
+  JUSTIFY // علّل
+  DEFINE // عرّف
+  COMPARE // قارن
+  PROBLEM // مسائل حسابية
+  PROOF // إثبات
+  ESSAY
+  APPLIED
+  DIAGRAM // أسئلة الرسومات والأشكال
+  COMPREHENSION // فهم وتحليل
+  GRAMMAR_PARSING // إعراب
+  EQUATION_BALANCING // كتابة المعادلة الكيميائية وموازنتها
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  MIXED
+}
+
+/// مستويات التفكير (Bloom)
+enum CognitiveLevel {
+  REMEMBER
+  UNDERSTAND
+  APPLY
+  ANALYZE
+  EVALUATE
+  CREATE
+}
+
+enum ExamKind {
+  QUIZ
+  MONTHLY
+  MIDTERM
+  FINAL
+  MINISTERIAL_STYLE
+}
+
+enum ExamRound {
+  FIRST
+  SECOND
+  THIRD
+}
+
+enum ExamStatus {
+  DRAFT
+  GENERATING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum BookStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum TemplateKind {
+  CLASSIC
+  SCHOOL
+  ACADEMIC
+  MINIMAL
+  CUSTOM
+}
+
+enum PageSize {
+  A4
+  A3
+}
+
+enum PageOrientation {
+  PORTRAIT
+  LANDSCAPE
+}
+
+enum TextDirection {
+  RTL
+  LTR
+}
+
+enum AssetKind {
+  LOGO
+  FRAME
+}
+
+enum ExportFormat {
+  PDF
+  DOCX
+  ZIP
+}
+
+enum ExportVariant {
+  QUESTIONS_ONLY
+  WITH_ANSWERS
+  ANSWER_KEY
+}
+
+enum RevisionReason {
+  CREATE
+  EDIT
+  REGENERATE
+  REPHRASE
+  REORDER
+  RESTORE
+}
+
+// ─────────────────────── Reference data: geography ───────────────────────
+
+model Governorate {
+  id           String                 @id @default(cuid())
+  code         String                 @unique
+  nameAr       String
+  nameEn       String
+  sortOrder    Int                    @default(0)
+  isActive     Boolean                @default(true)
+  directorates EducationDirectorate[]
+}
+
+model EducationDirectorate {
+  id            String      @id @default(cuid())
+  governorateId String
+  code          String      @unique
+  nameAr        String
+  nameEn        String
+  sortOrder     Int         @default(0)
+  isActive      Boolean     @default(true)
+  governorate   Governorate @relation(fields: [governorateId], references: [id], onDelete: Restrict)
+
+  teacherProfiles TeacherProfile[]
+  schoolProfiles  SchoolProfile[]
+
+  @@index([governorateId])
+}
+
+// ─────────────────────── Reference data: curriculum ───────────────────────
+
+/// المرحلة الدراسية: ابتدائية / متوسطة / إعدادية
+model EducationStage {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  nameAr    String
+  nameEn    String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  grades    Grade[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// الصف — مرتبط بمرحلة واحدة فقط
+model Grade {
+  id        String         @id @default(cuid())
+  stageId   String
+  code      String         @unique
+  nameAr    String
+  nameEn    String
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  stage     EducationStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+
+  branches  GradeBranch[]
+  tracks    TrackGrade[]
+  curricula Curriculum[]
+  exams     Exam[]
+  teachings TeacherTeaching[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([stageId, sortOrder])
+}
+
+/// مسار المنهج: العام / المتميزين / الدولي (قابل للإضافة من الإدارة)
+model CurriculumTrack {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  nameAr          String
+  nameEn          String
+  descriptionAr   String?
+  descriptionEn   String?
+  /// لغة التدريس الافتراضية للمسار (مثلاً الدولي غالباً بالإنكليزية للمواد العلمية)
+  defaultLanguage Locale            @default(AR)
+  sortOrder       Int               @default(0)
+  isActive        Boolean           @default(true)
+  grades          TrackGrade[]
+  curricula       Curriculum[]
+  exams           Exam[]
+  teachings       TeacherTeaching[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+/// الصفوف المتاحة لكل مسار
+model TrackGrade {
+  trackId String
+  gradeId String
+  track   CurriculumTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  grade   Grade           @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, gradeId])
+  @@index([gradeId])
+}
+
+/// الفرع الدراسي (علمي، أدبي، تطبيقي، أحيائي...)
+model StudyBranch {
+  id        String        @id @default(cuid())
+  code      String        @unique
+  nameAr    String
+  nameEn    String
+  sortOrder Int           @default(0)
+  isActive  Boolean       @default(true)
+  grades    GradeBranch[]
+  curricula Curriculum[]
+  exams     Exam[]
+}
+
+model GradeBranch {
+  gradeId  String
+  branchId String
+  grade    Grade       @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  branch   StudyBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([gradeId, branchId])
+  @@index([branchId])
+}
+
+model Subject {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  nameAr          String
+  nameEn          String
+  family          SubjectFamily
+  /// أنواع الأسئلة المسموحة لهذه المادة
+  questionTypes   QuestionType[]
+  /// استخدام الرموز اللاتينية (x, y, a, b) في الصياغة
+  useLatinSymbols Boolean           @default(false)
+  sortOrder       Int               @default(0)
+  isActive        Boolean           @default(true)
+  curricula       Curriculum[]
+  exams           Exam[]
+  teachings       TeacherTeaching[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model AcademicYear {
+  id        String       @id @default(cuid())
+  label     String       @unique // مثال: 2026-2027
+  startsOn  DateTime     @db.Date
+  endsOn    DateTime     @db.Date
+  isCurrent Boolean      @default(false)
+  curricula Curriculum[]
+}
+
+/// منهج محدد = مسار + صف + (فرع) + مادة + سنة دراسية + طبعة
+model Curriculum {
+  id             String              @id @default(cuid())
+  trackId        String
+  gradeId        String
+  branchId       String?
+  subjectId      String
+  academicYearId String
+  language       Locale              @default(AR)
+  title          String
+  edition        String?
+  isActive       Boolean             @default(true)
+  track          CurriculumTrack     @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  grade          Grade               @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+  branch         StudyBranch?        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  subject        Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear        @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  chapters       CurriculumChapter[]
+  books          UploadedBook[]
+  exams          Exam[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([trackId, gradeId, branchId, subjectId, academicYearId, language, edition])
+  @@index([gradeId, subjectId])
+}
+
+model CurriculumChapter {
+  id           String         @id @default(cuid())
+  curriculumId String
+  sortOrder    Int
+  title        String
+  pageStart    Int?
+  pageEnd      Int?
+  curriculum   Curriculum     @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  questions    ExamQuestion[]
+
+  @@unique([curriculumId, sortOrder])
+}
+
+// ───────────────────────────── Users & auth ─────────────────────────────
+
+model User {
+  id                String        @id @default(cuid())
+  fullName          String
+  /// يُخزَّن بأحرف صغيرة بعد التطبيع
+  email             String        @unique
+  /// بصيغة E.164 مثل +9647XXXXXXXXX
+  phone             String        @unique
+  passwordHash      String
+  role              UserRole      @default(TEACHER)
+  status            AccountStatus @default(PENDING_VERIFICATION)
+  locale            Locale        @default(AR)
+  emailVerifiedAt   DateTime?
+  phoneVerifiedAt   DateTime?
+  failedLoginCount  Int           @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  teacherProfile     TeacherProfile?
+  adminUser          AdminUser?
+  sessions           UserSession[]
+  trustedDevices     TrustedDevice[]
+  emailVerifications EmailVerification[]
+  phoneVerifications PhoneVerification[]
+  passwordResets     PasswordResetToken[]
+  subscriptions      Subscription[]
+  paymentRequests    PaymentRequest[]
+  transactions       PaymentTransaction[]
+  exams              Exam[]
+  templates          ExamTemplate[]
+  assets             TemplateAsset[]
+  books              UploadedBook[]
+  exports            ExamExport[]
+  notifications      Notification[]
+  questionRevisions  ExamQuestionRevision[]
+
+  @@index([status])
+  @@index([role])
+}
+
+model TeacherProfile {
+  id             String               @id @default(cuid())
+  userId         String               @unique
+  directorateId  String
+  specialization String
+  bio            String?
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  directorate    EducationDirectorate @relation(fields: [directorateId], references: [id], onDelete: Restrict)
+  schools        SchoolProfile[]
+  teachings      TeacherTeaching[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([directorateId])
+}
+
+/// المدرس يمكن أن يعمل في أكثر من مدرسة
+model SchoolProfile {
+  id               String               @id @default(cuid())
+  teacherProfileId String
+  directorateId    String
+  name             String
+  isPrimary        Boolean              @default(false)
+  logoAssetId      String?              @unique
+  teacherProfile   TeacherProfile       @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  directorate      EducationDirectorate @relation(fields: [directorateId], references: [id], onDelete: Restrict)
+  logoAsset        TemplateAsset?       @relation("SchoolLogo", fields: [logoAssetId], references: [id], onDelete: SetNull)
+  teachings        TeacherTeaching[]
+  exams            Exam[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([teacherProfileId])
+}
+
+/// ما يدرّسه المدرس: مادة + صف + مسار (+ مدرسة)
+model TeacherTeaching {
+  id               String          @id @default(cuid())
+  teacherProfileId String
+  schoolProfileId  String?
+  gradeId          String
+  subjectId        String
+  trackId          String
+  teacherProfile   TeacherProfile  @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  schoolProfile    SchoolProfile?  @relation(fields: [schoolProfileId], references: [id], onDelete: SetNull)
+  grade            Grade           @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+  subject          Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  track            CurriculumTrack @relation(fields: [trackId], references: [id], onDelete: Restrict)
+
+  @@unique([teacherProfileId, schoolProfileId, gradeId, subjectId, trackId])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  ip         String?
+  userAgent  String?
+  /// اجتاز التحقق الإضافي (OTP) عند الدخول
+  mfaPassed  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// جهاز موثوق (اختياري وبموافقة المستخدم) لتخطي OTP الدخول
+model TrustedDevice {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerification {
+  id                String     @id @default(cuid())
+  userId            String
+  email             String
+  purpose           OtpPurpose
+  codeHash          String
+  attempts          Int        @default(0)
+  maxAttempts       Int        @default(5)
+  expiresAt         DateTime
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+model PhoneVerification {
+  id                String     @id @default(cuid())
+  userId            String
+  phone             String
+  purpose           OtpPurpose
+  codeHash          String
+  attempts          Int        @default(0)
+  maxAttempts       Int        @default(5)
+  expiresAt         DateTime
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// معدل الطلبات (Rate limiting) مخزّن في قاعدة البيانات
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
+// ───────────────────────────── Admin ─────────────────────────────
+
+model AdminUser {
+  id          String            @id @default(cuid())
+  userId      String            @unique
+  permissions AdminPermission[]
+  isActive    Boolean           @default(true)
+  createdById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   AdminUser?        @relation("AdminCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  created     AdminUser[]       @relation("AdminCreatedBy")
+
+  auditLogs        AdminAuditLog[]
+  activatedSubs    Subscription[]       @relation("SubscriptionActivatedBy")
+  reviewedRequests PaymentRequest[]     @relation("PaymentRequestReviewedBy")
+  approvedTxns     PaymentTransaction[] @relation("TransactionApprovedBy")
+}
+
+model AdminAuditLog {
+  id          String     @id @default(cuid())
+  adminUserId String?
+  action      String // مثال: subscription.activate
+  targetType  String
+  targetId    String?
+  before      Json?
+  after       Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime   @default(now())
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([adminUserId, createdAt])
+  @@index([createdAt])
+}
+
+model SystemMessage {
+  id        String   @id @default(cuid())
+  key       String
+  locale    Locale
+  title     String
+  body      String
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, locale])
+}
+
+// ───────────────────────── Subscriptions & payments ─────────────────────────
+
+model SubscriptionPlan {
+  id            String               @id @default(cuid())
+  code          String               @unique
+  nameAr        String
+  nameEn        String
+  durationDays  Int
+  priceIqd      Int
+  /// حد الامتحانات خلال المدة (null = غير محدود)
+  examQuota     Int?
+  isActive      Boolean              @default(true)
+  sortOrder     Int                  @default(0)
+  subscriptions Subscription[]
+  requests      PaymentRequest[]
+  transactions  PaymentTransaction[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model Subscription {
+  id             String              @id @default(cuid())
+  userId         String
+  planId         String
+  status         SubscriptionStatus  @default(PENDING_PAYMENT)
+  paymentMethod  PaymentMethod?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  activatedAt    DateTime?
+  activatedById  String?
+  cancelledAt    DateTime?
+  notes          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  user           User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan           SubscriptionPlan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  activatedBy    AdminUser?          @relation("SubscriptionActivatedBy", fields: [activatedById], references: [id], onDelete: SetNull)
+  paymentRequest PaymentRequest?
+  transaction    PaymentTransaction?
+
+  @@index([userId, status])
+  @@index([status, endsAt])
+}
+
+/// طلب دفع نقدي ينتظر مراجعة الإدارة
+model PaymentRequest {
+  id             String               @id @default(cuid())
+  /// رقم الطلب الظاهر للمستخدم
+  reference      String               @unique
+  userId         String
+  planId         String
+  amountIqd      Int
+  status         PaymentRequestStatus @default(PENDING_REVIEW)
+  userNote       String?
+  reviewNote     String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  /// الاشتراك الناتج — فريد لمنع التفعيل المزدوج
+  subscriptionId String?              @unique
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan           SubscriptionPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reviewedBy     AdminUser?           @relation("PaymentRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  subscription   Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  transaction    PaymentTransaction?
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+/// عملية دفع (إلكترونية أو نقدية) — لا تُخزَّن أي بيانات بطاقة
+model PaymentTransaction {
+  id                    String                @id @default(cuid())
+  reference             String                @unique
+  userId                String
+  planId                String
+  method                PaymentMethod
+  provider              String? // اسم بوابة الدفع
+  providerTransactionId String?
+  amountIqd             Int
+  currency              String                @default("IQD")
+  status                PaymentStatus         @default(INITIATED)
+  failureReason         String?
+  paymentRequestId      String?               @unique
+  /// فريد لمنع تفعيل أكثر من اشتراك لنفس العملية
+  subscriptionId        String?               @unique
+  approvedById          String?
+  approvedAt            DateTime?
+  paidAt                DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan                  SubscriptionPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  paymentRequest        PaymentRequest?       @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
+  subscription          Subscription?         @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  approvedBy            AdminUser?            @relation("TransactionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  webhookEvents         PaymentWebhookEvent[]
+
+  @@unique([provider, providerTransactionId])
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+/// إشعارات بوابة الدفع — فريدة لكل حدث لمنع المعالجة المكررة
+model PaymentWebhookEvent {
+  id            String              @id @default(cuid())
+  provider      String
+  eventId       String
+  transactionId String?
+  eventType     String
+  payloadHash   String
+  signatureOk   Boolean
+  receivedAt    DateTime            @default(now())
+  processedAt   DateTime?
+  error         String?
+  transaction   PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, eventId])
+}
+
+// ───────────────────────────── Books & exams ─────────────────────────────
+
+model UploadedBook {
+  id           String       @id @default(cuid())
+  /// null = كتاب من مكتبة المنصة يرفعه المسؤول
+  ownerId      String?
+  curriculumId String?
+  originalName String
+  storageKey   String       @unique
+  mimeType     String
+  sizeBytes    Int
+  sha256       String
+  pageCount    Int?
+  status       BookStatus   @default(UPLOADED)
+  error        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  owner        User?        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  curriculum   Curriculum?  @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  pages        BookPage[]
+  examSources  ExamSource[]
+
+  @@index([ownerId])
+  @@index([curriculumId])
+  @@index([sha256])
+}
+
+/// النص المستخرج لكل صفحة (لتحديد نطاق الصفحات بدقة)
+model BookPage {
+  bookId     String
+  pageNumber Int
+  text       String
+  /// مستخرج عبر OCR (للكتب المصوّرة مستقبلاً)
+  isOcr      Boolean      @default(false)
+  book       UploadedBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, pageNumber])
+}
+
+model Exam {
+  id                String              @id @default(cuid())
+  ownerId           String
+  schoolProfileId   String?
+  curriculumId      String?
+  trackId           String
+  gradeId           String
+  branchId          String?
+  subjectId         String
+  templateId        String?
+  title             String
+  kind              ExamKind            @default(MONTHLY)
+  round             ExamRound?
+  term              Int?
+  academicYearLabel String?
+  language          Locale              @default(AR)
+  durationMinutes   Int?
+  totalMarks        Int
+  difficulty        Difficulty          @default(MIXED)
+  /// إعدادات التوليد: أنواع الأسئلة، عدد الأسئلة والفروع، التوزيعات...
+  settings          Json
+  /// إعدادات الترويسة (حقول ظاهرة/مخفية وقيمها)
+  headerConfig      Json?
+  status            ExamStatus          @default(DRAFT)
+  deletedAt         DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  owner             User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  schoolProfile     SchoolProfile?      @relation(fields: [schoolProfileId], references: [id], onDelete: SetNull)
+  curriculum        Curriculum?         @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  track             CurriculumTrack     @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  grade             Grade               @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+  branch            StudyBranch?        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  subject           Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  template          ExamTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  sources           ExamSource[]
+  models            ExamModel[]
+  jobs              ExamGenerationJob[]
+  exports           ExamExport[]
+
+  @@index([ownerId, createdAt])
+  @@index([status])
+}
+
+model ExamSource {
+  id       String       @id @default(cuid())
+  examId   String
+  bookId   String
+  pageFrom Int
+  pageTo   Int
+  exam     Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  book     UploadedBook @relation(fields: [bookId], references: [id], onDelete: Restrict)
+
+  @@index([examId])
+}
+
+model ExamGenerationJob {
+  id           String    @id @default(cuid())
+  examId       String
+  status       JobStatus @default(QUEUED)
+  aiProvider   String?
+  aiModel      String?
+  inputTokens  Int?
+  outputTokens Int?
+  error        String?
+  createdAt    DateTime  @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  exam         Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([examId, createdAt])
+  @@index([status])
+}
+
+/// نموذج امتحاني A / B / C / D
+model ExamModel {
+  id        String         @id @default(cuid())
+  examId    String
+  label     String // A | B | C | D
+  createdAt DateTime       @default(now())
+  exam      Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questions ExamQuestion[]
+
+  @@unique([examId, label])
+}
+
+model ExamQuestion {
+  id             String                 @id @default(cuid())
+  examModelId    String
+  /// السؤال الأب — لدعم الفروع (أ، ب، ج...)
+  parentId       String?
+  sortOrder      Int
+  type           QuestionType?
+  /// نص التعليمات مثل: أجب عن خمسة فقط مما يأتي
+  instruction    String?
+  prompt         String
+  /// خيارات MCQ وغيرها
+  options        Json?
+  answer         String?
+  marks          Decimal                @db.Decimal(6, 2)
+  difficulty     Difficulty?
+  cognitiveLevel CognitiveLevel?
+  chapterId      String?
+  sourcePages    Int[]
+  isLocked       Boolean                @default(false)
+  version        Int                    @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  examModel      ExamModel              @relation(fields: [examModelId], references: [id], onDelete: Cascade)
+  parent         ExamQuestion?          @relation("QuestionBranches", fields: [parentId], references: [id], onDelete: Cascade)
+  branches       ExamQuestion[]         @relation("QuestionBranches")
+  chapter        CurriculumChapter?     @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  revisions      ExamQuestionRevision[]
+
+  @@index([examModelId, parentId, sortOrder])
+}
+
+/// سجل التعديلات — يدعم التراجع وعرض التاريخ
+model ExamQuestionRevision {
+  id         String         @id @default(cuid())
+  questionId String
+  version    Int
+  reason     RevisionReason
+  snapshot   Json
+  editedById String?
+  createdAt  DateTime       @default(now())
+  question   ExamQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  editedBy   User?          @relation(fields: [editedById], references: [id], onDelete: SetNull)
+
+  @@unique([questionId, version])
+}
+
+// ───────────────────────────── Templates & export ─────────────────────────────
+
+model ExamTemplate {
+  id              String          @id @default(cuid())
+  /// null = قالب نظام متاح للجميع
+  ownerId         String?
+  name            String
+  kind            TemplateKind
+  pageSize        PageSize        @default(A4)
+  orientation     PageOrientation @default(PORTRAIT)
+  direction       TextDirection   @default(RTL)
+  fontFamily      String          @default("IBM Plex Sans Arabic")
+  fontSizePt      Int             @default(13)
+  lineSpacing     Decimal         @default(1.5) @db.Decimal(3, 2)
+  /// الهوامش بالمليمتر {top,right,bottom,left}
+  margins         Json
+  showPageNumbers Boolean         @default(true)
+  /// حقول الترويسة: ترتيبها وظهورها وقيمها الافتراضية
+  headerFields    Json
+  frameAssetId    String?
+  isDefault       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  owner           User?           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  frameAsset      TemplateAsset?  @relation("TemplateFrame", fields: [frameAssetId], references: [id], onDelete: SetNull)
+  exams           Exam[]
+
+  @@index([ownerId])
+}
+
+model TemplateAsset {
+  id         String         @id @default(cuid())
+  ownerId    String
+  kind       AssetKind
+  storageKey String         @unique
+  mimeType   String
+  sizeBytes  Int
+  sha256     String
+  createdAt  DateTime       @default(now())
+  owner      User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  schoolLogo SchoolProfile? @relation("SchoolLogo")
+  templates  ExamTemplate[] @relation("TemplateFrame")
+
+  @@index([ownerId])
+}
+
+model ExamExport {
+  id            String        @id @default(cuid())
+  examId        String
+  requestedById String
+  format        ExportFormat
+  variant       ExportVariant
+  modelLabels   String[]
+  status        JobStatus     @default(QUEUED)
+  storageKey    String?
+  error         String?
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+  exam          Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  requestedBy   User          @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([examId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
