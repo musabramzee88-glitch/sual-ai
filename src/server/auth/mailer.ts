@@ -26,7 +26,12 @@ class ResendMailer implements Mailer {
       body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) throw new EmailUnavailableError(`Email provider rejected the request (${res.status})`);
+    if (!res.ok) {
+      // نسجّل رمز الحالة واسم الخطأ فقط (لا محتوى الرسالة ولا المفتاح)
+      const body = (await res.json().catch(() => ({}))) as { name?: string; message?: string };
+      console.error(`[mailer] Resend rejected the request: status=${res.status} name=${body.name ?? "?"} message=${(body.message ?? "").replace(/\S+@\S+/g, "<email>")}`);
+      throw new EmailUnavailableError(`Email provider rejected the request (${res.status})`);
+    }
   }
 }
 
