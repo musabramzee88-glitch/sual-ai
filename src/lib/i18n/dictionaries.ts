@@ -72,6 +72,33 @@ const ar = {
   },
   footer: { rights: "جميع الحقوق محفوظة.", disclaimer: "سُؤال AI منصة مستقلة وغير تابعة لوزارة التربية." },
   soon: { title: "قيد الإنشاء", body: "هذه الصفحة تُفتح في المرحلة القادمة من إطلاق المنصة.", back: "العودة للرئيسية" },
+  auth: {
+    registerTitle: "إنشاء حساب مدرس", loginTitle: "تسجيل الدخول", verifyTitle: "أدخل رمز التحقق", forgotTitle: "استعادة كلمة المرور", resetTitle: "كلمة مرور جديدة",
+    fullName: "الاسم الكامل", phone: "رقم الهاتف", email: "البريد الإلكتروني", password: "كلمة المرور", passwordConfirm: "تأكيد كلمة المرور",
+    school: "المدرسة", governorate: "المحافظة", directorate: "المديرية العامة للتربية", specialization: "الاختصاص", choose: "اختر…",
+    identifier: "البريد أو رقم الهاتف", code: "رمز التحقق (6 أرقام)", remember: "تذكّر هذا الجهاز لمدة 30 يوماً",
+    submit: "متابعة", register: "إنشاء الحساب", login: "دخول", verify: "تحقق", resend: "إعادة إرسال الرمز", resendIn: "إعادة الإرسال بعد {s} ث",
+    forgot: "نسيت كلمة المرور؟", haveAccount: "لديك حساب؟", noAccount: "ليس لديك حساب؟", backToLogin: "العودة لتسجيل الدخول",
+    passwordHint: "10 أحرف على الأقل وتحتوي حرفاً ورقماً.", otpSent: "أرسلنا رمزاً إلى بريدك الإلكتروني. صالح 10 دقائق.",
+    forgotDone: "إن كان الحساب موجوداً فقد أرسلنا رابط الاستعادة إلى بريده.", resetDone: "تم تغيير كلمة المرور. سجّل الدخول من جديد.", 
+    logout: "تسجيل الخروج",
+    errors: {
+      EMAIL_TAKEN: "هذا البريد مسجّل مسبقاً.", PHONE_TAKEN: "هذا الهاتف مسجّل مسبقاً.", INVALID_PHONE: "رقم هاتف عراقي غير صالح (مثال 07701234567).",
+      WEAK_PASSWORD: "كلمة المرور ضعيفة: 10 أحرف على الأقل مع حرف ورقم.", PASSWORD_MISMATCH: "كلمتا المرور غير متطابقتين.", INVALID_DIRECTORATE: "المديرية لا تتبع المحافظة المختارة.",
+      INVALID_CREDENTIALS: "بيانات الدخول غير صحيحة.", LOCKED: "الحساب مقفل مؤقتاً بسبب محاولات فاشلة. حاول لاحقاً.", ACCOUNT_BANNED: "هذا الحساب محظور.",
+      INVALID: "الرمز غير صحيح.", EXPIRED: "انتهت صلاحية الرمز. اطلب رمزاً جديداً.", TOO_MANY_ATTEMPTS: "تجاوزت عدد المحاولات. اطلب رمزاً جديداً.",
+      OTP_COOLDOWN: "انتظر قليلاً قبل طلب رمز جديد.", RATE_LIMITED: "طلبات كثيرة. حاول بعد قليل.", EMAIL_UNAVAILABLE: "خدمة البريد غير متاحة حالياً. حاول لاحقاً.",
+      INVALID_TOKEN: "رابط الاستعادة غير صالح أو منتهٍ.", VALIDATION_ERROR: "تحقق من الحقول المدخلة.", GENERIC: "حدث خطأ. حاول مرة أخرى.",
+    } as Record<string, string>,
+  },
+  dashboard: {
+    title: "لوحة المدرس", hello: "مرحباً", status: "حالة الحساب",
+    states: {
+      UNVERIFIED: "بانتظار التحقق من البريد والهاتف", AWAITING_PAYMENT: "بانتظار الاشتراك والدفع", AWAITING_APPROVAL: "بانتظار موافقة الإدارة",
+      SUBSCRIPTION_ACTIVE: "اشتراك فعال", SUBSCRIPTION_EXPIRED: "الاشتراك منتهٍ", SUBSCRIPTION_SUSPENDED: "الاشتراك موقوف", ACCOUNT_SUSPENDED: "الحساب موقوف", BANNED: "الحساب محظور",
+    } as Record<string, string>,
+    phonePending: "تأكيد الهاتف عبر SMS غير مفعّل بعد (يُفعَّل في مرحلة لاحقة)، ولذلك لا يكتمل تفعيل الحساب حالياً.",
+  },
   langSwitch: "English",
 };
 
@@ -146,6 +173,33 @@ const en: Dictionary = {
   },
   footer: { rights: "All rights reserved.", disclaimer: "Sual AI is an independent platform, not affiliated with the Ministry of Education." },
   soon: { title: "Coming soon", body: "This page opens in the next release phase of the platform.", back: "Back to home" },
+  auth: {
+    registerTitle: "Create a teacher account", loginTitle: "Sign in", verifyTitle: "Enter the verification code", forgotTitle: "Reset your password", resetTitle: "Choose a new password",
+    fullName: "Full name", phone: "Phone number", email: "Email", password: "Password", passwordConfirm: "Confirm password",
+    school: "School", governorate: "Governorate", directorate: "Directorate of Education", specialization: "Specialization", choose: "Select…",
+    identifier: "Email or phone number", code: "Verification code (6 digits)", remember: "Remember this device for 30 days",
+    submit: "Continue", register: "Create account", login: "Sign in", verify: "Verify", resend: "Resend code", resendIn: "Resend in {s}s",
+    forgot: "Forgot your password?", haveAccount: "Already have an account?", noAccount: "No account yet?", backToLogin: "Back to sign in",
+    passwordHint: "At least 10 characters with a letter and a digit.", otpSent: "We sent a code to your email. Valid for 10 minutes.",
+    forgotDone: "If the account exists, a reset link was sent to its email.", resetDone: "Password changed. Please sign in again.",
+    logout: "Sign out",
+    errors: {
+      EMAIL_TAKEN: "This email is already registered.", PHONE_TAKEN: "This phone is already registered.", INVALID_PHONE: "Invalid Iraqi phone number (e.g. 07701234567).",
+      WEAK_PASSWORD: "Weak password: at least 10 characters with a letter and a digit.", PASSWORD_MISMATCH: "Passwords do not match.", INVALID_DIRECTORATE: "The directorate does not belong to the selected governorate.",
+      INVALID_CREDENTIALS: "Incorrect credentials.", LOCKED: "Account temporarily locked after failed attempts. Try later.", ACCOUNT_BANNED: "This account is banned.",
+      INVALID: "Incorrect code.", EXPIRED: "The code has expired. Request a new one.", TOO_MANY_ATTEMPTS: "Too many attempts. Request a new code.",
+      OTP_COOLDOWN: "Please wait before requesting a new code.", RATE_LIMITED: "Too many requests. Try again shortly.", EMAIL_UNAVAILABLE: "Email service is unavailable right now. Try later.",
+      INVALID_TOKEN: "The reset link is invalid or expired.", VALIDATION_ERROR: "Please check the fields.", GENERIC: "Something went wrong. Try again.",
+    } as Record<string, string>,
+  },
+  dashboard: {
+    title: "Teacher dashboard", hello: "Welcome", status: "Account status",
+    states: {
+      UNVERIFIED: "Awaiting email and phone verification", AWAITING_PAYMENT: "Awaiting subscription payment", AWAITING_APPROVAL: "Awaiting admin approval",
+      SUBSCRIPTION_ACTIVE: "Active subscription", SUBSCRIPTION_EXPIRED: "Subscription expired", SUBSCRIPTION_SUSPENDED: "Subscription suspended", ACCOUNT_SUSPENDED: "Account suspended", BANNED: "Account banned",
+    } as Record<string, string>,
+    phonePending: "Phone verification by SMS is not enabled yet (a later phase), so account activation cannot complete for now.",
+  },
   langSwitch: "العربية",
 };
 

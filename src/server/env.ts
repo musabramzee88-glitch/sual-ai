@@ -26,3 +26,9 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+
+/** سر التوقيع/التجزئة — مطلوب لكل مسارات الحسابات. */
+export function authSecret(): string {
+  if (!env.AUTH_SECRET) throw new Error("AUTH_SECRET is required (>= 32 chars)");
+  return env.AUTH_SECRET;
+}
