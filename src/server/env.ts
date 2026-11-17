@@ -25,7 +25,9 @@ const schema = z.object({
   STORAGE_DIR: z.string().default("./storage"),
 });
 
-export const env = schema.parse(process.env);
+// المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة
+const raw = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ""));
+export const env = schema.parse(raw);
 
 /** سر التوقيع/التجزئة — مطلوب لكل مسارات الحسابات. */
 export function authSecret(): string {
