@@ -18,6 +18,13 @@ const schema = z.object({
   EMAIL_PROVIDER: z.enum(["resend", "smtp"]).optional(),
   EMAIL_FROM: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  // SMTP (مثلاً Gmail: smtp.gmail.com:587 + App Password)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  // true للمنفذ 465 (TLS مباشر)؛ false مع 587 (STARTTLS)
+  SMTP_SECURE: z.enum(["true", "false"]).default("false"),
   // SMS وبوابة الدفع — تُحدَّد في المرحلة 5
   SMS_PROVIDER: z.string().optional(),
   PAYMENT_PROVIDER: z.string().optional(),

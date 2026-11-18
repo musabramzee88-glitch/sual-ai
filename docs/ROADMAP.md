@@ -21,7 +21,7 @@
 | قبل الإطلاق | استضافة HTTPS، نسخ احتياطي لقاعدة البيانات، اختبار اختراق ومراجعة أمنية من مختصين، سياسة خصوصية وشروط استخدام بمراجعة قانونية |
 
 ## ملاحظات المرحلة 1
-- **مزوّد البريد:** المنفَّذ حالياً Resend فقط (`EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM`). بدونه تعيد مسارات التسجيل والدخول `503 EMAIL_UNAVAILABLE` ولا يُنشأ حساب. SMTP غير منفَّذ.
+- **مزوّد البريد:** المنفَّذ حالياً Resend فقط (`EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM`). بدونه تعيد مسارات التسجيل والدخول `503 EMAIL_UNAVAILABLE` ولا يُنشأ حساب. SMTP منفَّذ أيضاً (`EMAIL_PROVIDER=smtp` + `SMTP_HOST/PORT/SECURE/USER/PASS` + `EMAIL_FROM`).
 - **تحقق الهاتف (SMS) من المرحلة 5:** حسب SPEC §3 لا يُفعَّل الحساب قبل نجاح البريد **و** الهاتف، لذلك تبقى الحسابات `PENDING_VERIFICATION` (وصول `UNVERIFIED`) إلى أن يُنفَّذ SMS؛ والخدمات المدفوعة ممنوعة على الخادم لها.
 - **Rate limiting** مخزَّن في PostgreSQL؛ يعتمد عنوان العميل على `x-forwarded-for` فيجب نشر التطبيق خلف وكيل موثوق يضبطه.
 - حماية CSRF: فحص Origin/Sec-Fetch-Site في `src/middleware.ts` + `SameSite=Lax` + إلزام `application/json`.
