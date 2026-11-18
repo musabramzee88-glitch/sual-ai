@@ -41,3 +41,8 @@ npm run typecheck && npm run lint && npm run build
 - `src/server/auth/otp.ts`: `issueOtp(user, channel, …)` و`verifyOtps([...])` (الكل أو لا شيء). معرّف التحدّي `E_<id>` للبريد و`P_<id>` للهاتف.
 - `src/server/auth/sms.ts`: لا مزوّد SMS مركَّب بعد؛ `smsAvailable()` هو الحكم الوحيد لإتاحة الهاتف. لا تفترض توفر SMS في الواجهة، واقرأ `/api/v1/auth/channels`.
 - `login()` يحدد القناة بما كتبه المستخدم؛ وضع `loginSecurity=BOTH` يصدر رمزين ولا يقبل الجهاز الموثوق.
+
+## إدارة المناهج (المرحلة 2ب)
+- `src/server/admin/curriculum.ts`: `createEntity/updateEntity(kind, …)` لكل الأنواع، و`replaceChapters` (استبدال القائمة كاملة ذرّياً). أضف نوعاً جديداً بإضافته إلى `schemas`.
+- الرمز ثابت بعد الإنشاء؛ لا حذف للمرجعي (تعطيل). فرادة المنهج مع NULL مفروضة بفهرس تعبيري في migration `curriculum_unique_nulls`.
+- `prisma/seed.ts` يضيف المفقود فقط — لا تجعله يعيد كتابة بيانات تديرها الإدارة.

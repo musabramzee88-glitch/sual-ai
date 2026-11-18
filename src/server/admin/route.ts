@@ -7,7 +7,7 @@ import { actorOf, requireAdmin, type AdminContext } from "./guard";
 import type { Actor } from "./audit";
 
 const STATUS: Record<string, number> = {
-  NOT_FOUND: 404, USER_NOT_FOUND: 404, FORBIDDEN: 403, CANNOT_MODIFY_SELF: 403, INVALID_DATE: 400,
+  NOT_FOUND: 404, USER_NOT_FOUND: 404, CHAPTER_NOT_FOUND: 404, FORBIDDEN: 403, CANNOT_MODIFY_SELF: 403, INVALID_DATE: 400, VALIDATION_ERROR: 400,
 };
 
 /** يحوّل نتيجة خدمة {ok:true,...}|{ok:false,code} إلى استجابة HTTP موحّدة. */

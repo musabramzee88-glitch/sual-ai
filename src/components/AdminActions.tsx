@@ -39,7 +39,7 @@ const input = "w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm o
 /** نموذج JSON عام: حقول بسيطة → إرسال إلى API */
 export function JsonForm({ url, method = "POST", fields, submit, L, extra }: {
   url: string; method?: "POST" | "PUT"; submit: string; L: ActLabels;
-  fields: { name: string; label: string; type?: "text" | "number" | "textarea" | "select"; options?: [string, string][]; required?: boolean; dir?: "ltr" }[];
+  fields: { name: string; label: string; type?: "text" | "number" | "textarea" | "select" | "date"; options?: [string, string][]; required?: boolean; dir?: "ltr" }[];
   extra?: { name: string; label: string; options: [string, string][] };
 }) {
   const router = useRouter();
@@ -63,7 +63,7 @@ export function JsonForm({ url, method = "POST", fields, submit, L, extra }: {
           <span className="mb-1 block text-muted">{f.label}</span>
           {f.type === "textarea" ? <textarea className={input} rows={5} required={f.required !== false} value={v[f.name]} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
             : f.type === "select" ? <select className={input} value={v[f.name]} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}>{f.options!.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-            : <input className={input} dir={f.dir} type={f.type === "number" ? "number" : "text"} required={f.required !== false} value={v[f.name]} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />}
+            : <input className={input} dir={f.dir} type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} required={f.required !== false} value={v[f.name]} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />}
         </label>
       ))}
       {extra && (

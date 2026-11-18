@@ -1,4 +1,8 @@
-/** زرع البيانات المرجعية — آمن للتشغيل أكثر من مرة (idempotent). */
+/**
+ * زرع البيانات المرجعية — آمن للتشغيل أكثر من مرة (idempotent).
+ * بيانات المناهج تُدار من لوحة الإدارة بعد الزرع الأول، لذلك الزرع **يضيف المفقود فقط**
+ * ولا يعيد كتابة أسماء/ترتيب/روابط عدّلتها الإدارة.
+ */
 import { PrismaClient } from "@prisma/client";
 import { BRANCHES, GOVERNORATES, STAGES, SUBJECTS, TRACKS, directoratesFor } from "./seed-data";
 
@@ -10,13 +14,13 @@ async function main() {
   for (const [si, s] of STAGES.entries()) {
     const stage = await prisma.educationStage.upsert({
       where: { code: s.code },
-      update: { nameAr: s.nameAr, nameEn: s.nameEn, sortOrder: si },
+      update: {},
       create: { code: s.code, nameAr: s.nameAr, nameEn: s.nameEn, sortOrder: si },
     });
     for (const [gi, [code, nameAr, nameEn]] of s.grades.entries()) {
       const grade = await prisma.grade.upsert({
         where: { code },
-        update: { nameAr, nameEn, sortOrder: gi, stageId: stage.id },
+        update: {},
         create: { code, nameAr, nameEn, sortOrder: gi, stageId: stage.id },
       });
       gradeIds.set(code, grade.id);
@@ -25,11 +29,8 @@ async function main() {
 
   for (const [i, t] of TRACKS.entries()) {
     const { grades, ...data } = t;
-    const track = await prisma.curriculumTrack.upsert({
-      where: { code: t.code },
-      update: { ...data, sortOrder: i },
-      create: { ...data, sortOrder: i },
-    });
+    if (await prisma.curriculumTrack.findUnique({ where: { code: t.code } })) continue; // تديره الإدارة
+    const track = await prisma.curriculumTrack.create({ data: { ...data, sortOrder: i } });
     await prisma.trackGrade.createMany({
       data: grades.map((g) => ({ trackId: track.id, gradeId: gradeIds.get(g)! })),
       skipDuplicates: true,
@@ -38,11 +39,8 @@ async function main() {
 
   for (const [i, b] of BRANCHES.entries()) {
     const { grades, ...data } = b;
-    const branch = await prisma.studyBranch.upsert({
-      where: { code: b.code },
-      update: { ...data, sortOrder: i },
-      create: { ...data, sortOrder: i },
-    });
+    if (await prisma.studyBranch.findUnique({ where: { code: b.code } })) continue; // تديره الإدارة
+    const branch = await prisma.studyBranch.create({ data: { ...data, sortOrder: i } });
     await prisma.gradeBranch.createMany({
       data: grades.map((g) => ({ branchId: branch.id, gradeId: gradeIds.get(g)! })),
       skipDuplicates: true,
@@ -52,7 +50,7 @@ async function main() {
   for (const [i, s] of SUBJECTS.entries()) {
     await prisma.subject.upsert({
       where: { code: s.code },
-      update: { ...s, sortOrder: i },
+      update: {},
       create: { ...s, sortOrder: i },
     });
   }

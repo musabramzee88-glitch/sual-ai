@@ -58,3 +58,25 @@ export function listGovernorates() {
     select: { ...pick, directorates: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: pick } },
   });
 }
+
+/**
+ * المناهج المحددة (مسار + صف + مادة [+ فرع]) مع فصولها ونطاق صفحاتها — يحتاجها معالج إنشاء الامتحان.
+ * منهج بلا فرع مشترك لكل فروع الصف.
+ */
+export function listCurricula(f: { gradeCode: string; trackCode: string; subjectCode?: string; branchCode?: string }) {
+  return db.curriculum.findMany({
+    where: {
+      isActive: true,
+      grade: { code: f.gradeCode, isActive: true },
+      track: { code: f.trackCode, isActive: true },
+      subject: f.subjectCode ? { code: f.subjectCode, isActive: true } : { isActive: true },
+      ...(f.branchCode ? { OR: [{ branchId: null }, { branch: { code: f.branchCode } }] } : {}),
+    },
+    orderBy: [{ academicYear: { startsOn: "desc" } }, { title: "asc" }],
+    select: {
+      id: true, title: true, edition: true, language: true,
+      subject: { select: pick }, branch: { select: pick }, academicYear: { select: { label: true, isCurrent: true } },
+      chapters: { orderBy: { sortOrder: "asc" }, select: { id: true, sortOrder: true, title: true, pageStart: true, pageEnd: true } },
+    },
+  });
+}
