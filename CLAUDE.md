@@ -29,3 +29,10 @@ npm run typecheck && npm run lint && npm run build
 - المبالغ بالدينار كأعداد صحيحة.
 - النصوص الرياضية داخل جمل عربية تُعزل بـ `dir="ltr"` + `unicode-bidi: isolate`.
 - لا يُعرض محتوى توضيحي على أنه ناتج حقيقي للذكاء الاصطناعي.
+
+## الإدارة والاشتراكات (المرحلة 2)
+- `src/server/admin/guard.ts` — `requireAdmin(perm)` (API) و`requireAdminPage(perm)` (صفحات): دور + سجل `AdminUser` فعّال + صلاحية؛ `SUPER_ADMIN` يملك كل الصلاحيات. لا تعتمد على إخفاء الأزرار.
+- كل إجراء إداري يكتب `audit(tx, …)` داخل **نفس المعاملة**؛ لا تكتب سجل التدقيق خارجها.
+- `src/server/billing/service.ts` — تدفق الدفع النقدي؛ الموافقة تحجز الحالة بـ `updateMany` شرطي (لا تفعيل مزدوج)، ولا يتجاوز أي كود قيود الفهارس الجزئية.
+- مسارات `src/app/api/v1/admin/*` تمر عبر `adminMutation`/`adminRead` في `src/server/admin/route.ts` (صلاحية + حد معدّل + Zod).
+- `npm run admin:create` — إنشاء/ترقية المدير الرئيسي (لا كلمات مرور في الكود).

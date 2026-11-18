@@ -74,7 +74,7 @@ export async function loadAuth(token: string | undefined, now = new Date()): Pro
   if (!token) return null;
   const s = await db.userSession.findUnique({
     where: { tokenHash: sessionHash(token) },
-    include: { user: { include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+    include: { user: { include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 10 } } } },
   });
   if (!s || s.revokedAt || s.expiresAt <= now || !s.mfaPassed) return null;
   const u = s.user;
@@ -82,7 +82,8 @@ export async function loadAuth(token: string | undefined, now = new Date()): Pro
   if (now.getTime() - s.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
     await db.userSession.update({ where: { id: s.id }, data: { lastSeenAt: now } });
   }
-  const sub = u.subscriptions[0];
+  // الاشتراك الفعال له الأولوية (طلب تجديد معلّق لا يقطع الخدمة)؛ وإلا الأحدث
+  const sub = u.subscriptions.find((x) => x.status === "ACTIVE") ?? u.subscriptions[0];
   return {
     user: { id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, locale: u.locale, emailVerified: !!u.emailVerifiedAt, phoneVerified: !!u.phoneVerifiedAt },
     access: resolveAccess({ status: u.status, emailVerifiedAt: u.emailVerifiedAt, phoneVerifiedAt: u.phoneVerifiedAt, subscription: sub ? { status: sub.status, endsAt: sub.endsAt } : null }, now),

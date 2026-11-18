@@ -99,6 +99,15 @@ const ar = {
     } as Record<string, string>,
     phonePending: "تأكيد الهاتف عبر SMS غير مفعّل بعد (يُفعَّل في مرحلة لاحقة)، ولذلك لا يكتمل تفعيل الحساب حالياً.",
   },
+  subscribe: {
+    title: "الاشتراك", plans: "الباقات المتاحة", noPlans: "لم تُعلن الباقات بعد. تواصل مع الإدارة.", days: "يوم", iqd: "د.ع", choose: "طلب التفعيل (دفع نقدي)",
+    note: "ملاحظة للإدارة (اختيارية)", instructions: "تعليمات الدفع", noInstructions: "لم تضبط الإدارة تعليمات الدفع بعد. تواصل معها.",
+    cashFlow: "الدفع نقداً حسب التعليمات أدناه، ثم أرسل الطلب. يُفعَّل اشتراكك بعد تأكيد الإدارة للدفع، ولا يتم التفعيل تلقائياً.",
+    pendingTitle: "طلبك بانتظار تأكيد الإدارة", ref: "الرقم المرجعي", cancel: "إلغاء الطلب", current: "اشتراكك الحالي", ends: "ينتهي في", renew: "تجديد الاشتراك",
+    needEmail: "أكّد بريدك الإلكتروني أولاً.", back: "لوحة المدرس", sent: "تم إرسال الطلب. رقمه المرجعي:",
+    errors: { PLAN_NOT_FOUND: "الباقة غير متاحة.", EMAIL_NOT_VERIFIED: "أكّد بريدك أولاً.", ACCOUNT_RESTRICTED: "الحساب مقيَّد.", ALREADY_PENDING: "لديك طلب معلّق بالفعل.", NO_PENDING_REQUEST: "لا يوجد طلب معلّق.", RATE_LIMITED: "طلبات كثيرة.", GENERIC: "تعذّر تنفيذ الطلب." } as Record<string, string>,
+    adminPanel: "لوحة الإدارة", toSubscribe: "الاشتراك والدفع",
+  },
   langSwitch: "English",
 };
 
@@ -199,6 +208,15 @@ const en: Dictionary = {
       SUBSCRIPTION_ACTIVE: "Active subscription", SUBSCRIPTION_EXPIRED: "Subscription expired", SUBSCRIPTION_SUSPENDED: "Subscription suspended", ACCOUNT_SUSPENDED: "Account suspended", BANNED: "Account banned",
     } as Record<string, string>,
     phonePending: "Phone verification by SMS is not enabled yet (a later phase), so account activation cannot complete for now.",
+  },
+  subscribe: {
+    title: "Subscription", plans: "Available plans", noPlans: "Plans have not been announced yet. Contact the administration.", days: "days", iqd: "IQD", choose: "Request activation (cash payment)",
+    note: "Note to the administration (optional)", instructions: "Payment instructions", noInstructions: "The administration has not set payment instructions yet. Please contact them.",
+    cashFlow: "Pay in cash following the instructions below, then submit the request. Your subscription is activated only after the administration confirms the payment; nothing is activated automatically.",
+    pendingTitle: "Your request is awaiting administration confirmation", ref: "Reference", cancel: "Cancel request", current: "Your current subscription", ends: "Ends on", renew: "Renew subscription",
+    needEmail: "Please verify your email first.", back: "Teacher dashboard", sent: "Request submitted. Reference:",
+    errors: { PLAN_NOT_FOUND: "Plan is not available.", EMAIL_NOT_VERIFIED: "Verify your email first.", ACCOUNT_RESTRICTED: "Account is restricted.", ALREADY_PENDING: "You already have a pending request.", NO_PENDING_REQUEST: "No pending request.", RATE_LIMITED: "Too many requests.", GENERIC: "The request failed." },
+    adminPanel: "Admin panel", toSubscribe: "Subscription & payment",
   },
   langSwitch: "العربية",
 };
