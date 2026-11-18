@@ -14,9 +14,10 @@ describe("resolveAccess", () => {
     expect(resolveAccess(verified, now)).toBe("SUBSCRIPTION_ACTIVE");
     expect(canUsePaidServices(verified, now)).toBe(true);
   });
-  it("requires BOTH email and phone verification", () => {
-    expect(resolveAccess({ ...verified, phoneVerifiedAt: null }, now)).toBe("UNVERIFIED");
-    expect(resolveAccess({ ...verified, emailVerifiedAt: null }, now)).toBe("UNVERIFIED");
+  it("requires at least ONE verified channel (email or phone), not both", () => {
+    expect(resolveAccess({ ...verified, phoneVerifiedAt: null }, now)).toBe("SUBSCRIPTION_ACTIVE");
+    expect(resolveAccess({ ...verified, emailVerifiedAt: null }, now)).toBe("SUBSCRIPTION_ACTIVE");
+    expect(resolveAccess({ ...verified, emailVerifiedAt: null, phoneVerifiedAt: null }, now)).toBe("UNVERIFIED");
     expect(resolveAccess({ ...verified, status: "PENDING_VERIFICATION" }, now)).toBe("UNVERIFIED");
   });
   it("bans and suspensions override an active subscription", () => {

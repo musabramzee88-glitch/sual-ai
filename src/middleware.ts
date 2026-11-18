@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/dashboard", "/subscribe", "/admin"];
+const PROTECTED = ["/dashboard", "/subscribe", "/admin", "/settings"];
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
@@ -39,4 +39,4 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/api/:path*", "/dashboard/:path*", "/dashboard", "/subscribe/:path*", "/subscribe", "/admin/:path*", "/admin"] };
+export const config = { matcher: ["/api/:path*", "/dashboard/:path*", "/dashboard", "/subscribe/:path*", "/subscribe", "/admin/:path*", "/admin", "/settings/:path*"] };

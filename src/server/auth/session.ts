@@ -66,7 +66,7 @@ export async function isTrustedDevice(userId: string, now = new Date()): Promise
 
 // ───────── قراءة الجلسة الحالية ─────────
 export type AuthContext = {
-  user: { id: string; fullName: string; email: string; phone: string; role: "TEACHER" | "ADMIN_STAFF" | "SUPER_ADMIN"; locale: "AR" | "EN"; emailVerified: boolean; phoneVerified: boolean };
+  user: { id: string; fullName: string; email: string; phone: string; role: "TEACHER" | "ADMIN_STAFF" | "SUPER_ADMIN"; locale: "AR" | "EN"; loginSecurity: "SINGLE" | "BOTH"; emailVerified: boolean; phoneVerified: boolean };
   access: AccessState;
 };
 
@@ -85,7 +85,7 @@ export async function loadAuth(token: string | undefined, now = new Date()): Pro
   // الاشتراك الفعال له الأولوية (طلب تجديد معلّق لا يقطع الخدمة)؛ وإلا الأحدث
   const sub = u.subscriptions.find((x) => x.status === "ACTIVE") ?? u.subscriptions[0];
   return {
-    user: { id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, locale: u.locale, emailVerified: !!u.emailVerifiedAt, phoneVerified: !!u.phoneVerifiedAt },
+    user: { id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, locale: u.locale, loginSecurity: u.loginSecurity, emailVerified: !!u.emailVerifiedAt, phoneVerified: !!u.phoneVerifiedAt },
     access: resolveAccess({ status: u.status, emailVerifiedAt: u.emailVerifiedAt, phoneVerifiedAt: u.phoneVerifiedAt, subscription: sub ? { status: sub.status, endsAt: sub.endsAt } : null }, now),
   };
 }

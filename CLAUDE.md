@@ -36,3 +36,8 @@ npm run typecheck && npm run lint && npm run build
 - `src/server/billing/service.ts` — تدفق الدفع النقدي؛ الموافقة تحجز الحالة بـ `updateMany` شرطي (لا تفعيل مزدوج)، ولا يتجاوز أي كود قيود الفهارس الجزئية.
 - مسارات `src/app/api/v1/admin/*` تمر عبر `adminMutation`/`adminRead` في `src/server/admin/route.ts` (صلاحية + حد معدّل + Zod).
 - `npm run admin:create` — إنشاء/ترقية المدير الرئيسي (لا كلمات مرور في الكود).
+
+## التحقق والدخول (قناة واحدة أو اثنتان)
+- `src/server/auth/otp.ts`: `issueOtp(user, channel, …)` و`verifyOtps([...])` (الكل أو لا شيء). معرّف التحدّي `E_<id>` للبريد و`P_<id>` للهاتف.
+- `src/server/auth/sms.ts`: لا مزوّد SMS مركَّب بعد؛ `smsAvailable()` هو الحكم الوحيد لإتاحة الهاتف. لا تفترض توفر SMS في الواجهة، واقرأ `/api/v1/auth/channels`.
+- `login()` يحدد القناة بما كتبه المستخدم؛ وضع `loginSecurity=BOTH` يصدر رمزين ولا يقبل الجهاز الموثوق.

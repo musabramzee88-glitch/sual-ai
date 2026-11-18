@@ -36,7 +36,7 @@ export default async function Page() {
             <p className="text-sm">{s.ref}: <strong dir="ltr">{state.pending.reference}</strong> · {(locale === "ar" ? state.pending.plan.nameAr : state.pending.plan.nameEn)} · <span dir="ltr">{state.pending.amountIqd.toLocaleString("en-US")} {s.iqd}</span></p>
             <CancelRequestButton t={s} />
           </div>
-        ) : blocked ? null : !auth.user.emailVerified ? (
+        ) : blocked ? null : !(auth.user.emailVerified || auth.user.phoneVerified) ? (
           <p className="text-sm text-danger">{s.needEmail}</p>
         ) : plans.length === 0 ? (
           <p className="text-sm text-muted">{s.noPlans}</p>

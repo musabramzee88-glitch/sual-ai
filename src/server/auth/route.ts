@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fail } from "../http";
 import { clientIp, rateLimit } from "./ratelimit";
 import { EmailUnavailableError } from "./mailer";
+import { SmsUnavailableError } from "./sms";
 import { getAuth, type AuthContext } from "./session";
 import type { AccessState } from "@/lib/access";
 
@@ -42,6 +43,9 @@ export const meta = (req: Request) => ({ ip: clientIp(req), userAgent: req.heade
 
 export const emailUnavailable = () => fail(503, "EMAIL_UNAVAILABLE", "Email service is not available. Try again later.");
 export const isEmailError = (e: unknown) => e instanceof EmailUnavailableError;
+export const smsUnavailable = () => fail(503, "SMS_UNAVAILABLE", "SMS service is not available. Use e-mail verification.");
+/** يحوّل أخطاء إرسال الرمز (بريد/SMS) إلى استجابة، أو null إن لم يكن الخطأ منها */
+export const sendError = (e: unknown): Response | null => (isEmailError(e) ? emailUnavailable() : e instanceof SmsUnavailableError ? smsUnavailable() : null);
 
 const DENY: Record<Exclude<AccessState, "SUBSCRIPTION_ACTIVE">, [number, string]> = {
   UNVERIFIED: [403, "ACCOUNT_UNVERIFIED"],

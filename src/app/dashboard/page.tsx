@@ -19,9 +19,9 @@ export default async function Page() {
       <div className="space-y-4">
         <p>{t.dashboard.hello}، <strong>{auth.user.fullName}</strong></p>
         <p className="text-sm"><span className="text-muted">{t.dashboard.status}: </span><strong>{t.dashboard.states[auth.access]}</strong></p>
-        {!auth.user.phoneVerified && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">{t.dashboard.phonePending}</p>}
         <div className="flex flex-wrap gap-2">
           {auth.access !== "BANNED" && auth.access !== "ACCOUNT_SUSPENDED" && <Link href="/subscribe" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white dark:text-paper">{t.subscribe.toSubscribe}</Link>}
+          <Link href="/settings/security" className="rounded-lg border border-line px-4 py-2 text-sm">{t.subscribe.toSecurity}</Link>
           {isAdmin && <Link href="/admin" className="rounded-lg border border-line px-4 py-2 text-sm">{t.subscribe.adminPanel}</Link>}
           <LogoutButton t={t.auth} />
         </div>

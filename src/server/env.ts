@@ -25,6 +25,8 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   // true للمنفذ 465 (TLS مباشر)؛ false مع 587 (STARTTLS)
   SMTP_SECURE: z.enum(["true", "false"]).default("false"),
+  // يُفرض STARTTLS مع المنفذ 587 افتراضياً؛ false للتجارب المحلية فقط
+  SMTP_REQUIRE_TLS: z.enum(["true", "false"]).default("true"),
   // SMS وبوابة الدفع — تُحدَّد في المرحلة 5
   SMS_PROVIDER: z.string().optional(),
   PAYMENT_PROVIDER: z.string().optional(),

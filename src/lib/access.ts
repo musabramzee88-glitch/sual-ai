@@ -32,7 +32,8 @@ export interface AccessInput {
 export function resolveAccess(u: AccessInput, now: Date = new Date()): AccessState {
   if (u.status === "BANNED") return "BANNED";
   if (u.status === "SUSPENDED") return "ACCOUNT_SUSPENDED";
-  if (u.status === "PENDING_VERIFICATION" || !u.emailVerifiedAt || !u.phoneVerifiedAt) return "UNVERIFIED";
+  // التحقق بقناة واحدة (بريد أو هاتف) يكفي؛ «الاثنان معاً» خيار أمان للدخول لا شرط وصول.
+  if (u.status === "PENDING_VERIFICATION" || (!u.emailVerifiedAt && !u.phoneVerifiedAt)) return "UNVERIFIED";
 
   const s = u.subscription;
   if (!s || s.status === "PENDING_PAYMENT" || s.status === "CANCELLED") return "AWAITING_PAYMENT";

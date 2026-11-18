@@ -2,9 +2,9 @@ import { z } from "zod";
 import { fail, ok } from "@/server/http";
 import { resendOtp } from "@/server/auth/service";
 import { clientIp } from "@/server/auth/ratelimit";
-import { emailUnavailable, isEmailError, limit, parseBody } from "@/server/auth/route";
+import { limit, parseBody, sendError } from "@/server/auth/route";
 
-const schema = z.object({ challengeId: z.string().min(10).max(40) });
+const schema = z.object({ challengeId: z.string().min(12).max(44) });
 
 export async function POST(req: Request) {
   const b = await parseBody(req, schema);
@@ -14,9 +14,10 @@ export async function POST(req: Request) {
   try {
     const r = await resendOtp(b.data.challengeId);
     if (!r.ok) return fail(r.code === "OTP_COOLDOWN" ? 429 : 400, r.code, "Cannot resend");
-    return ok({ challengeId: r.challengeId, resendAvailableAt: r.resendAvailableAt });
+    return ok({ challenge: r.challenge });
   } catch (e) {
-    if (isEmailError(e)) return emailUnavailable();
+    const res = sendError(e);
+    if (res) return res;
     throw e;
   }
 }

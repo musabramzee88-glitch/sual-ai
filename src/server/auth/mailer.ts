@@ -73,7 +73,7 @@ class UnconfiguredMailer implements Mailer {
 function buildMailer(): Mailer {
   if (env.EMAIL_PROVIDER === "resend") return new ResendMailer();
   if (env.EMAIL_PROVIDER === "smtp" && env.SMTP_HOST && env.EMAIL_FROM) {
-    return createSmtpMailer({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE === "true", user: env.SMTP_USER, pass: env.SMTP_PASS, from: env.EMAIL_FROM });
+    return createSmtpMailer({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE === "true", user: env.SMTP_USER, pass: env.SMTP_PASS, from: env.EMAIL_FROM, requireTLS: env.SMTP_SECURE === "true" ? false : env.SMTP_REQUIRE_TLS === "true" });
   }
   return new UnconfiguredMailer();
 }

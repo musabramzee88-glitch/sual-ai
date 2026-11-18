@@ -4,7 +4,7 @@ import { limit, parseBody, requireAuth } from "@/server/auth/route";
 import { cancelMyPendingRequest, requestCashSubscription } from "@/server/billing/service";
 
 const schema = z.object({ planId: z.string().min(10).max(40), note: z.string().trim().max(500).optional() });
-const CODES: Record<string, number> = { PLAN_NOT_FOUND: 404, EMAIL_NOT_VERIFIED: 403, ACCOUNT_RESTRICTED: 403, ALREADY_PENDING: 409 };
+const CODES: Record<string, number> = { PLAN_NOT_FOUND: 404, ACCOUNT_UNVERIFIED: 403, ACCOUNT_RESTRICTED: 403, ALREADY_PENDING: 409 };
 
 export async function POST(req: Request) {
   const g = await requireAuth();

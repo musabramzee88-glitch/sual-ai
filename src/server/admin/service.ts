@@ -107,7 +107,7 @@ export async function manualVerifyPhone(actor: Actor, targetId: string, reason: 
     if (u.phoneVerifiedAt) return fail("ALREADY_VERIFIED");
     const now = new Date();
     await tx.user.update({ where: { id: targetId }, data: { phoneVerifiedAt: now } });
-    await tx.user.updateMany({ where: { id: targetId, status: "PENDING_VERIFICATION", emailVerifiedAt: { not: null } }, data: { status: "ACTIVE" } });
+    await tx.user.updateMany({ where: { id: targetId, status: "PENDING_VERIFICATION" }, data: { status: "ACTIVE" } });
     await audit(tx, actor, { action: "user.phone_verify_manual", targetType: "User", targetId, after: { reason, phone: u.phone } });
     return { ok: true as const };
   });

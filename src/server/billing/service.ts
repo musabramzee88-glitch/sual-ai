@@ -28,7 +28,7 @@ export async function getMySubscriptionState(userId: string) {
 export async function requestCashSubscription(userId: string, planId: string, userNote?: string) {
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user || user.status === "BANNED" || user.status === "SUSPENDED") return fail("ACCOUNT_RESTRICTED");
-  if (!user.emailVerifiedAt) return fail("EMAIL_NOT_VERIFIED");
+  if (!user.emailVerifiedAt && !user.phoneVerifiedAt) return fail("ACCOUNT_UNVERIFIED");
   const plan = await db.subscriptionPlan.findUnique({ where: { id: planId } });
   if (!plan || !plan.isActive) return fail("PLAN_NOT_FOUND");
 

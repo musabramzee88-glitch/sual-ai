@@ -27,11 +27,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const Err = ({ t, code }: { t: T; code: string | null }) =>
   code ? <p role="alert" className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-danger">{t.errors[code] ?? t.errors.GENERIC}</p> : null;
 
-/** خطوة إدخال رمز OTP — تُستعمل بعد التسجيل وبعد الدخول */
-export function OtpStep({ t, challengeId: initial, purpose }: { t: T; challengeId: string; purpose: "SIGNUP" | "LOGIN" }) {
+export type Challenge = { challengeId: string; channel: "EMAIL" | "PHONE"; masked: string };
+
+/** خطوة إدخال الرمز: رمز واحد على قناة الدخول، أو رمزان معاً عند تفعيل الأمان الإضافي */
+export function OtpStep({ t, challenges: initial, purpose }: { t: T; challenges: Challenge[]; purpose: "SIGNUP" | "LOGIN" }) {
   const router = useRouter();
-  const [challengeId, setChallengeId] = useState(initial);
-  const [code, setCode] = useState("");
+  const [chs, setChs] = useState(initial);
+  const [codes, setCodes] = useState<Record<string, string>>({});
   const [remember, setRemember] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,30 +43,44 @@ export function OtpStep({ t, challengeId: initial, purpose }: { t: T; challengeI
     const id = setTimeout(() => setWait((w) => w - 1), 1000);
     return () => clearTimeout(id);
   }, [wait]);
+  const both = chs.length === 2;
+  const ready = chs.every((c) => (codes[c.channel] ?? "").length === 6);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(null);
-    const r = await post("/api/v1/auth/otp/verify", { challengeId, code, rememberDevice: purpose === "LOGIN" ? remember : undefined });
+    const r = await post("/api/v1/auth/otp/verify", {
+      challenges: chs.map((c) => ({ challengeId: c.challengeId, code: codes[c.channel] })),
+      rememberDevice: purpose === "LOGIN" && !both ? remember : undefined,
+    });
     setBusy(false);
     if (r.ok) { router.replace("/dashboard"); router.refresh(); } else setErr(r.code);
   }
   async function resend() {
     setErr(null);
-    const r = await post("/api/v1/auth/otp/resend", { challengeId });
-    if (r.ok) { setChallengeId(r.data.challengeId); setWait(60); setCode(""); } else setErr(r.code);
+    const next: Challenge[] = [];
+    for (const c of chs) {
+      const r = await post("/api/v1/auth/otp/resend", { challengeId: c.challengeId });
+      if (!r.ok) return setErr(r.code);
+      next.push(r.data.challenge);
+    }
+    setChs(next); setWait(60); setCodes({});
   }
+  const label = (c: Challenge) => (both ? (c.channel === "EMAIL" ? t.emailCode : t.phoneCode) : t.code);
   return (
     <form onSubmit={submit} className="space-y-4">
-      <p className="text-sm text-muted">{t.otpSent}</p>
-      <Field label={t.code}>
-        <input className={input + " text-center text-2xl tracking-[0.4em]"} dir="ltr" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
-      </Field>
-      {purpose === "LOGIN" && (
+      <p className="text-sm text-muted">{both ? t.bothHint : t.otpSent.replace("{to}", chs[0].masked)}</p>
+      {chs.map((c) => (
+        <Field key={c.challengeId} label={`${label(c)}${both ? ` — ${t.sentTo} ${c.masked}` : ""}`}>
+          <input className={input + " text-center text-2xl tracking-[0.4em]"} dir="ltr" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required
+            value={codes[c.channel] ?? ""} onChange={(e) => setCodes({ ...codes, [c.channel]: e.target.value.replace(/\D/g, "") })} />
+        </Field>
+      ))}
+      {purpose === "LOGIN" && !both && (
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />{t.remember}</label>
       )}
       <Err t={t} code={err} />
-      <button className={btn} disabled={busy || code.length !== 6}>{t.verify}</button>
+      <button className={btn} disabled={busy || !ready}>{t.verify}</button>
       <button type="button" onClick={resend} disabled={wait > 0} className="w-full text-sm text-brand disabled:text-muted">{wait > 0 ? t.resendIn.replace("{s}", String(wait)) : t.resend}</button>
     </form>
   );
@@ -75,14 +91,14 @@ export function LoginForm({ t }: { t: T }) {
   const [f, setF] = useState({ identifier: "", password: "" });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [otp, setOtp] = useState<{ challengeId: string; purpose: "SIGNUP" | "LOGIN" } | null>(null);
+  const [otp, setOtp] = useState<{ challenges: Challenge[]; purpose: "SIGNUP" | "LOGIN" } | null>(null);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(null);
     const r = await post("/api/v1/auth/login", f);
     setBusy(false);
     if (!r.ok) return setErr(r.code);
-    if (r.data.step === "done") { router.replace("/dashboard"); router.refresh(); } else setOtp({ challengeId: r.data.challengeId, purpose: r.data.purpose });
+    if (r.data.step === "done") { router.replace("/dashboard"); router.refresh(); } else setOtp({ challenges: r.data.challenges, purpose: r.data.purpose });
   }
   if (otp) return <OtpStep t={t} {...otp} />;
   return (
@@ -98,11 +114,12 @@ export function LoginForm({ t }: { t: T }) {
 
 export function RegisterForm({ t, locale }: { t: T; locale: "ar" | "en" }) {
   const [govs, setGovs] = useState<Gov[]>([]);
-  const [f, setF] = useState({ fullName: "", phone: "", email: "", password: "", passwordConfirm: "", schoolName: "", governorateCode: "", directorateCode: "", specialization: "" });
+  const [f, setF] = useState({ fullName: "", phone: "", email: "", password: "", passwordConfirm: "", schoolName: "", governorateCode: "", directorateCode: "", specialization: "", verificationChannel: "EMAIL" });
+  const [phoneOk, setPhoneOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [otp, setOtp] = useState<string | null>(null);
-  useEffect(() => { fetch("/api/v1/geo/governorates").then((r) => r.json()).then((j) => setGovs(j.data ?? [])).catch(() => {}); }, []);
+  const [otp, setOtp] = useState<Challenge[] | null>(null);
+  useEffect(() => { fetch("/api/v1/auth/channels").then((r) => r.json()).then((j) => setPhoneOk(!!j.data?.phone)).catch(() => {}); fetch("/api/v1/geo/governorates").then((r) => r.json()).then((j) => setGovs(j.data ?? [])).catch(() => {}); }, []);
   const name = (x: { nameAr: string; nameEn: string }) => (locale === "ar" ? x.nameAr : x.nameEn);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value, ...(k === "governorateCode" ? { directorateCode: "" } : {}) });
   async function submit(e: React.FormEvent) {
@@ -110,9 +127,9 @@ export function RegisterForm({ t, locale }: { t: T; locale: "ar" | "en" }) {
     setBusy(true); setErr(null);
     const r = await post("/api/v1/auth/register", f);
     setBusy(false);
-    if (r.ok) setOtp(r.data.challengeId); else setErr(r.code);
+    if (r.ok) setOtp(r.data.challenges); else setErr(r.code);
   }
-  if (otp) return <OtpStep t={t} challengeId={otp} purpose="SIGNUP" />;
+  if (otp) return <OtpStep t={t} challenges={otp} purpose="SIGNUP" />;
   const dirs = govs.find((g) => g.code === f.governorateCode)?.directorates ?? [];
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -134,6 +151,14 @@ export function RegisterForm({ t, locale }: { t: T; locale: "ar" | "en" }) {
         </Field>
       </div>
       <Field label={t.specialization}><input className={input} required value={f.specialization} onChange={set("specialization")} /></Field>
+      <fieldset className="space-y-2">
+        <legend className="mb-1 text-sm text-muted">{t.verifyBy}</legend>
+        <label className="flex items-center gap-2 text-sm"><input type="radio" name="vc" checked={f.verificationChannel === "EMAIL"} onChange={() => setF({ ...f, verificationChannel: "EMAIL" })} />{t.byEmail}</label>
+        <label className={`flex items-center gap-2 text-sm ${phoneOk ? "" : "text-muted"}`}>
+          <input type="radio" name="vc" disabled={!phoneOk} checked={f.verificationChannel === "PHONE"} onChange={() => setF({ ...f, verificationChannel: "PHONE" })} />
+          {t.byPhone}{!phoneOk && <span className="text-xs"> ({t.phoneSoon})</span>}
+        </label>
+      </fieldset>
       <Err t={t} code={err} />
       <button className={btn} disabled={busy}>{t.register}</button>
       <p className="text-center text-sm"><Link href="/login" className="text-brand">{t.haveAccount}</Link></p>

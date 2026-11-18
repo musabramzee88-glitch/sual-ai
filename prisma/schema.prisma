@@ -34,6 +34,12 @@ enum Locale {
   EN
 }
 
+/// مستوى أمان الدخول: رمز واحد (على قناة الدخول) أو رمزان معاً (بريد + هاتف) بطلب المستخدم
+enum LoginSecurity {
+  SINGLE
+  BOTH
+}
+
 enum OtpPurpose {
   SIGNUP
   LOGIN
@@ -420,6 +426,7 @@ model User {
   role              UserRole      @default(TEACHER)
   status            AccountStatus @default(PENDING_VERIFICATION)
   locale            Locale        @default(AR)
+  loginSecurity     LoginSecurity @default(SINGLE)
   emailVerifiedAt   DateTime?
   phoneVerifiedAt   DateTime?
   failedLoginCount  Int           @default(0)

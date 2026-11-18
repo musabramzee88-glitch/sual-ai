@@ -115,9 +115,9 @@ describe("cash payment flow", () => {
     expect(await cancelMyPendingRequest(u.id)).toEqual({ ok: false, code: "NO_PENDING_REQUEST" });
   });
 
-  it("refuses unverified e-mail, banned users and inactive plans", async () => {
+  it("refuses unverified accounts, banned users and inactive plans", async () => {
     const un = await mkUser({ verified: false });
-    expect(await requestCashSubscription(un.id, planId)).toEqual({ ok: false, code: "EMAIL_NOT_VERIFIED" });
+    expect(await requestCashSubscription(un.id, planId)).toEqual({ ok: false, code: "ACCOUNT_UNVERIFIED" });
     const b = await mkUser();
     await db.user.update({ where: { id: b.id }, data: { status: "BANNED" } });
     expect(await requestCashSubscription(b.id, planId)).toEqual({ ok: false, code: "ACCOUNT_RESTRICTED" });
@@ -190,7 +190,7 @@ describe("admin actions", () => {
 
 describe("admin guard", () => {
   const ctx = (userId: string, role: "TEACHER" | "ADMIN_STAFF" | "SUPER_ADMIN") => ({
-    user: { id: userId, fullName: "x", email: "x", phone: "x", role, locale: "AR" as const, emailVerified: true, phoneVerified: true },
+    user: { id: userId, fullName: "x", email: "x", phone: "x", role, locale: "AR" as const, loginSecurity: "SINGLE" as const, emailVerified: true, phoneVerified: true },
     access: "AWAITING_PAYMENT" as const,
   });
   it("rejects teachers, honours staff permissions and deactivation", async () => {
