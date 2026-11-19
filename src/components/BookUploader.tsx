@@ -83,38 +83,44 @@ export function Dropzone({ t, L }: { t: DropLabels; L: ActLabels }) {
 
 export type ReviewCard = {
   id: string; name: string; status: string; error: string | null; pageCount: number | null; processedPages: number;
-  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: string;
+  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: string; part: number;
   sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null; working: boolean;
 };
 export type ReviewLabels = {
   reviewTitle: string; reviewEmpty: string; reviewHint: string; confirm: string; confirmAll: string; sureTag: string; checkTag: string; autoTag: string; working: string; needsOcrTag: string; readOcr: string;
   fromCover: string; pickGrade: string; pickSubject: string; track: string; grade: string; subject: string; kind: string; remove: string; ocrPage: string; failedOcr: string;
+  part: string; parts: string[]; partConflict: string;
 };
-type Sel = { track: string; grade: string; subject: string; kind: string };
+type Sel = { track: string; grade: string; subject: string; kind: string; part: number };
 
 /**
  * لوحة المراجعة: بطاقة لكل كتاب بصورة غلافه الفعلية ونتيجة التعرّف. الواثق منه يظهر محدّداً (وُضع تلقائياً)،
  * وتضغط ✓ للتأكيد أو تصحّح الاختيارات ثم ✓. التأكيد يضع الكتاب في منهجه (ينشئه إن لزم).
  */
-export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds }: {
-  items: ReviewCard[]; t: ReviewLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][];
+export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds, occupied }: {
+  items: ReviewCard[]; t: ReviewLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][]; occupied: string[];
 }) {
   const router = useRouter();
   const [sel, setSel] = useState<Record<string, Sel>>({});
   const [gone, setGone] = useState<Set<string>>(new Set());
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const get = (c: ReviewCard): Sel => sel[c.id] ?? { track: c.trackCode, grade: c.gradeCode ?? "", subject: c.subjectCode ?? "", kind: c.kind };
+  const get = (c: ReviewCard): Sel => sel[c.id] ?? { track: c.trackCode, grade: c.gradeCode ?? "", subject: c.subjectCode ?? "", kind: c.kind, part: c.part };
   const set = (c: ReviewCard, p: Partial<Sel>) => setSel((s) => ({ ...s, [c.id]: { ...get(c), ...p } }));
   const visible = items.filter((c) => !gone.has(c.id));
   const complete = (c: ReviewCard) => { const g = get(c); return !!(g.grade && g.subject) && !c.working; };
-  const confirmable = visible.filter((c) => c.sure && complete(c));
+  // تعارض: نفس (مسار|صف|مادة|نوع|جزء) عند كتاب مؤكَّد آخر أو عند بطاقة أخرى معروضة (غالباً جزءان لكتاب واحد)
+  const keyOf = (c: ReviewCard) => { const g = get(c); return `${g.track}|${g.grade}|${g.subject}|${g.kind}|${g.part}`; };
+  const counts = new Map<string, number>();
+  for (const c of visible) if (get(c).grade && get(c).subject) counts.set(keyOf(c), (counts.get(keyOf(c)) ?? 0) + 1);
+  const conflict = (c: ReviewCard) => !!(get(c).grade && get(c).subject) && (occupied.includes(keyOf(c)) || (counts.get(keyOf(c)) ?? 0) > 1);
+  const confirmable = visible.filter((c) => c.sure && complete(c) && !conflict(c));
 
   async function confirm(cards: ReviewCard[]) {
     setBusy(true);
     const res = await fetch("/api/v1/admin/books/confirm", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: cards.map((c) => { const g = get(c); return { bookId: c.id, trackCode: g.track, gradeCode: g.grade, subjectCode: g.subject, kind: g.kind }; }) }),
+      body: JSON.stringify({ items: cards.map((c) => { const g = get(c); return { bookId: c.id, trackCode: g.track, gradeCode: g.grade, subjectCode: g.subject, kind: g.kind, part: g.part }; }) }),
     });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
@@ -158,6 +164,8 @@ export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds }: {
                   <select className={sc} value={g.kind} onChange={(e) => set(c, { kind: e.target.value })} aria-label={t.kind}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                   <select className={sc} value={g.track} onChange={(e) => set(c, { track: e.target.value })} aria-label={t.track}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                 </div>
+                <select className={sc} value={g.part} onChange={(e) => set(c, { part: Number(e.target.value) })} aria-label={t.part}>{t.parts.map((l, i) => <option key={i} value={i}>{l}</option>)}</select>
+                {conflict(c) && <div role="status" className="rounded-lg bg-accent-soft px-2 py-1 text-[11px] text-danger">{t.partConflict}</div>}
                 {c.evidence && <div className="line-clamp-2 text-[11px] text-muted" dir="auto">{c.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{c.evidence}»</div>}
                 {errs[c.id] && <div role="alert" className="text-xs text-danger">{errs[c.id]}</div>}
                 <div className="flex flex-wrap gap-1.5 pt-1">

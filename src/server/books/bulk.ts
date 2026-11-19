@@ -14,12 +14,13 @@ export const confirmSchema = z.object({
     gradeCode: codeSchema,
     subjectCode: codeSchema,
     kind: z.enum(["TEXTBOOK", "EXERCISES", "ACTIVITY"]),
+    part: z.number().int().min(0).max(5).default(0),
   })).min(1).max(200),
 });
 
 export type ReviewItem = {
   id: string; originalName: string; status: string; error: string | null; pageCount: number | null; textPageCount: number | null; processedPages: number;
-  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: BookGuess["kind"];
+  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: BookGuess["kind"]; part: number;
   /** واثق: النظام يرجّح صحة الاقتراح (غلاف بعبارة صف صريحة، أو ربط تلقائي سابق) */
   sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null;
   /** ما زال يُقرأ/يُتعرَّف عليه */
@@ -36,7 +37,7 @@ export async function listReview(): Promise<ReviewItem[]> {
     orderBy: [{ createdAt: "desc" }],
     select: {
       id: true, originalName: true, status: true, error: true, pageCount: true, textPageCount: true, processedPages: true, detected: true, autoLinked: true, curriculumId: true,
-      curriculum: { select: { kind: true, grade: { select: { code: true } }, subject: { select: { code: true } }, track: { select: { code: true } } } },
+      curriculum: { select: { kind: true, part: true, grade: { select: { code: true } }, subject: { select: { code: true } }, track: { select: { code: true } } } },
     },
   });
   return books.map((b) => {
@@ -46,10 +47,11 @@ export async function listReview(): Promise<ReviewItem[]> {
     const gradeCode = c?.grade.code ?? d?.gradeCode ?? name.gradeCode;
     const subjectCode = c?.subject.code ?? d?.subjectCode ?? name.subjectCode;
     const kind: BookGuess["kind"] = c?.kind ?? (d && d.kind !== "TEXTBOOK" ? d.kind : name.kind);
+    const part = c ? c.part : (d?.part || name.part || 0);
     const sure = b.autoLinked || (d ? d.confidence === "high" : !!name.gradeCode && !!name.subjectCode);
     return {
       id: b.id, originalName: b.originalName, status: b.status, error: b.error, pageCount: b.pageCount, textPageCount: b.textPageCount, processedPages: b.processedPages,
-      trackCode: c?.track.code ?? "GENERAL", gradeCode, subjectCode, kind, sure: sure && !!gradeCode && !!subjectCode,
+      trackCode: c?.track.code ?? "GENERAL", gradeCode, subjectCode, kind, part, sure: sure && !!gradeCode && !!subjectCode,
       linked: !!b.curriculumId, autoLinked: b.autoLinked, evidence: d?.evidence ?? null, source: d?.source ?? null,
       working: b.status === "UPLOADED" || b.status === "PROCESSING" || (d === null && b.status !== "FAILED"),
     };
@@ -60,8 +62,20 @@ export async function listReview(): Promise<ReviewItem[]> {
 export async function confirmPlacements(actor: Actor, input: z.infer<typeof confirmSchema>) {
   const results: { bookId: string; ok: boolean; created?: boolean; curriculumId?: string; code?: string }[] = [];
   for (const it of input.items) {
-    const r = await placeBook(actor, it.bookId, { trackCode: it.trackCode, gradeCode: it.gradeCode, subjectCode: it.subjectCode, kind: it.kind }, "confirm");
+    const r = await placeBook(actor, it.bookId, { trackCode: it.trackCode, gradeCode: it.gradeCode, subjectCode: it.subjectCode, kind: it.kind, part: it.part }, "confirm");
     results.push({ bookId: it.bookId, ...(r.ok ? { ok: true, created: r.created, curriculumId: r.curriculumId } : { ok: false, code: r.code }) });
   }
   return results;
+}
+
+/**
+ * أمكنة (مسار|صف|مادة|نوع|جزء) المشغولة بكتب مؤكَّدة: تُنبّه المراجعة إن وُضع كتاب ثانٍ في المكان نفسه
+ * (غالباً جزء ثانٍ من الكتاب نفسه فتتعارض أرقام صفحاتهما).
+ */
+export async function listOccupiedKeys(): Promise<string[]> {
+  const rows = await db.uploadedBook.findMany({
+    where: { ownerId: null, confirmedAt: { not: null }, curriculumId: { not: null } },
+    select: { curriculum: { select: { kind: true, part: true, track: { select: { code: true } }, grade: { select: { code: true } }, subject: { select: { code: true } } } } },
+  });
+  return [...new Set(rows.flatMap((r) => (r.curriculum ? [`${r.curriculum.track.code}|${r.curriculum.grade.code}|${r.curriculum.subject.code}|${r.curriculum.kind}|${r.curriculum.part}`] : [])))];
 }

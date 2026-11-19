@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { guessFromName } from "./names";
 
 // أسماء حقيقية من ملفات المستخدم (الأول/الرابع/السادس الابتدائي)
-const cases: [string, ReturnType<typeof guessFromName>][] = [
+const cases: [string, Omit<ReturnType<typeof guessFromName>, "part"> & { part?: number }][] = [
   ["كتاب-الرياضيات-الاول-الابتدائي-350lg41.pdf", { gradeCode: "PRI_1", subjectCode: "MATH", kind: "TEXTBOOK" }],
   ["كتاب-تمرينات-الرياضيات-الاول-الابتدائي-ddawymi.pdf", { gradeCode: "PRI_1", subjectCode: "MATH", kind: "EXERCISES" }],
   ["كتاب-العلوم-الاول-الابتدائي-lruqhtn.pdf", { gradeCode: "PRI_1", subjectCode: "SCIENCE", kind: "TEXTBOOK" }],
@@ -28,5 +28,10 @@ const cases: [string, ReturnType<typeof guessFromName>][] = [
 ];
 
 describe("guessFromName", () => {
-  it.each(cases)("%s", (name, expected) => expect(guessFromName(name)).toEqual(expected));
+  it.each(cases)("%s", (name, expected) => expect(guessFromName(name)).toEqual({ part: 0, ...expected }));
+
+  it.each([
+    ["كتاب-الرياضيات-الجزء-الاول-الثالث-الابتدائي.pdf", 1], ["كتاب الرياضيات الجزء الثاني للصف الثالث الابتدائي.pdf", 2],
+    ["math-grade3-part-2.pdf", 2], ["Science Primary 4 Part One.pdf", 1], ["كتاب-العلوم-الثالث.pdf", 0],
+  ])("part of %s", (name, part) => expect(guessFromName(name).part).toBe(part));
 });

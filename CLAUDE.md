@@ -70,3 +70,6 @@ npm run typecheck && npm run lint && npm run build
 - `placement.ts: placeBook(actor, bookId, placement, "auto"|"confirm")`: الوحيد الذي يضع كتاباً في منهجه (ينشئ المنهج عبر `createEntity`). "auto" لا يتجاوز ربطاً قائماً ولا يضع `confirmedAt`؛ "confirm" يضعه. قائمة المراجعة = `confirmedAt IS NULL` (`listReview`).
 - لا تُنشئ مسار ربط جديداً يتجاوز `placeBook` (يفقد التحقق والتدقيق).
 - صور الأغلفة تمر بسقف الذاكرة المشترك (`withExtractSlot`) لأن الصفحة تطلب عشرات الصور معاً.
+
+## الأجزاء
+- هوية المنهج صارت: مسار + صف + [فرع] + مادة + سنة + لغة + kind + **part** + [طبعة]. لا تضع جزءين في منهج واحد (ترقيم الصفحات مستقل لكل ملف). `placeBook` يمرّر `part` دائماً (الافتراضي 0).

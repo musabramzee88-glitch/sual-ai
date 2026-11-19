@@ -39,7 +39,7 @@ const input = "w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm o
 /** نموذج JSON عام: حقول بسيطة → إرسال إلى API */
 export function JsonForm({ url, method = "POST", fields, submit, L, extra }: {
   url: string; method?: "POST" | "PUT"; submit: string; L: ActLabels;
-  fields: { name: string; label: string; type?: "text" | "number" | "textarea" | "select" | "date"; options?: [string, string][]; required?: boolean; dir?: "ltr" }[];
+  fields: { name: string; label: string; type?: "text" | "number" | "textarea" | "select" | "date"; options?: [string, string][]; required?: boolean; dir?: "ltr"; numeric?: boolean }[];
   extra?: { name: string; label: string; options: [string, string][] };
 }) {
   const router = useRouter();
@@ -50,7 +50,7 @@ export function JsonForm({ url, method = "POST", fields, submit, L, extra }: {
   async function send(e: React.FormEvent) {
     e.preventDefault(); setErr(null); setOk(false);
     const body: Record<string, unknown> = {};
-    for (const f of fields) if (v[f.name] !== "") body[f.name] = f.type === "number" ? Number(v[f.name]) : v[f.name];
+    for (const f of fields) if (v[f.name] !== "") body[f.name] = f.type === "number" || f.numeric ? Number(v[f.name]) : v[f.name];
     if (extra) body[extra.name] = perms;
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await res.json().catch(() => ({}));

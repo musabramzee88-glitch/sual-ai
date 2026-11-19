@@ -72,9 +72,9 @@ export function listCurricula(f: { gradeCode: string; trackCode: string; subject
       subject: f.subjectCode ? { code: f.subjectCode, isActive: true } : { isActive: true },
       ...(f.branchCode ? { OR: [{ branchId: null }, { branch: { code: f.branchCode } }] } : {}),
     },
-    orderBy: [{ academicYear: { startsOn: "desc" } }, { subject: { sortOrder: "asc" } }, { kind: "asc" }, { title: "asc" }],
+    orderBy: [{ academicYear: { startsOn: "desc" } }, { subject: { sortOrder: "asc" } }, { kind: "asc" }, { part: "asc" }, { title: "asc" }],
     select: {
-      id: true, title: true, edition: true, language: true, kind: true,
+      id: true, title: true, edition: true, language: true, kind: true, part: true,
       subject: { select: pick }, branch: { select: pick }, academicYear: { select: { label: true, isCurrent: true } },
       chapters: { orderBy: { sortOrder: "asc" }, select: { id: true, sortOrder: true, title: true, pageStart: true, pageEnd: true } },
     },

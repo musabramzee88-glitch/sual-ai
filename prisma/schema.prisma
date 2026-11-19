@@ -391,6 +391,8 @@ model Curriculum {
   language       Locale              @default(AR)
   /// كتاب الطالب / التمارين / النشاط — يميّز كتابين لنفس المادة والصف والسنة
   kind           CurriculumKind      @default(TEXTBOOK)
+  /// الجزء (1 = الأول، 2 = الثاني …)؛ 0 = كتاب بلا أجزاء. لكل جزء ملف PDF بترقيم صفحات مستقل
+  part           Int                 @default(0)
   title          String
   edition        String?
   isActive       Boolean             @default(true)
@@ -405,7 +407,7 @@ model Curriculum {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  @@unique([trackId, gradeId, branchId, subjectId, academicYearId, language, kind, edition])
+  @@unique([trackId, gradeId, branchId, subjectId, academicYearId, language, kind, part, edition])
   @@index([gradeId, subjectId])
 }
 

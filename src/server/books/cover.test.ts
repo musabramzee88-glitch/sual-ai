@@ -46,6 +46,18 @@ const cases: [string, string, { gradeCode: string | null; subjectCode: string | 
   ["صفحة بلا معنى", "ثق بالله\n\n٣", { gradeCode: null, subjectCode: null, kind: "TEXTBOOK", confidence: "low" }],
 ];
 
+describe("guessFromCover: parts (الجزء الأول / الثاني)", () => {
+  it.each([
+    ["الرياضيات\nالجزء الأول\nللصف الثالث الابتدائي", 1],
+    ["جمهورية العراق وزارة التربية\nالعلوم\nللصف الرابع الابتدائي\nالجزء الثاني", 2],
+    ["الرياضيات\nللصف الثالث الابتدائي", 0],
+    ["English for Iraq Primary 5 Pupil's Book Part 2 Ministry of Education Republic of Iraq", 2],
+  ])("%j", (text, part) => expect(guessFromCover(text).part).toBe(part));
+  it("keeps grade/subject/kind identification with a part on the cover", () => {
+    expect(guessFromCover("تمارين الرياضيات\nالجزء الثاني\nللصف الثالث الابتدائي")).toMatchObject({ gradeCode: "PRI_3", subjectCode: "MATH", kind: "EXERCISES", part: 2, confidence: "high" });
+  });
+});
+
 describe("guessFromCover", () => {
   it.each(cases)("%s", (_n, text, expected) => expect(guessFromCover(text)).toMatchObject(expected));
   it("returns a short evidence snippet for the user to verify", () => {

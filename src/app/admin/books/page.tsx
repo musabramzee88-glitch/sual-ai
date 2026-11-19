@@ -4,7 +4,7 @@ import { AdminShell, Pill, TableWrap, Td, Th } from "@/components/AdminShell";
 import { AutoRefresh, CancelAll, Dropzone, LinkSelect, ReprocessFailed, ReviewBoard } from "@/components/BookUploader";
 import { db } from "@/server/db";
 import { adminCtx } from "@/server/admin/page";
-import { listReview } from "@/server/books/bulk";
+import { listOccupiedKeys, listReview } from "@/server/books/bulk";
 import { listLibraryBooks, STALE_MS } from "@/server/books/service";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +12,10 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { admin, site, t, L, pick } = await adminCtx("MANAGE_CURRICULUM");
   const b = t.books;
-  const [books, review, tracks, grades, subjects, curricula] = await Promise.all([
+  const [books, review, occupied, tracks, grades, subjects, curricula] = await Promise.all([
     listLibraryBooks(),
     listReview(),
+    listOccupiedKeys(),
     db.curriculumTrack.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     db.grade.findMany({ where: { isActive: true }, orderBy: [{ stage: { sortOrder: "asc" } }, { sortOrder: "asc" }] }),
     db.subject.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
@@ -39,12 +40,12 @@ export default async function Page() {
 
       <ReviewBoard
         L={L}
-        items={review.map((r) => ({ ...r, name: r.originalName }))}
+        items={review.map((r) => ({ ...r, name: r.originalName }))} occupied={occupied}
         tracks={tracks.map((x) => [x.code, pick(x)])} grades={grades.map((x) => [x.code, pick(x)])} subjects={subjects.map((x) => [x.code, pick(x)])} kinds={Object.entries(t.cur.kinds)}
         t={{
           reviewTitle: b.reviewTitle, reviewEmpty: b.reviewEmpty, reviewHint: b.reviewHint, confirm: b.confirm, confirmAll: b.confirmAll, sureTag: b.sureTag, checkTag: b.checkTag, autoTag: b.autoTag,
           working: b.working, needsOcrTag: b.needsOcrTag, readOcr: b.readOcr, fromCover: b.fromCover, pickGrade: b.pickGrade, pickSubject: b.pickSubject, track: t.cur.track, grade: t.cur.grade, subject: t.cur.subject,
-          kind: t.cur.kind, remove: b.remove, ocrPage: b.ocrPage, failedOcr: b.failedOcr,
+          kind: t.cur.kind, remove: b.remove, ocrPage: b.ocrPage, failedOcr: b.failedOcr, part: t.cur.part, parts: t.cur.parts, partConflict: b.partConflict,
         }}
       />
 

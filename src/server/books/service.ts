@@ -148,7 +148,7 @@ export async function processBook(id: string, opts: { ocr?: boolean; actor?: Act
   }
 }
 
-export type Detected = Pick<CoverGuess, "gradeCode" | "subjectCode" | "kind" | "confidence" | "evidence"> & { source: "text" | "ocr" };
+export type Detected = Pick<CoverGuess, "gradeCode" | "subjectCode" | "kind" | "part" | "confidence" | "evidence"> & { source: "text" | "ocr" };
 
 /**
  * يتعرّف على الصف والمادة ونوع الكتاب من نص الصفحات الأولى (الغلاف)، فأسماء الملفات المحمّلة كثيراً ما
@@ -188,7 +188,7 @@ export async function detectBook(id: string, actor?: Actor): Promise<Detected | 
   await db.uploadedBook.update({ where: { id }, data: { detected: best } });
   // تعرّف واثق → يوضع في مكانه تلقائياً (يبقى ينتظر مراجعتك). لا يلمس كتاباً ربطه المستخدم.
   if (actor && !b.curriculumId && best.confidence === "high" && best.gradeCode && best.subjectCode) {
-    const r = await placeBook(actor, id, { trackCode: "GENERAL", gradeCode: best.gradeCode, subjectCode: best.subjectCode, kind: best.kind }, "auto");
+    const r = await placeBook(actor, id, { trackCode: "GENERAL", gradeCode: best.gradeCode, subjectCode: best.subjectCode, kind: best.kind, part: best.part ?? 0 }, "auto");
     if (!r.ok && r.code !== "NO_CURRENT_YEAR" && r.code !== "ALREADY_LINKED") console.error(`[books] auto placement failed for ${id}: ${r.code}`);
   }
   return best;

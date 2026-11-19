@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../db";
-import { confirmPlacements, listReview } from "./bulk";
+import { confirmPlacements, listOccupiedKeys, listReview } from "./bulk";
 import { createEntity } from "../admin/curriculum";
 import { placeBook } from "./placement";
 
@@ -15,7 +15,7 @@ const mkBook = async (name: string) => {
   bookIds.push(b.id);
   return b.id;
 };
-const item = (bookId: string, gradeCode: string, subjectCode: string, kind: "TEXTBOOK" | "EXERCISES" | "ACTIVITY", trackCode = "GENERAL") => ({ bookId, trackCode, gradeCode, subjectCode, kind });
+const item = (bookId: string, gradeCode: string, subjectCode: string, kind: "TEXTBOOK" | "EXERCISES" | "ACTIVITY", trackCode = "GENERAL", part = 0) => ({ bookId, trackCode, gradeCode, subjectCode, kind, part });
 
 beforeAll(async () => {
   const u = await db.user.create({ data: { fullName: "مدير ربط", email: `${TAG}@example.test`, phone: `+96478${String(Date.now()).slice(-8)}`, passwordHash: "x", role: "SUPER_ADMIN" } });
@@ -96,5 +96,28 @@ describe("placing and confirming books", () => {
   it("curricula identity includes the book kind at the database level", async () => {
     const c = await db.curriculum.findFirstOrThrow({ where: { kind: "TEXTBOOK", academicYear: { label: YEAR }, subject: { code: "MATH" } } });
     await expect(db.curriculum.create({ data: { trackId: c.trackId, gradeId: c.gradeId, subjectId: c.subjectId, academicYearId: c.academicYearId, language: c.language, kind: "TEXTBOOK", title: "dup" } })).rejects.toThrow();
+  });
+
+  it("part 1 and part 2 of the same book become separate curricula (separate page numbering); occupied keys expose conflicts", async () => {
+    const p1 = await mkBook("part1.pdf"), p2 = await mkBook("part2.pdf"), dup = await mkBook("part-dup.pdf");
+    const r = await confirmPlacements(actor, { items: [item(p1, "PRI_3", "MATH", "TEXTBOOK", "GENERAL", 1), item(p2, "PRI_3", "MATH", "TEXTBOOK", "GENERAL", 2)] });
+    expect(r.map((x) => [x.ok, x.created])).toEqual([[true, true], [true, true]]);
+    const cs = await db.curriculum.findMany({ where: { academicYear: { label: YEAR }, grade: { code: "PRI_3" }, subject: { code: "MATH" } }, orderBy: { part: "asc" } });
+    expect(cs.map((c) => [c.part, c.title])).toEqual([[1, "الرياضيات — الجزء الأول — الثالث الابتدائي"], [2, "الرياضيات — الجزء الثاني — الثالث الابتدائي"]]);
+    expect(cs[0].id).not.toBe(cs[1].id);
+
+    const occ = await listOccupiedKeys();
+    expect(occ).toContain("GENERAL|PRI_3|MATH|TEXTBOOK|1");
+    expect(occ).toContain("GENERAL|PRI_3|MATH|TEXTBOOK|2");
+    expect(occ).not.toContain("GENERAL|PRI_3|MATH|TEXTBOOK|0");
+
+    // بلا جزء: منهج ثالث مستقل (جزء 0)
+    const whole = await confirmPlacements(actor, { items: [item(dup, "PRI_3", "MATH", "TEXTBOOK")] });
+    expect(whole[0]).toMatchObject({ ok: true, created: true });
+    expect(await db.curriculum.count({ where: { academicYear: { label: YEAR }, grade: { code: "PRI_3" }, subject: { code: "MATH" } } })).toBe(3);
+    // الجزء مفروض في قاعدة البيانات أيضاً
+    const c = cs[0];
+    await expect(db.curriculum.create({ data: { trackId: c.trackId, gradeId: c.gradeId, subjectId: c.subjectId, academicYearId: c.academicYearId, language: c.language, kind: "TEXTBOOK", part: 1, title: "dup" } })).rejects.toThrow();
+    await expect(db.curriculum.create({ data: { trackId: c.trackId, gradeId: c.gradeId, subjectId: c.subjectId, academicYearId: c.academicYearId, language: c.language, kind: "TEXTBOOK", part: 9, title: "bad" } })).rejects.toThrow(); // CHECK 0..5
   });
 });

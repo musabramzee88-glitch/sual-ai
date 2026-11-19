@@ -4,12 +4,13 @@ import { audit, type Actor } from "../admin/audit";
 import { createEntity } from "../admin/curriculum";
 import { languageOf, type BookGuess } from "./names";
 
-export type Placement = { trackCode: string; gradeCode: string; subjectCode: string; kind: BookGuess["kind"] };
+export type Placement = { trackCode: string; gradeCode: string; subjectCode: string; kind: BookGuess["kind"]; part?: number };
 export type PlaceResult = { ok: true; created: boolean; curriculumId: string } | { ok: false; code: string };
 
 /** العنوان الافتراضي النظيف للمنهج (لا اسم ملف) */
-const titleOf = (kind: BookGuess["kind"], subject: string, grade: string) =>
-  `${kind === "EXERCISES" ? "تمارين " : kind === "ACTIVITY" ? "نشاط " : ""}${subject} — ${grade}`;
+const PART_AR = ["", "الجزء الأول", "الجزء الثاني", "الجزء الثالث", "الجزء الرابع", "الجزء الخامس"];
+const titleOf = (kind: BookGuess["kind"], subject: string, grade: string, part: number) =>
+  `${kind === "EXERCISES" ? "تمارين " : kind === "ACTIVITY" ? "نشاط " : ""}${subject}${part > 0 ? ` — ${PART_AR[part]}` : ""} — ${grade}`;
 
 /**
  * يضع الكتاب في مكانه: يجد المنهج (مسار + صف + مادة + السنة الحالية + نوع الكتاب) أو ينشئه، ثم يربط الكتاب به.
@@ -31,15 +32,16 @@ export async function placeBook(actor: Actor, bookId: string, p: Placement, mode
   if (mode === "auto" && book.curriculumId) return { ok: false, code: "ALREADY_LINKED" };
 
   const language = languageOf(subject.code);
+  const part = p.part ?? 0;
   let cur = await db.curriculum.findFirst({
-    where: { trackId: track.id, gradeId: grade.id, branchId: null, subjectId: subject.id, academicYearId: year.id, language, kind: p.kind, edition: null },
+    where: { trackId: track.id, gradeId: grade.id, branchId: null, subjectId: subject.id, academicYearId: year.id, language, kind: p.kind, part, edition: null },
     select: { id: true },
   });
   let created = false;
   if (!cur) {
     const r = await createEntity(actor, "curricula", {
-      trackCode: track.code, gradeCode: grade.code, subjectCode: subject.code, yearLabel: year.label, language, kind: p.kind,
-      title: titleOf(p.kind, subject.nameAr, grade.nameAr),
+      trackCode: track.code, gradeCode: grade.code, subjectCode: subject.code, yearLabel: year.label, language, kind: p.kind, part,
+      title: titleOf(p.kind, subject.nameAr, grade.nameAr, part),
     });
     if (!r.ok) return { ok: false, code: r.code };
     cur = { id: r.id };

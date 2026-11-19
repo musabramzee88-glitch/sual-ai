@@ -91,7 +91,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
         <TableWrap><thead><tr><Th>{c.ctitle}</Th><Th>{c.kind}</Th><Th>{c.grade}</Th><Th>{c.track}</Th><Th>{c.subject}</Th><Th>{c.year}</Th><Th>{c.chapters}</Th><Th>{c.active}</Th><Th>{t.common.actions}</Th></tr></thead>
           <tbody>{d.curricula.length === 0 && <tr><Td>{t.common.empty}</Td></tr>}{d.curricula.map((r) => <tr key={r.id}>
             <Td>{r.title}{r.edition && <div className="text-xs text-muted">{r.edition}</div>}<div className="text-xs text-muted">{r.language}</div></Td>
-            <Td><Pill>{c.kinds[r.kind]}</Pill></Td>
+            <Td><Pill>{c.kinds[r.kind]}</Pill>{r.part > 0 && <div className="mt-1 text-xs text-muted">{c.parts[r.part]}</div>}</Td>
             <Td>{pick(r.grade)}{r.branch && <div className="text-xs text-muted">{pick(r.branch)}</div>}</Td><Td>{pick(r.track)}</Td><Td>{pick(r.subject)}</Td><Td><span dir="ltr">{r.academicYear.label}</span></Td>
             <Td>{r._count.chapters}</Td><Td><Pill>{r.isActive ? t.common.yes : t.common.no}</Pill></Td>
             <Td><div className="flex flex-wrap gap-1"><Link href={`/admin/curriculum/curricula/${r.id}`} className="rounded-lg border border-line px-3 py-1 text-xs">{c.editChapters}</Link>
@@ -108,6 +108,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
             { name: "yearLabel", label: c.year, type: "select", options: d.years.map((y) => [y.label, y.label]) },
             { name: "language", label: c.language, type: "select", options: [["AR", "العربية"], ["EN", "English"]] },
             { name: "kind", label: c.kind, type: "select", options: Object.entries(c.kinds) },
+            { name: "part", label: c.part, type: "select", numeric: true, options: c.parts.map((l, i): [string, string] => [String(i), l]) },
             { name: "title", label: c.ctitle }, { name: "edition", label: c.edition, required: false },
           ]} />
         )}

@@ -1,4 +1,4 @@
-import { guessGrade, guessKind, guessSubject, normalizeName, type BookGuess } from "./names";
+import { guessGrade, guessKind, guessPart, guessSubject, normalizeName, type BookGuess } from "./names";
 
 /**
  * تعرّف على الكتاب من نص غلافه/صفحاته الأولى (دوال نقية).
@@ -27,6 +27,7 @@ function guessEnglishCover(raw: string): CoverGuess | null {
     gradeCode: num && primary ? `PRI_${num}` : null,
     subjectCode: "ENGLISH",
     kind: /activity|workbook/.test(n) ? "ACTIVITY" : "TEXTBOOK",
+    part: guessPart(n),
     confidence: num ? "high" : "low",
     evidence: raw.replace(/\s+/g, " ").trim().slice(0, 160),
   };
@@ -44,10 +45,10 @@ export function guessFromCover(raw: string): CoverGuess {
     // العنوان يسبق «للصف …» عادةً: نافذة قصيرة قبل العبارة أولاً (تتجنب كلمات الوزارة وغيرها)
     const before = n.slice(Math.max(0, m.index - 70), m.index + m[0].length);
     const subjectCode = guessSubject(before);
-    return { gradeCode, subjectCode, kind: guessKind(before), confidence: gradeCode && subjectCode ? "high" : "low", evidence };
+    return { gradeCode, subjectCode, kind: guessKind(before), part: guessPart(n), confidence: gradeCode && subjectCode ? "high" : "low", evidence };
   }
   // لا عبارة صف صريحة: تخمين ضعيف من النص كله، يحتاج مراجعة
-  return { gradeCode: guessGrade(n), subjectCode: guessSubject(n), kind: guessKind(n), confidence: "low", evidence };
+  return { gradeCode: guessGrade(n), subjectCode: guessSubject(n), kind: guessKind(n), part: guessPart(n), confidence: "low", evidence };
 }
 
 /**

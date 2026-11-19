@@ -41,7 +41,7 @@ export const schemas = {
   curricula: {
     create: z.object({
       trackCode: codeSchema, gradeCode: codeSchema, branchCode: codeSchema.nullable().optional(), subjectCode: codeSchema, yearLabel: z.string().regex(/^\d{4}-\d{4}$/),
-      language: z.enum(["AR", "EN"]), kind: z.enum(["TEXTBOOK", "EXERCISES", "ACTIVITY"]).default("TEXTBOOK"), title: z.string().trim().min(2).max(200), edition: z.string().trim().max(80).nullable().optional(),
+      language: z.enum(["AR", "EN"]), kind: z.enum(["TEXTBOOK", "EXERCISES", "ACTIVITY"]).default("TEXTBOOK"), part: z.number().int().min(0).max(5).default(0), title: z.string().trim().min(2).max(200), edition: z.string().trim().max(80).nullable().optional(),
     }),
     update: z.object({ title: z.string().trim().min(2).max(200).optional(), edition: z.string().trim().max(80).nullable().optional(), isActive: z.boolean().optional() }),
   },
@@ -113,10 +113,10 @@ export async function createEntity(actor: Actor, kind: Kind, raw: unknown) {
           if (!track.grades.some((g) => g.gradeId === grade.id)) return fail("TRACK_NOT_FOR_GRADE" as const);
           if (branch && !grade.branches.some((b) => b.branchId === branch.id)) return fail("BRANCH_NOT_FOR_GRADE" as const);
           // فرادة يدوية لأن PostgreSQL يعامل NULL (الفرع/الطبعة) كقيم مختلفة في القيد المركّب
-          const dup = await tx.curriculum.findFirst({ where: { trackId: track.id, gradeId: grade.id, branchId: branch?.id ?? null, subjectId: subject.id, academicYearId: year.id, language: i.language, kind: i.kind, edition: i.edition ?? null } });
+          const dup = await tx.curriculum.findFirst({ where: { trackId: track.id, gradeId: grade.id, branchId: branch?.id ?? null, subjectId: subject.id, academicYearId: year.id, language: i.language, kind: i.kind, part: i.part, edition: i.edition ?? null } });
           if (dup) return fail("DUPLICATE" as const);
           id = (await tx.curriculum.create({
-            data: { trackId: track.id, gradeId: grade.id, branchId: branch?.id ?? null, subjectId: subject.id, academicYearId: year.id, language: i.language, kind: i.kind, title: i.title, edition: i.edition ?? null },
+            data: { trackId: track.id, gradeId: grade.id, branchId: branch?.id ?? null, subjectId: subject.id, academicYearId: year.id, language: i.language, kind: i.kind, part: i.part, title: i.title, edition: i.edition ?? null },
           })).id;
           break;
         }
