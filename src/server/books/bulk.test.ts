@@ -46,6 +46,10 @@ describe("placing and confirming books", () => {
 
     const text = await mkBook("t1.pdf"), ex = await mkBook("t2.pdf"), act = await mkBook("t3.pdf"), text2 = await mkBook("t4.pdf");
     const mine = [text, ex, act, text2];
+    // فحص السلامة يظهر في قائمة المراجعة قبل التأكيد (هنا الملفات غير موجودة على القرص عمداً)
+    const card = (await listReview()).find((x) => x.id === text)!;
+    expect(card.problems.some((p) => p.severity === "error" && p.text.includes("ملف الكتاب غير موجود على القرص"))).toBe(true);
+    expect(card.problems.some((p) => p.text.includes("غير مربوط"))).toBe(false); // مشكلات بديهية لا تُعرض في البطاقة
     expect((await listReview()).filter((x) => mine.includes(x.id)).length).toBe(4); // كلها تنتظر مراجعة
     const r = await confirmPlacements(actor, { items: [
       item(text, "PRI_1", "MATH", "TEXTBOOK"), item(ex, "PRI_1", "MATH", "EXERCISES"), item(act, "PRI_1", "READING", "ACTIVITY"), item(text2, "PRI_1", "MATH", "TEXTBOOK"),

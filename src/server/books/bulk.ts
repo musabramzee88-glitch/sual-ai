@@ -3,6 +3,9 @@ import { z } from "zod";
 import { db } from "../db";
 import { codeSchema } from "../http";
 import type { Actor } from "../admin/audit";
+import { env } from "../env";
+import { buildReport, issueMessage } from "./health";
+import { loadBookInputs } from "./health-data";
 import { guessFromName, type BookGuess } from "./names";
 import { placeBook } from "./placement";
 import type { Detected } from "./service";
@@ -25,6 +28,8 @@ export type ReviewItem = {
   sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null;
   /** ما زال يُقرأ/يُتعرَّف عليه */
   working: boolean;
+  /** نتائج فحص السلامة (قبل التأكيد): أخطاء وتنبيهات بنص مفهوم */
+  problems: { severity: "error" | "warn"; text: string }[];
 };
 
 /**
@@ -32,6 +37,10 @@ export type ReviewItem = {
  * المصدر الأول للاقتراح: منهجه الحالي، ثم محتوى الغلاف، ثم اسم الملف احتياطاً.
  */
 export async function listReview(): Promise<ReviewItem[]> {
+  // فحص السلامة على عيّنة من أول 30 صفحة لكل كتاب منتظر (سريع حتى مع تحديث الصفحة كل 3 ثوانٍ)
+  const health = buildReport(await loadBookInputs(db, env.STORAGE_DIR, { onlyUnconfirmed: true, maxPages: 30 }));
+  const problemsOf = new Map(health.books.map((b) => [b.id, b.issues.filter((i) => i.severity !== "info" && i.code !== "NOT_LINKED" && i.code !== "NOT_CONFIRMED" && i.code !== "DUPLICATE_CONTENT").map((i) => ({ severity: i.severity as "error" | "warn", text: `${issueMessage(i.code)}${i.detail ? ` (${i.detail})` : ""}` }))]));
+  const dup = new Map(health.books.map((b) => [b.id, b.issues.find((i) => i.code === "DUPLICATE_CONTENT")]));
   const books = await db.uploadedBook.findMany({
     where: { ownerId: null, confirmedAt: null },
     orderBy: [{ createdAt: "desc" }],
@@ -54,6 +63,7 @@ export async function listReview(): Promise<ReviewItem[]> {
       trackCode: c?.track.code ?? "GENERAL", gradeCode, subjectCode, kind, part, sure: sure && !!gradeCode && !!subjectCode,
       linked: !!b.curriculumId, autoLinked: b.autoLinked, evidence: d?.evidence ?? null, source: d?.source ?? null,
       working: b.status === "UPLOADED" || b.status === "PROCESSING" || (d === null && b.status !== "FAILED"),
+      problems: [...(problemsOf.get(b.id) ?? []), ...(dup.get(b.id) ? [{ severity: "warn" as const, text: `${issueMessage("DUPLICATE_CONTENT")} (${dup.get(b.id)!.detail})` }] : [])],
     };
   });
 }

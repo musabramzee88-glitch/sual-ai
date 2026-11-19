@@ -85,6 +85,7 @@ export type ReviewCard = {
   id: string; name: string; status: string; error: string | null; pageCount: number | null; processedPages: number;
   trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: string; part: number;
   sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null; working: boolean;
+  problems: { severity: "error" | "warn"; text: string }[];
 };
 export type ReviewLabels = {
   reviewTitle: string; reviewEmpty: string; reviewHint: string; confirm: string; confirmAll: string; sureTag: string; checkTag: string; autoTag: string; working: string; needsOcrTag: string; readOcr: string;
@@ -114,7 +115,7 @@ export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds, occu
   const counts = new Map<string, number>();
   for (const c of visible) if (get(c).grade && get(c).subject) counts.set(keyOf(c), (counts.get(keyOf(c)) ?? 0) + 1);
   const conflict = (c: ReviewCard) => !!(get(c).grade && get(c).subject) && (occupied.includes(keyOf(c)) || (counts.get(keyOf(c)) ?? 0) > 1);
-  const confirmable = visible.filter((c) => c.sure && complete(c) && !conflict(c));
+  const confirmable = visible.filter((c) => c.sure && complete(c) && !conflict(c) && !c.problems.some((p) => p.severity === "error"));
 
   async function confirm(cards: ReviewCard[]) {
     setBusy(true);
@@ -165,6 +166,11 @@ export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds, occu
                   <select className={sc} value={g.track} onChange={(e) => set(c, { track: e.target.value })} aria-label={t.track}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                 </div>
                 <select className={sc} value={g.part} onChange={(e) => set(c, { part: Number(e.target.value) })} aria-label={t.part}>{t.parts.map((l, i) => <option key={i} value={i}>{l}</option>)}</select>
+                {c.problems.length > 0 && (
+                  <ul className="space-y-0.5 text-[11px]">
+                    {c.problems.map((p, k) => <li key={k} className={p.severity === "error" ? "text-danger" : "text-muted"}>{p.severity === "error" ? "✗" : "!"} {p.text}</li>)}
+                  </ul>
+                )}
                 {conflict(c) && <div role="status" className="rounded-lg bg-accent-soft px-2 py-1 text-[11px] text-danger">{t.partConflict}</div>}
                 {c.evidence && <div className="line-clamp-2 text-[11px] text-muted" dir="auto">{c.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{c.evidence}»</div>}
                 {errs[c.id] && <div role="alert" className="text-xs text-danger">{errs[c.id]}</div>}

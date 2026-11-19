@@ -83,10 +83,12 @@ export function checkBook(b: BookCheckInput): BookReport {
   const textPages = pages.filter((p) => letters(p.text) >= 10);
   const ocrPages = pages.filter((p) => p.isOcr);
   const blank = pages.filter((p) => letters(p.text) < 10);
+  // العدّ من قاعدة البيانات إن توفر (يصح مع عيّنة الصفحات)؛ وإلا من الصفحات المعروضة
+  const blankTotal = b.textPageCount != null && pageCount > 0 ? Math.max(0, pageCount - b.textPageCount) : blank.length;
   if (pageCount > 0 && pageCount < 4) add("TOO_FEW_PAGES", "warn", String(pageCount));
   if (pageCount > 600) add("TOO_MANY_PAGES", "warn", String(pageCount));
   if (ocrPages.length > 0) add("OCR_USED", "warn", `${ocrPages.length}/${pageCount}`);
-  if (b.status === "READY" && ocrPages.length === 0 && pageCount >= 10 && blank.length / pageCount > 0.3) add("MANY_BLANK_PAGES", "warn", `${blank.length}/${pageCount}`);
+  if (b.status === "READY" && ocrPages.length === 0 && pageCount >= 10 && blankTotal / pageCount > 0.3) add("MANY_BLANK_PAGES", "warn", `${blankTotal}/${pageCount}`);
 
   // ── جودة النص (على الصفحات ذات النص الأصلي، لا OCR فالـOCR له تنبيهه) ──
   const native = textPages.filter((p) => !p.isOcr);
@@ -137,7 +139,7 @@ export function checkBook(b: BookCheckInput): BookReport {
   if (!c && b.detected && b.detected.confidence === "low") add("LOW_CONFIDENCE", "info");
 
   const level = issues.some((i) => i.severity === "error") ? "error" : issues.some((i) => i.severity === "warn") ? "warn" : "ok";
-  return { id: b.id, name: b.name, level, issues, stats: { pages: pageCount, textPages: textPages.length, ocrPages: ocrPages.length, blankPages: blank.length } };
+  return { id: b.id, name: b.name, level, issues, stats: { pages: pageCount, textPages: textPages.length, ocrPages: ocrPages.length, blankPages: blankTotal } };
 }
 
 /** بصمة أول صفحات الكتاب النصية (لكشف كتابين بالمحتوى نفسه رُفعا بملفين مختلفين) */
@@ -172,6 +174,8 @@ export function buildReport(inputs: BookCheckInput[], now = new Date()): Report 
 }
 
 const MESSAGES: Record<string, string> = {
+  HASH_MISMATCH: "بصمة الملف (SHA-256) تغيّرت: الملف تالف أو عُدّل بعد الرفع", PDF_UNREADABLE: "تعذّر فتح ملف PDF", PAGECOUNT_MISMATCH: "عدد الصفحات الفعلي في الملف يختلف عن المسجَّل",
+  STORED_TEXT_DRIFT: "النص المخزَّن يختلف عن نص الملف الحالي: أعد معالجة الكتاب",
   FILE_MISSING: "ملف الكتاب غير موجود على القرص", FILE_SIZE_MISMATCH: "حجم الملف على القرص يختلف عن المسجَّل (تالف أو معدَّل)", STUCK: "عالق في المعالجة بلا نبض",
   STILL_PROCESSING: "ما زال قيد المعالجة", PARTIAL_TEXT: "نص جزئي: كثير من الصفحات بلا نص", TOO_FEW_PAGES: "عدد صفحاته قليل جداً", TOO_MANY_PAGES: "عدد صفحاته كبير جداً",
   OCR_USED: "بعض صفحاته مقروءة بـ OCR (قد تحوي أخطاء، خصوصاً الأرقام)", MANY_BLANK_PAGES: "أكثر من 30% من الصفحات بلا نص (رسوم؟ أم فشل استخراج؟)",
@@ -192,4 +196,17 @@ export function formatReport(r: Report): string {
     for (const i of b.issues.filter((x) => x.severity !== "info")) lines.push(`    ${i.severity === "error" ? "خطأ" : "تنبيه"}: ${issueMessage(i.code)}${i.detail ? ` (${i.detail})` : ""}`);
   }
   return lines.join("\n");
+}
+
+const summarize = (books: BookReport[]) => ({ total: books.length, ok: books.filter((b) => b.level === "ok").length, warn: books.filter((b) => b.level === "warn").length, error: books.filter((b) => b.level === "error").length });
+
+/** يضيف مشكلات (من فحص عميق مثلاً) إلى كتاب في تقرير قائم ويعيد حساب مستواه وملخص التقرير وترتيبه */
+export function addIssues(r: Report, bookId: string, issues: Issue[]): void {
+  const b = r.books.find((x) => x.id === bookId);
+  if (!b || issues.length === 0) return;
+  b.issues.push(...issues);
+  b.level = b.issues.some((i) => i.severity === "error") ? "error" : b.issues.some((i) => i.severity === "warn") ? "warn" : "ok";
+  const order = { error: 0, warn: 1, ok: 2 } as const;
+  r.books.sort((a, c) => order[a.level] - order[c.level] || a.name.localeCompare(c.name));
+  r.summary = summarize(r.books);
 }

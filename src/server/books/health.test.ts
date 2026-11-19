@@ -46,7 +46,7 @@ describe("checkBook", () => {
     expect(codes(base({ status: "PROCESSING", stale: true }))).toContain("STUCK");
     const ocr = base({ pages: Array.from({ length: 20 }, (_, i) => page(i + 1, PARA, i < 5)) });
     expect(codes(ocr)).toContain("OCR_USED");
-    const blanks = base({ pages: Array.from({ length: 20 }, (_, i) => page(i + 1, i < 8 ? "" : PARA)) });
+    const blanks = base({ textPageCount: 12, pages: Array.from({ length: 20 }, (_, i) => page(i + 1, i < 8 ? "" : PARA)) });
     expect(codes(blanks)).toContain("MANY_BLANK_PAGES");
   });
 

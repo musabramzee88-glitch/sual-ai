@@ -76,3 +76,4 @@ npm run typecheck && npm run lint && npm run build
 
 ## فحص الكتب
 - `health.ts` دوال نقية (لا server-only ولا DB)، و`health-data.ts` يأخذ `PrismaClient` ومجلد التخزين وسيطين ليعمل في الواجهة وفي `scripts/check-books.ts`. أي فحص جديد: أضفه في `checkBook` مع رسالة في `MESSAGES` واختباره بمدخلات اصطناعية.
+- الفحص العميق (`health-deep.ts`) يستورد `server-only`، لذلك سكربت `books:check` يعمل بـ `tsx --conditions=react-server` ويحمّله بـ `import()` عند `--deep` فقط.

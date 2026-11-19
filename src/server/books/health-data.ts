@@ -9,13 +9,14 @@ const STALE_MS = 5 * 60_000; // نفس عتبة العالق في service.ts
  * يجمع مدخلات الفحص من قاعدة البيانات والقرص. يأخذ عميل Prisma ومجلد التخزين كوسيطين
  * (لا يستورد server-only) ليعمل في الواجهة وفي سكربت سطر الأوامر معاً.
  */
-export async function loadBookInputs(prisma: PrismaClient, storageDir: string, now = Date.now()): Promise<BookCheckInput[]> {
+export async function loadBookInputs(prisma: PrismaClient, storageDir: string, opts: { onlyUnconfirmed?: boolean; maxPages?: number } = {}, now = Date.now()): Promise<BookCheckInput[]> {
   const books = await prisma.uploadedBook.findMany({
-    where: { ownerId: null },
+    where: { ownerId: null, ...(opts.onlyUnconfirmed ? { confirmedAt: null } : {}) },
     orderBy: { originalName: "asc" },
     select: {
       id: true, originalName: true, status: true, error: true, updatedAt: true, sizeBytes: true, storageKey: true, pageCount: true, textPageCount: true, confirmedAt: true, detected: true,
-      pages: { orderBy: { pageNumber: "asc" }, select: { pageNumber: true, text: true, isOcr: true } },
+      // maxPages: عيّنة من أول الصفحات لقوائم المراجعة السريعة (لا نحمّل نص كتب كاملة في كل تحديث للصفحة)
+      pages: { where: opts.maxPages ? { pageNumber: { lte: opts.maxPages } } : undefined, orderBy: { pageNumber: "asc" }, select: { pageNumber: true, text: true, isOcr: true } },
       curriculum: {
         select: {
           id: true, title: true, kind: true, part: true, grade: { select: { code: true } }, subject: { select: { code: true } },
