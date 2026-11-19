@@ -61,3 +61,7 @@ npm run typecheck && npm run lint && npm run build
 - `src/server/books/ocr.ts`: `ocrPdfPages(data, pages, onPage)` و`runOcrExclusive` (طابور واحد). نسخة `@napi-rs/canvas` **يجب أن تطابق** نسخة pdfjs-dist الداخلية (0.1.100) وإلا يحدث segfault. pdf.js يستولي على المخزن الممرَّر له، فانسخه (`data.slice()`) قبل إعادة استعماله.
 - مسار ملفات اللغة من `process.cwd()` لا `require.resolve` (Next يكسره بعد التجميع). أي تعديل في OCR يُختبر أيضاً على الخادم المبني (`npm run build && npm start`) لا بالاختبارات وحدها.
 - صفحات OCR تُعلَّم `isOcr`؛ لا تعاملها كنص موثوق في التوليد (الأرقام خصوصاً).
+
+## التعرّف من الغلاف
+- `src/server/books/cover.ts` (دوال نقية، اختباراتها بنصوص أغلفة عراقية/إنكليزية): ثقة `high` تتطلب عبارة الصف الصريحة. لا تُرفع الثقة لتخمين عام من النص كله.
+- `detectBook` يُستدعى في نهاية `processBook` (فشله غير قاتل) ويقرأ أول صفحتين بـ OCR عند الحاجة عبر نفس الطابور. `proposeLinks` يفضّل `detected` ويستعمل اسم الملف احتياطاً فقط.

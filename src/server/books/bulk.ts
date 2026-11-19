@@ -5,7 +5,7 @@ import { codeSchema } from "../http";
 import type { Actor } from "../admin/audit";
 import { createEntity } from "../admin/curriculum";
 import { guessFromName, languageOf, type BookGuess } from "./names";
-import { linkBook } from "./service";
+import { linkBook, type Detected } from "./service";
 
 export const applySchema = z.object({
   trackCode: codeSchema,
@@ -17,14 +17,32 @@ export const applySchema = z.object({
   })).min(1).max(100),
 });
 
-/** اقتراحات للكتب غير المربوطة: تخمين من الاسم فقط، والمستخدم يراجعه ويعدّله */
+/**
+ * اقتراحات للكتب غير المربوطة. المصدر الأول محتوى الغلاف (detected)، والاسم احتياط لما يغيب منه
+ * (أسماء الملفات المحمّلة قد تفقد حروفها العربية). الصفوف غير الواثقة تُعلَّم لتراجعها.
+ */
 export async function proposeLinks() {
   const books = await db.uploadedBook.findMany({
     where: { ownerId: null, curriculumId: null },
     orderBy: { originalName: "asc" },
-    select: { id: true, originalName: true, status: true, error: true },
+    select: { id: true, originalName: true, status: true, error: true, detected: true },
   });
-  return books.map((b) => ({ ...b, guess: guessFromName(b.originalName) as BookGuess }));
+  return books.map((b) => {
+    const name = guessFromName(b.originalName);
+    const d = b.detected as Detected | null;
+    const gradeCode = d?.gradeCode ?? name.gradeCode;
+    const subjectCode = d?.subjectCode ?? name.subjectCode;
+    const kind: BookGuess["kind"] = d && d.kind !== "TEXTBOOK" ? d.kind : name.kind;
+    // واثق: من الغلاف بثقة عالية، أو (بلا تعرّف) من الاسم بصف ومادة معاً
+    const sure = d ? d.confidence === "high" || (!!name.gradeCode && !!name.subjectCode && !d.gradeCode && !d.subjectCode) : !!name.gradeCode && !!name.subjectCode;
+    return {
+      id: b.id, originalName: b.originalName, status: b.status, error: b.error,
+      guess: { gradeCode, subjectCode, kind } as BookGuess,
+      sure, evidence: d?.evidence ?? null, source: d?.source ?? null,
+      /** لم يُجرَّ التعرّف بعد وهناك صفحات جاهزة له */
+      pending: d === null && b.status !== "PROCESSING" && b.status !== "UPLOADED",
+    };
+  });
 }
 
 type ItemResult = { bookId: string; ok: boolean; created?: boolean; curriculumId?: string; code?: string };

@@ -7,6 +7,8 @@ import { env } from "../env";
 import { audit, type Actor } from "../admin/audit";
 import { extractPdfPages } from "./extract";
 import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
+import { guessFromCover, type CoverGuess } from "./cover";
+import { hasRealText } from "./text";
 
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
 /** نبض الحياة كل صفحة؛ كتاب بلا نبض 5 دقائق يُعدّ عالقاً (خادم أُغلق) ويجوز إعادة معالجته */
@@ -130,6 +132,8 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
         },
       });
     }, { timeout: 120_000 });
+    // التعرّف على الكتاب من غلافه (فشله لا يفشل المعالجة)
+    await detectBook(id).catch((e) => console.error(`[books] detection failed for ${id}: ${(e as Error).name}`));
     return { ok: true as const, pageCount: pages.length, textPages, ocrPages: pages.filter((p) => p.isOcr).length };
   } catch (e) {
     if (e instanceof CancelledError) return fail("CANCELLED");
@@ -138,6 +142,42 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
     await db.uploadedBook.update({ where: { id }, data: { status: "FAILED", error: "EXTRACT_FAILED" } });
     return fail("EXTRACT_FAILED");
   }
+}
+
+export type Detected = Pick<CoverGuess, "gradeCode" | "subjectCode" | "kind" | "confidence" | "evidence"> & { source: "text" | "ocr" };
+
+/**
+ * يتعرّف على الصف والمادة ونوع الكتاب من نص الصفحات الأولى (الغلاف)، فأسماء الملفات المحمّلة كثيراً ما
+ * تفقد حروفها العربية. الصفحات المصوّرة: يقرأ أول صفحتين فقط بـ OCR (ثوانٍ) ولو كان OCR الكتاب مطفأً.
+ * إن لم تحمل الصفحات الأولى عبارة «للصف …» صريحة تُجرَّب قراءة الصفحتين الأوليين بـ OCR أيضاً وتُؤخذ الأفضل.
+ */
+export async function detectBook(id: string): Promise<Detected | null> {
+  const b = await db.uploadedBook.findUnique({
+    where: { id },
+    select: { storageKey: true, pageCount: true, pages: { where: { pageNumber: { lte: 4 } }, orderBy: { pageNumber: "asc" }, select: { text: true } } },
+  });
+  if (!b) return null;
+  let text = b.pages.map((p) => p.text).join("\n");
+  let best: Detected = { ...guessFromCover(text), source: "text" };
+  const needOcr = !hasRealText(text) || best.confidence === "low";
+  if (needOcr && ocrEnabled() && (b.pageCount ?? 0) > 0) {
+    try {
+      const bytes = new Uint8Array(await readFile(fileOf(b.storageKey)));
+      const res = await runOcrExclusive(() => ocrPdfPages(bytes, [1, 2].filter((n) => n <= (b.pageCount ?? 0))));
+      text = res.map((r) => r.text).join("\n");
+      const viaOcr: Detected = { ...guessFromCover(text), source: "ocr" };
+      if (viaOcr.confidence === "high" || !hasRealText(b.pages.map((p) => p.text).join("\n"))) best = viaOcr;
+    } catch (e) {
+      console.error(`[books] cover OCR failed for ${id}: ${(e as Error).name}`);
+    }
+  }
+  await db.uploadedBook.update({ where: { id }, data: { detected: best } });
+  return best;
+}
+
+/** يجري التعرّف على الكتب المحدّدة بالتتابع (للكتب المرفوعة قبل هذه الميزة) */
+export async function detectMany(ids: string[]) {
+  for (const id of ids) await detectBook(id).catch(() => null);
 }
 
 async function assertStillProcessing(id: string) {
@@ -193,7 +233,7 @@ export const listLibraryBooks = () =>
     where: { ownerId: null },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, updatedAt: true, status: true, error: true, createdAt: true, curriculumId: true,
+      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, updatedAt: true, detected: true, status: true, error: true, createdAt: true, curriculumId: true,
       curriculum: { select: { title: true, grade: { select: { nameAr: true, nameEn: true } }, subject: { select: { nameAr: true, nameEn: true } } } },
     },
   });

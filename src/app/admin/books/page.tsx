@@ -34,7 +34,7 @@ export default async function Page() {
       <BookUploader L={L} t={{ choose: b.choose, upload: b.upload, uploading: b.uploading, queued: b.queued, uploaded: b.uploaded, ocrToggle: b.ocrToggle, ocrToggleHint: b.ocrToggleHint }} />
       <div className="mt-6">
         <BulkLink L={L} t={{ ...b, kind: t.cur.kind, name: b.name }} tracks={tracks.map((x) => [x.code, pick(x)])} grades={grades.map((x) => [x.code, pick(x)])} subjects={subjects.map((x) => [x.code, pick(x)])}
-          kinds={Object.entries(t.cur.kinds)} initial={proposals.map((p) => ({ id: p.id, name: p.originalName, grade: p.guess.gradeCode, subject: p.guess.subjectCode, kind: p.guess.kind }))} />
+          kinds={Object.entries(t.cur.kinds)} initial={proposals.map((p) => ({ id: p.id, name: p.originalName, grade: p.guess.gradeCode, subject: p.guess.subjectCode, kind: p.guess.kind, sure: p.sure, evidence: p.evidence, source: p.source, pending: p.pending }))} />
         <TableWrap>
           <thead><tr><Th>{b.name}</Th><Th>{b.size}</Th><Th>{b.pages}</Th><Th>{b.textPages}</Th><Th>{b.status}</Th><Th>{b.curriculum}</Th><Th>{t.common.actions}</Th></tr></thead>
           <tbody>

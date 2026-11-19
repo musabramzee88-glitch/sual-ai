@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActLabels } from "./AdminActions";
 
 type Row = { name: string; state: "queued" | "uploading" | "done" | "error"; pct: number; msg?: string };
@@ -105,31 +105,57 @@ export function LinkSelect({ bookId, value, options, none, L }: { bookId: string
   );
 }
 
-export type BulkLabels = { bulkTitle: string; bulkHint: string; bulkTrack: string; bulkApply: string; bulkNeed: string; pickGrade: string; pickSubject: string; bulkDone: string; created: string; linked: string; kind: string; name: string };
-type Item = { id: string; name: string; grade: string; subject: string; kind: string; on: boolean; result?: string };
+export type BulkLabels = { detect: string; detecting: string; detectDone: string; fromCover: string; fromName: string; unsure: string; bulkTitle: string; bulkHint: string; bulkTrack: string; bulkApply: string; bulkNeed: string; pickGrade: string; pickSubject: string; bulkDone: string; created: string; linked: string; kind: string; name: string };
+type Item = { id: string; name: string; grade: string; subject: string; kind: string; on: boolean; sure: boolean; evidence: string | null; source: string | null; result?: string };
+export type BulkInitial = { id: string; name: string; grade: string | null; subject: string | null; kind: string; sure: boolean; evidence: string | null; source: string | null; pending: boolean };
 
 /** مراجعة اقتراحات الربط (صف/مادة/نوع من اسم الملف) ثم إنشاء المناهج وربط الكتب دفعة واحدة */
 export function BulkLink({ t, L, tracks, grades, subjects, kinds, initial }: {
   t: BulkLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][];
-  initial: { id: string; name: string; grade: string | null; subject: string | null; kind: string }[];
+  initial: BulkInitial[];
 }) {
   const router = useRouter();
   const [track, setTrack] = useState(tracks.find(([k]) => k === "GENERAL")?.[0] ?? tracks[0]?.[0] ?? "");
-  const [rows, setRows] = useState<Item[]>(() => initial.map((x) => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: !!(x.grade && x.subject) })));
+  const toItem = (x: BulkInitial): Item => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: x.sure && !!(x.grade && x.subject), sure: x.sure, evidence: x.evidence, source: x.source });
+  const [rows, setRows] = useState<Item[]>(() => initial.map(toItem));
+  const [detecting, setDetecting] = useState(false);
+  const polls = useRef(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const set = (i: number, p: Partial<Item>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const sel = "rounded-lg border border-line bg-paper px-2 py-1 text-xs";
   const ready = rows.filter((r) => r.on && r.grade && r.subject);
   const incomplete = rows.some((r) => r.on && !(r.grade && r.subject));
-  // كتب جديدة رُفعت بعد فتح الصفحة تُضاف للقائمة دون فقد ما عدّله المستخدم
+  // كتب جديدة أو نتائج تعرّف وصلت بعد فتح الصفحة: تُضاف/تُحدَّث دون فقد ما عدّله المستخدم يدوياً
   useEffect(() => {
     setRows((cur) => {
-      const have = new Set(cur.map((x) => x.id));
-      const add = initial.filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: !!(x.grade && x.subject) }));
-      return add.length ? [...cur, ...add] : cur;
+      const byId = new Map(cur.map((x) => [x.id, x]));
+      const next = [...cur];
+      for (const x of initial) {
+        const have = byId.get(x.id);
+        if (!have) next.push(toItem(x));
+        else if (!have.result && have.source !== x.source && have.grade === "" && have.subject === "") {
+          // صفّ بلا اختيارات بعد: ملؤه بنتيجة التعرّف الجديدة
+          next[next.indexOf(have)] = toItem(x);
+        }
+      }
+      return next;
     });
   }, [initial]);
+  // أثناء «جارٍ التعرّف»: حدّث الصفحة كل 3 ثوانٍ (حتى دقيقتين) إلى أن ينتهي كل ما كان معلّقاً
+  const pending = initial.filter((x) => x.pending).length;
+  useEffect(() => {
+    if (!detecting) return;
+    if (pending === 0 && polls.current > 0) { setDetecting(false); return; }
+    if (polls.current >= 40) { setDetecting(false); return; }
+    const id = setTimeout(() => { polls.current++; router.refresh(); }, 3000);
+    return () => clearTimeout(id);
+  }, [detecting, pending, router, initial]);
+  async function detect() {
+    setErr(null); polls.current = 0; setDetecting(true);
+    const res = await fetch("/api/v1/admin/books/detect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ force: true }) });
+    if (!res.ok) { setDetecting(false); const j = await res.json().catch(() => ({})); setErr(L.errors[j.error?.code] ?? L.errors.GENERIC); }
+  }
   if (rows.length === 0) return null;
 
   async function apply() {
@@ -154,13 +180,20 @@ export function BulkLink({ t, L, tracks, grades, subjects, kinds, initial }: {
       <p className="text-sm text-muted">{t.bulkHint}</p>
       <label className="flex items-center gap-2 text-sm"><span className="text-muted">{t.bulkTrack}</span>
         <select className={sel} value={track} onChange={(e) => setTrack(e.target.value)}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand disabled:opacity-50" disabled={detecting} onClick={detect}>{t.detect}</button>
+        {detecting && <span className="text-sm text-muted">{t.detecting}</span>}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[44rem] text-sm">
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-t border-line/60">
                 <td className="p-2"><input type="checkbox" checked={r.on} disabled={!!r.result && !r.on} onChange={(e) => set(i, { on: e.target.checked })} /></td>
-                <td className="max-w-56 break-words p-2 text-xs" dir="auto">{!(r.grade && r.subject) && <span title={t.bulkNeed}>⚠ </span>}{r.name}</td>
+                <td className="max-w-64 break-words p-2 text-xs">
+                  <div dir="auto">{(!(r.grade && r.subject) || !r.sure) && <span title={r.sure ? t.bulkNeed : t.unsure}>⚠ </span>}{r.name}</div>
+                  {r.evidence && <div className="mt-1 text-[11px] text-muted" dir="auto">{r.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{r.evidence}»</div>}
+                </td>
                 <td className="p-2"><select className={sel} value={r.grade} onChange={(e) => set(i, { grade: e.target.value, on: !!(e.target.value && r.subject) || r.on })}><option value="">{t.pickGrade}</option>{grades.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                 <td className="p-2"><select className={sel} value={r.subject} onChange={(e) => set(i, { subject: e.target.value, on: !!(r.grade && e.target.value) || r.on })}><option value="">{t.pickSubject}</option>{subjects.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                 <td className="p-2"><select className={sel} value={r.kind} onChange={(e) => set(i, { kind: e.target.value })}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>

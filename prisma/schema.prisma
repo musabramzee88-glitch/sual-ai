@@ -795,6 +795,8 @@ model UploadedBook {
   textPageCount Int?
   /// تقدّم المعالجة الطويلة (OCR): عدد الصفحات المنجزة
   processedPages Int @default(0)
+  /// نتيجة التعرّف على الكتاب من غلافه {gradeCode, subjectCode, kind, confidence, evidence, source}؛ null = لم تُجرَّ
+  detected Json?
   status        BookStatus   @default(UPLOADED)
   error         String?
   createdAt     DateTime     @default(now())
