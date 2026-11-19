@@ -1,0 +1,130 @@
+import "server-only";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { db } from "../db";
+import { env } from "../env";
+import { audit, type Actor } from "../admin/audit";
+import { extractPdfPages } from "./extract";
+
+export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
+const STALE_MS = 15 * 60_000;
+
+type Fail<C extends string> = { ok: false; code: C };
+const fail = <C extends string>(code: C): Fail<C> => ({ ok: false, code });
+
+/** التخزين خارج public دائماً؛ المفتاح يولَّد داخلياً فقط (لا أسماء من المستخدم في المسار) */
+const root = () => path.resolve(env.STORAGE_DIR);
+const fileOf = (key: string) => {
+  const p = path.resolve(root(), key);
+  if (!p.startsWith(root() + path.sep)) throw new Error("Invalid storage key");
+  return p;
+};
+
+const cleanName = (n: string) => n.replace(/[\u0000-\u001F<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) || "book.pdf";
+
+/** رفع كتاب لمكتبة المنصة (من الإدارة). يتحقق من النوع الفعلي (لا الامتداد) والحجم ويمنع التكرار. */
+export async function uploadBook(actor: Actor, file: { name: string; bytes: Uint8Array }, curriculumId?: string | null) {
+  if (file.bytes.byteLength === 0) return fail("EMPTY_FILE");
+  if (file.bytes.byteLength > MAX_BOOK_BYTES) return fail("FILE_TOO_LARGE");
+  if (Buffer.from(file.bytes.subarray(0, 5)).toString("latin1") !== "%PDF-") return fail("NOT_PDF");
+  if (curriculumId && !(await db.curriculum.findUnique({ where: { id: curriculumId } }))) return fail("CURRICULUM_NOT_FOUND");
+
+  const sha256 = createHash("sha256").update(file.bytes).digest("hex");
+  const dup = await db.uploadedBook.findFirst({ where: { sha256, ownerId: null }, select: { id: true } });
+  if (dup) return { ok: false as const, code: "DUPLICATE" as const, existingId: dup.id };
+
+  const storageKey = `books/${randomUUID()}.pdf`;
+  await mkdir(path.dirname(fileOf(storageKey)), { recursive: true });
+  await writeFile(fileOf(storageKey), file.bytes, { flag: "wx" });
+  try {
+    const book = await db.$transaction(async (tx) => {
+      const b = await tx.uploadedBook.create({
+        data: { ownerId: null, curriculumId: curriculumId ?? null, originalName: cleanName(file.name), storageKey, mimeType: "application/pdf", sizeBytes: file.bytes.byteLength, sha256 },
+      });
+      await audit(tx, actor, { action: "book.upload", targetType: "UploadedBook", targetId: b.id, after: { name: b.originalName, sizeBytes: b.sizeBytes, sha256 } });
+      return b;
+    });
+    return { ok: true as const, id: book.id };
+  } catch (e) {
+    await rm(fileOf(storageKey), { force: true });
+    throw e;
+  }
+}
+
+/**
+ * يستخرج نص كل صفحة ويخزّنه. يحجز الكتاب أولاً (لا معالجتان متزامنتان للكتاب نفسه).
+ * الكتاب بلا نص (مصوَّر) → FAILED/NEEDS_OCR؛ نص جزئي → READY مع تحذير PARTIAL_TEXT.
+ */
+export async function processBook(id: string, now = new Date()) {
+  const claimed = await db.uploadedBook.updateMany({
+    where: { id, OR: [{ status: { in: ["UPLOADED", "FAILED"] } }, { status: "PROCESSING", updatedAt: { lt: new Date(now.getTime() - STALE_MS) } }, { status: "READY" }] },
+    data: { status: "PROCESSING", error: null },
+  });
+  if (claimed.count !== 1) return fail("BUSY_OR_MISSING");
+  const book = await db.uploadedBook.findUniqueOrThrow({ where: { id } });
+  try {
+    const pages = await extractPdfPages(new Uint8Array(await readFile(fileOf(book.storageKey))));
+    const textPages = pages.filter((p) => p.hasText).length;
+    await db.$transaction(async (tx) => {
+      await tx.bookPage.deleteMany({ where: { bookId: id } });
+      for (let i = 0; i < pages.length; i += 200) {
+        await tx.bookPage.createMany({ data: pages.slice(i, i + 200).map((p) => ({ bookId: id, pageNumber: p.pageNumber, text: p.text })) });
+      }
+      await tx.uploadedBook.update({
+        where: { id },
+        data: {
+          pageCount: pages.length,
+          textPageCount: textPages,
+          status: textPages === 0 ? "FAILED" : "READY",
+          error: textPages === 0 ? "NEEDS_OCR" : textPages < pages.length * 0.6 ? "PARTIAL_TEXT" : null,
+        },
+      });
+    }, { timeout: 120_000 });
+    return { ok: true as const, pageCount: pages.length, textPages };
+  } catch (e) {
+    // لا نخزّن تفاصيل داخلية؛ رمز خطأ مفهوم فقط
+    console.error(`[books] extraction failed for ${id}: ${(e as Error).name}`);
+    await db.uploadedBook.update({ where: { id }, data: { status: "FAILED", error: "EXTRACT_FAILED" } });
+    return fail("EXTRACT_FAILED");
+  }
+}
+
+export async function linkBook(actor: Actor, id: string, curriculumId: string | null) {
+  return db.$transaction(async (tx) => {
+    const b = await tx.uploadedBook.findUnique({ where: { id } });
+    if (!b) return fail("NOT_FOUND");
+    if (curriculumId && !(await tx.curriculum.findUnique({ where: { id: curriculumId } }))) return fail("CURRICULUM_NOT_FOUND");
+    await tx.uploadedBook.update({ where: { id }, data: { curriculumId } });
+    await audit(tx, actor, { action: "book.link", targetType: "UploadedBook", targetId: id, before: { curriculumId: b.curriculumId }, after: { curriculumId } });
+    return { ok: true as const };
+  });
+}
+
+/** حذف كتاب غير مستعمل في أي امتحان (السجل + الصفحات + الملف) */
+export async function deleteBook(actor: Actor, id: string) {
+  const b = await db.uploadedBook.findUnique({ where: { id }, include: { _count: { select: { examSources: true } } } });
+  if (!b) return fail("NOT_FOUND");
+  if (b._count.examSources > 0) return fail("IN_USE");
+  if (b.status === "PROCESSING") return fail("BUSY_OR_MISSING");
+  await db.$transaction(async (tx) => {
+    await tx.uploadedBook.delete({ where: { id } });
+    await audit(tx, actor, { action: "book.delete", targetType: "UploadedBook", targetId: id, before: { name: b.originalName, sha256: b.sha256 } });
+  });
+  await rm(fileOf(b.storageKey), { force: true });
+  return { ok: true as const };
+}
+
+export const listLibraryBooks = () =>
+  db.uploadedBook.findMany({
+    where: { ownerId: null },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, status: true, error: true, createdAt: true, curriculumId: true,
+      curriculum: { select: { title: true, grade: { select: { nameAr: true, nameEn: true } }, subject: { select: { nameAr: true, nameEn: true } } } },
+    },
+  });
+
+export const getBookPage = (bookId: string, pageNumber: number) =>
+  db.bookPage.findUnique({ where: { bookId_pageNumber: { bookId, pageNumber } } });
+export const getBook = (id: string) => db.uploadedBook.findUnique({ where: { id }, include: { curriculum: { select: { title: true } } } });

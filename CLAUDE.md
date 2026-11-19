@@ -46,3 +46,8 @@ npm run typecheck && npm run lint && npm run build
 - `src/server/admin/curriculum.ts`: `createEntity/updateEntity(kind, …)` لكل الأنواع، و`replaceChapters` (استبدال القائمة كاملة ذرّياً). أضف نوعاً جديداً بإضافته إلى `schemas`.
 - الرمز ثابت بعد الإنشاء؛ لا حذف للمرجعي (تعطيل). فرادة المنهج مع NULL مفروضة بفهرس تعبيري في migration `curriculum_unique_nulls`.
 - `prisma/seed.ts` يضيف المفقود فقط — لا تجعله يعيد كتابة بيانات تديرها الإدارة.
+
+## الكتب واستخراج النص (المرحلة 3)
+- `src/server/books/text.ts` (دوال نقية): `assembleLines` يرتّب حسب الموضع، `visualVotes` يكشف الكلمات المقلوبة بأشكال العرض العربية (جدول مولَّد من unicodedata — لا يُعدَّل يدوياً). أي تعديل يجب أن يمر باختبارات `extract.test.ts` على `test/fixtures`.
+- `src/server/books/service.ts`: الرفع/المعالجة/الربط/الحذف. المعالجة تحجز الكتاب بـ `updateMany` شرطي. المسار المخزَّن يولَّد داخلياً ويُتحقق أنه داخل `STORAGE_DIR`.
+- الرفع multipart يمر بالـ middleware؛ لذلك `experimental.middlewareClientMaxBodySize` في `next.config.ts`.

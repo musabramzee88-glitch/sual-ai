@@ -772,24 +772,26 @@ model PaymentWebhookEvent {
 // ───────────────────────────── Books & exams ─────────────────────────────
 
 model UploadedBook {
-  id           String       @id @default(cuid())
+  id            String       @id @default(cuid())
   /// null = كتاب من مكتبة المنصة يرفعه المسؤول
-  ownerId      String?
-  curriculumId String?
-  originalName String
-  storageKey   String       @unique
-  mimeType     String
-  sizeBytes    Int
-  sha256       String
-  pageCount    Int?
-  status       BookStatus   @default(UPLOADED)
-  error        String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  owner        User?        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  curriculum   Curriculum?  @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
-  pages        BookPage[]
-  examSources  ExamSource[]
+  ownerId       String?
+  curriculumId  String?
+  originalName  String
+  storageKey    String       @unique
+  mimeType      String
+  sizeBytes     Int
+  sha256        String
+  pageCount     Int?
+  /// عدد الصفحات التي فيها نص حقيقي (المصوّرة لا تُحتسب)
+  textPageCount Int?
+  status        BookStatus   @default(UPLOADED)
+  error         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  owner         User?        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  curriculum    Curriculum?  @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  pages         BookPage[]
+  examSources   ExamSource[]
 
   @@index([ownerId])
   @@index([curriculumId])
