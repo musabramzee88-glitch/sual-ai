@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { ActLabels } from "./AdminActions";
 
 type Row = { name: string; state: "queued" | "uploading" | "done" | "error"; pct: number; msg?: string };
-export type UploaderLabels = { choose: string; upload: string; uploading: string; queued: string; uploaded: string };
+export type UploaderLabels = { choose: string; upload: string; uploading: string; queued: string; uploaded: string; ocrToggle: string; ocrToggleHint: string };
 
 /** رفع ملفات متعددة واحداً تلو الآخر مع نسبة التقدّم (XHR لدعم تقدّم الرفع) */
 export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
@@ -12,6 +12,7 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
   const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
+  const [ocr, setOcr] = useState(true);
 
   function send(f: File, onPct: (p: number) => void): Promise<{ ok: boolean; code?: string }> {
     return new Promise((resolve) => {
@@ -26,6 +27,7 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
       xhr.onerror = () => resolve({ ok: false, code: "GENERIC" });
       const fd = new FormData();
       fd.append("file", f);
+      fd.append("ocr", ocr ? "1" : "0");
       xhr.send(fd);
     });
   }
@@ -52,6 +54,8 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
         <span className="text-sm text-muted">{files.length > 0 && `${files.length} × PDF`}</span>
         <button className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || files.length === 0} onClick={start}>{t.upload}</button>
       </div>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ocr} disabled={busy} onChange={(e) => setOcr(e.target.checked)} />{t.ocrToggle}</label>
+      {!ocr && <p className="text-xs text-muted">{t.ocrToggleHint}</p>}
       {rows.length > 0 && (
         <ul className="space-y-1 text-sm">
           {rows.map((r, i) => (
@@ -192,5 +196,20 @@ export function ReprocessFailed({ L, label, queued }: { L: ActLabels; label: str
       }}>{label}</button>
       {msg && <span className="text-sm text-muted">{msg}</span>}
     </div>
+  );
+}
+
+/** يوقف كل معالجة جارية أو منتظرة */
+export function CancelAll({ L, label }: { L: ActLabels; label: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button className="rounded-lg border border-danger px-4 py-2 text-sm font-semibold text-danger disabled:opacity-50" disabled={busy} onClick={async () => {
+      if (!window.confirm(L.confirm)) return;
+      setBusy(true);
+      await fetch("/api/v1/admin/books/cancel-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      setBusy(false);
+      router.refresh();
+    }}>{label}</button>
   );
 }

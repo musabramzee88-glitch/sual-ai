@@ -9,7 +9,10 @@ import { extractPdfPages } from "./extract";
 import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
 
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
-const STALE_MS = 15 * 60_000;
+/** نبض الحياة كل صفحة؛ كتاب بلا نبض 5 دقائق يُعدّ عالقاً (خادم أُغلق) ويجوز إعادة معالجته */
+export const STALE_MS = 5 * 60_000;
+
+class CancelledError extends Error {}
 
 /** استخراج النص يحمّل الملف كاملاً بالذاكرة: لا أكثر من 2 في وقت واحد (رفع 20 كتاباً معاً لا يستنزف الذاكرة) */
 const EXTRACT_SLOTS = 2;
@@ -74,6 +77,7 @@ export async function uploadBook(actor: Actor, file: { name: string; bytes: Uint
  * كتاب بلا أي نص بعد المحاولة → FAILED/NEEDS_OCR؛ نص جزئي → READY مع PARTIAL_TEXT.
  */
 export async function processBook(id: string, opts: { ocr?: boolean } = {}, now = new Date()) {
+  const wantOcr = (opts.ocr ?? true) && ocrEnabled();
   const claimed = await db.uploadedBook.updateMany({
     where: { id, OR: [{ status: { in: ["UPLOADED", "FAILED"] } }, { status: "PROCESSING", updatedAt: { lt: new Date(now.getTime() - STALE_MS) } }, { status: "READY" }] },
     data: { status: "PROCESSING", error: null, processedPages: 0 },
@@ -83,19 +87,23 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
   try {
     const bytes = new Uint8Array(await readFile(fileOf(book.storageKey)));
     const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean }[] = (await withExtractSlot(() => extractPdfPages(bytes))).map((p) => ({ ...p, isOcr: false }));
-    await db.uploadedBook.update({ where: { id }, data: { pageCount: pages.length, processedPages: pages.length } });
+    // الإلغاء أثناء الاستخراج: التحديث الشرطي لا يمس شيئاً إن لم تعد الحالة PROCESSING
+    if ((await db.uploadedBook.updateMany({ where: { id, status: "PROCESSING" }, data: { pageCount: pages.length, processedPages: pages.length } })).count !== 1) throw new CancelledError();
 
     const blank = pages.filter((p) => !p.hasText).map((p) => p.pageNumber);
     let ocrUsed = false;
-    if (blank.length > 0 && (opts.ocr ?? ocrEnabled())) {
+    if (blank.length > 0 && wantOcr) {
       // نبض الحياة: كل صفحة تحدّث updatedAt فلا يُعاد حجز كتاب يُعالَج منذ دقائق
       let done = 0;
-      const results = await runOcrExclusive(() =>
-        ocrPdfPages(bytes, blank, async (n) => {
+      const results = await runOcrExclusive(async () => {
+        await assertStillProcessing(id); // أُلغي أثناء الانتظار في الطابور؟
+        return ocrPdfPages(bytes, blank, async (n) => {
           done = n;
-          await db.uploadedBook.update({ where: { id }, data: { processedPages: pages.length - blank.length + done } });
-        }),
-      );
+          // التحديث الشرطي يكشف الإلغاء: إن لم تعد الحالة PROCESSING لا يتأثر أي صف
+          const u = await db.uploadedBook.updateMany({ where: { id, status: "PROCESSING" }, data: { processedPages: pages.length - blank.length + done } });
+          if (u.count !== 1) throw new CancelledError();
+        });
+      });
       for (const r of results) {
         const p = pages[r.pageNumber - 1];
         p.text = r.text;
@@ -124,11 +132,30 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
     }, { timeout: 120_000 });
     return { ok: true as const, pageCount: pages.length, textPages, ocrPages: pages.filter((p) => p.isOcr).length };
   } catch (e) {
+    if (e instanceof CancelledError) return fail("CANCELLED");
     // لا نخزّن تفاصيل داخلية؛ رمز خطأ مفهوم فقط
     console.error(`[books] processing failed for ${id}: ${(e as Error).name}: ${(e as Error).message?.slice(0, 160)}`);
     await db.uploadedBook.update({ where: { id }, data: { status: "FAILED", error: "EXTRACT_FAILED" } });
     return fail("EXTRACT_FAILED");
   }
+}
+
+async function assertStillProcessing(id: string) {
+  const b = await db.uploadedBook.findUnique({ where: { id }, select: { status: true } });
+  if (b?.status !== "PROCESSING") throw new CancelledError();
+}
+
+/** إيقاف معالجة كتاب (جارية أو بالانتظار). المهمة الجارية تتوقف عند الصفحة التالية. */
+export async function cancelProcessing(actor: Actor, ids?: string[]) {
+  const r = await db.$transaction(async (tx) => {
+    const res = await tx.uploadedBook.updateMany({
+      where: { ownerId: null, status: { in: ["PROCESSING", "UPLOADED"] }, ...(ids ? { id: { in: ids } } : {}) },
+      data: { status: "FAILED", error: "CANCELLED" },
+    });
+    await audit(tx, actor, { action: "book.cancel_processing", targetType: "UploadedBook", after: { count: res.count, ids: ids ?? "all" } });
+    return res.count;
+  });
+  return { ok: true as const, cancelled: r };
 }
 
 /** معالجة عدة كتب بالتتابع (دفعة «إعادة معالجة كل المصوَّرة») */
@@ -152,7 +179,7 @@ export async function deleteBook(actor: Actor, id: string) {
   const b = await db.uploadedBook.findUnique({ where: { id }, include: { _count: { select: { examSources: true } } } });
   if (!b) return fail("NOT_FOUND");
   if (b._count.examSources > 0) return fail("IN_USE");
-  if (b.status === "PROCESSING") return fail("BUSY_OR_MISSING");
+  if (b.status === "PROCESSING" && Date.now() - b.updatedAt.getTime() < STALE_MS) return fail("BUSY_OR_MISSING"); // العالق (بلا نبض) يجوز حذفه
   await db.$transaction(async (tx) => {
     await tx.uploadedBook.delete({ where: { id } });
     await audit(tx, actor, { action: "book.delete", targetType: "UploadedBook", targetId: id, before: { name: b.originalName, sha256: b.sha256 } });
@@ -166,7 +193,7 @@ export const listLibraryBooks = () =>
     where: { ownerId: null },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, status: true, error: true, createdAt: true, curriculumId: true,
+      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, updatedAt: true, status: true, error: true, createdAt: true, curriculumId: true,
       curriculum: { select: { title: true, grade: { select: { nameAr: true, nameEn: true } }, subject: { select: { nameAr: true, nameEn: true } } } },
     },
   });

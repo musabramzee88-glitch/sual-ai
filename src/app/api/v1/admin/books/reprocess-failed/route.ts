@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 /** يعيد معالجة كل كتب المكتبة الفاشلة بسبب NEEDS_OCR (تُنفَّذ بالتتابع في الخلفية) */
 export async function POST(req: Request) {
   return adminMutation(req, "MANAGE_CURRICULUM", z.object({}), async () => {
-    const rows = await db.uploadedBook.findMany({ where: { ownerId: null, status: "FAILED", error: "NEEDS_OCR" }, select: { id: true }, orderBy: { createdAt: "asc" } });
+    const rows = await db.uploadedBook.findMany({ where: { ownerId: null, status: "FAILED", error: { in: ["NEEDS_OCR", "CANCELLED"] } }, select: { id: true }, orderBy: { createdAt: "asc" } });
     if (rows.length > 0) after(() => processMany(rows.map((r) => r.id)));
     return ok({ queued: rows.length });
   });

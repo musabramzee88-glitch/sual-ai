@@ -7,7 +7,7 @@ import { cleanOcrText, hasOcrText } from "./text";
 /** OCR محلي: pdf.js يرسم الصفحة صورة، وTesseract يقرأ العربية والإنكليزية. بدون خدمات خارجية. */
 export const ocrEnabled = () => env.OCR_ENABLED === "true";
 
-const SCALE = 3; // ≈ 216 DPI لصفحة A4
+const SCALE = 2; // ≈ 144 DPI: جودة مقاربة لـ 216 DPI بقياساتنا وأسرع بنحو الثلث
 const MAX_SIDE = 3600;
 
 /**

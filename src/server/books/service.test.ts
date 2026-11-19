@@ -12,7 +12,8 @@ const tmp = vi.hoisted(() => {
 });
 
 import { db } from "../db";
-import { deleteBook, getBookPage, linkBook, processBook, uploadBook } from "./service";
+import { cancelProcessing, deleteBook, getBookPage, linkBook, processBook, uploadBook } from "./service";
+import { runOcrExclusive } from "./ocr";
 
 const fx = (f: string) => new Uint8Array(readFileSync(path.resolve(__dirname, "../../../test/fixtures", f)));
 const TAG = `bk${Date.now()}`;
@@ -67,6 +68,28 @@ describe("book library", () => {
     const pg = await getBookPage(r.id, 1);
     expect(pg?.isOcr).toBe(true);
     expect(pg?.text).toContain("الأعداد الطبيعية");
+  }, 180_000);
+
+  it("cancelling a queued OCR job stops it before any OCR work and leaves no pages", async () => {
+    // بايتات إضافية غير مؤثرة في آخر الملف ليختلف الهاش عن الاختبار السابق (منع التكرار)
+    const bytes = new Uint8Array([...fx("scanned-ar.pdf"), 10, 37, 37, 99, 97, 110, 99]);
+    const r2 = await uploadBook(actor, { name: "للإلغاء.pdf", bytes });
+    if (!r2.ok) throw new Error(r2.code);
+    ids.push(r2.id);
+
+    // نشغل الطابور بمهمة وهمية ليبقى OCR الكتاب منتظراً، ثم نلغي قبل أن يبدأ
+    let release!: () => void;
+    const hold = runOcrExclusive(() => new Promise<void>((res) => (release = res)));
+    const job = processBook(r2.id, { ocr: true });
+    await new Promise((res) => setTimeout(res, 1500)); // وقت كافٍ لينتهي استخراج النص ويصل الكتاب للطابور
+    expect((await cancelProcessing(actor, [r2.id])).cancelled).toBe(1);
+    release();
+    await hold;
+    expect(await job).toEqual({ ok: false, code: "CANCELLED" });
+    expect(await db.uploadedBook.findUniqueOrThrow({ where: { id: r2.id } })).toMatchObject({ status: "FAILED", error: "CANCELLED" });
+    expect(await db.bookPage.count({ where: { bookId: r2.id } })).toBe(0);
+    // يمكن إعادة المحاولة بعد الإلغاء
+    expect((await processBook(r2.id, { ocr: true })).ok).toBe(true);
   }, 180_000);
 
   it("a pure image (no letters) stays unusable even with OCR", async () => {

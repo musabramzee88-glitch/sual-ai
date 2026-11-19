@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     const status = r.code === "FILE_TOO_LARGE" ? 413 : r.code === "DUPLICATE" ? 409 : 400;
     return Response.json({ error: { code: r.code, message: "Upload rejected", ...("existingId" in r ? { existingId: r.existingId } : {}) } }, { status });
   }
-  after(() => processBook(r.id));
+  const ocr = form.get("ocr") !== "0"; // يمكن رفع عشرات الكتب دون OCR ثم تشغيله لما يلزم فقط
+  after(() => processBook(r.id, { ocr }));
   return Response.json({ data: { id: r.id, status: "UPLOADED" } }, { status: 201 });
 }

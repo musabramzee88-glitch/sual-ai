@@ -3,7 +3,7 @@ import { z } from "zod";
 import { fail, ok } from "@/server/http";
 import { actorOf, requireAdmin } from "@/server/admin/guard";
 import { adminMutation, adminRead, respond } from "@/server/admin/route";
-import { deleteBook, getBook, getBookPage, linkBook, processBook } from "@/server/books/service";
+import { cancelProcessing, deleteBook, getBook, getBookPage, linkBook, processBook, STALE_MS } from "@/server/books/service";
 
 export const runtime = "nodejs";
 
@@ -20,17 +20,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link"), curriculumId: z.string().min(10).max(40).nullable() }),
-  z.object({ action: z.literal("reprocess") }),
+  z.object({ action: z.literal("reprocess"), ocr: z.boolean().optional() }),
+  z.object({ action: z.literal("cancel") }),
 ]);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return adminMutation(req, "MANAGE_CURRICULUM", schema, async ({ actor, body }) => {
     if (body.action === "link") return respond(await linkBook(actor, id, body.curriculumId));
+    if (body.action === "cancel") return ok(await cancelProcessing(actor, [id]));
     const b = await getBook(id);
     if (!b) return fail(404, "NOT_FOUND", "Book not found");
-    if (b.status === "PROCESSING") return fail(409, "BUSY_OR_MISSING", "Already processing");
-    after(() => processBook(id));
+    // قيد المعالجة فعلاً (نبض حديث) → ارفض؛ العالق (بلا نبض) يجوز إعادة معالجته
+    if (b.status === "PROCESSING" && Date.now() - b.updatedAt.getTime() < STALE_MS) return fail(409, "BUSY_OR_MISSING", "Already processing");
+    after(() => processBook(id, { ocr: body.ocr ?? true }));
     return ok({ queued: true });
   });
 }
