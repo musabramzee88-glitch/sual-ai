@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import type { ActLabels } from "./AdminActions";
 
 type Row = { name: string; state: "queued" | "uploading" | "done" | "error"; pct: number; msg?: string };
-export type UploaderLabels = { choose: string; upload: string; uploading: string; queued: string; uploaded: string; ocrToggle: string; ocrToggleHint: string };
+export type DropLabels = { dropTitle: string; dropHint: string; uploading: string; queued: string; uploaded: string; ocrToggle: string; ocrToggleHint: string };
 
-/** رفع ملفات متعددة واحداً تلو الآخر مع نسبة التقدّم (XHR لدعم تقدّم الرفع) */
-export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
+/** منطقة رفع بالسحب والإفلات: يبدأ الرفع فور اختيار الملفات (بلا زر)، واحداً تلو الآخر مع نسبة التقدّم */
+export function Dropzone({ t, L }: { t: DropLabels; L: ActLabels }) {
   const router = useRouter();
-  const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
   const [ocr, setOcr] = useState(true);
+  const input = useRef<HTMLInputElement>(null);
 
   function send(f: File, onPct: (p: number) => void): Promise<{ ok: boolean; code?: string }> {
     return new Promise((resolve) => {
@@ -31,10 +32,11 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
       xhr.send(fd);
     });
   }
-  async function start() {
+  async function start(list: File[]) {
+    const files = list.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    if (files.length === 0 || busy) return;
     setBusy(true);
-    const init: Row[] = files.map((f) => ({ name: f.name, state: "queued", pct: 0 }));
-    setRows(init);
+    setRows(files.map((f) => ({ name: f.name, state: "queued", pct: 0 })));
     for (let i = 0; i < files.length; i++) {
       setRows((r) => r.map((x, j) => (j === i ? { ...x, state: "uploading" } : x)));
       const res = await send(files[i], (p) => setRows((r) => r.map((x, j) => (j === i ? { ...x, pct: p } : x))));
@@ -42,17 +44,22 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
       router.refresh();
     }
     setBusy(false);
-    setFiles([]);
   }
   return (
-    <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm">
-          {t.choose}
-          <input type="file" accept="application/pdf,.pdf" multiple className="hidden" disabled={busy} onChange={(e) => setFiles([...(e.target.files ?? [])])} />
-        </label>
-        <span className="text-sm text-muted">{files.length > 0 && `${files.length} × PDF`}</span>
-        <button className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || files.length === 0} onClick={start}>{t.upload}</button>
+    <div className="space-y-3">
+      <div
+        role="button" tabIndex={0}
+        onClick={() => !busy && input.current?.click()}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && input.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); void start([...e.dataTransfer.files]); }}
+        className={`cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition ${over ? "border-brand bg-brand-soft" : "border-line bg-surface"} ${busy ? "opacity-60" : ""}`}
+      >
+        <div className="text-lg font-semibold">{t.dropTitle}</div>
+        <div className="mt-1 text-sm text-muted">{t.dropHint}</div>
+        <input ref={input} type="file" accept="application/pdf,.pdf" multiple className="hidden" disabled={busy}
+          onChange={(e) => { void start([...(e.target.files ?? [])]); e.target.value = ""; }} />
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ocr} disabled={busy} onChange={(e) => setOcr(e.target.checked)} />{t.ocrToggle}</label>
       {!ocr && <p className="text-xs text-muted">{t.ocrToggleHint}</p>}
@@ -60,7 +67,7 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
         <ul className="space-y-1 text-sm">
           {rows.map((r, i) => (
             <li key={i} className="flex items-center gap-3">
-              <span className="min-w-0 flex-1 truncate">{r.name}</span>
+              <span className="min-w-0 flex-1 truncate" dir="auto">{r.name}</span>
               <span className="w-40">
                 {r.state === "uploading" ? <span className="block h-2 overflow-hidden rounded bg-line"><span className="block h-2 bg-brand" style={{ width: `${r.pct}%` }} /></span>
                   : r.state === "done" ? <span className="text-brand">{t.uploaded}</span>
@@ -71,6 +78,103 @@ export function BookUploader({ t, L }: { t: UploaderLabels; L: ActLabels }) {
         </ul>
       )}
     </div>
+  );
+}
+
+export type ReviewCard = {
+  id: string; name: string; status: string; error: string | null; pageCount: number | null; processedPages: number;
+  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: string;
+  sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null; working: boolean;
+};
+export type ReviewLabels = {
+  reviewTitle: string; reviewEmpty: string; reviewHint: string; confirm: string; confirmAll: string; sureTag: string; checkTag: string; autoTag: string; working: string; needsOcrTag: string; readOcr: string;
+  fromCover: string; pickGrade: string; pickSubject: string; track: string; grade: string; subject: string; kind: string; remove: string; ocrPage: string; failedOcr: string;
+};
+type Sel = { track: string; grade: string; subject: string; kind: string };
+
+/**
+ * لوحة المراجعة: بطاقة لكل كتاب بصورة غلافه الفعلية ونتيجة التعرّف. الواثق منه يظهر محدّداً (وُضع تلقائياً)،
+ * وتضغط ✓ للتأكيد أو تصحّح الاختيارات ثم ✓. التأكيد يضع الكتاب في منهجه (ينشئه إن لزم).
+ */
+export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds }: {
+  items: ReviewCard[]; t: ReviewLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][];
+}) {
+  const router = useRouter();
+  const [sel, setSel] = useState<Record<string, Sel>>({});
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const get = (c: ReviewCard): Sel => sel[c.id] ?? { track: c.trackCode, grade: c.gradeCode ?? "", subject: c.subjectCode ?? "", kind: c.kind };
+  const set = (c: ReviewCard, p: Partial<Sel>) => setSel((s) => ({ ...s, [c.id]: { ...get(c), ...p } }));
+  const visible = items.filter((c) => !gone.has(c.id));
+  const complete = (c: ReviewCard) => { const g = get(c); return !!(g.grade && g.subject) && !c.working; };
+  const confirmable = visible.filter((c) => c.sure && complete(c));
+
+  async function confirm(cards: ReviewCard[]) {
+    setBusy(true);
+    const res = await fetch("/api/v1/admin/books/confirm", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: cards.map((c) => { const g = get(c); return { bookId: c.id, trackCode: g.track, gradeCode: g.grade, subjectCode: g.subject, kind: g.kind }; }) }),
+    });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) { const m = L.errors[j.error?.code] ?? L.errors.GENERIC; setErrs((e) => ({ ...e, ...Object.fromEntries(cards.map((c) => [c.id, m])) })); return; }
+    const results = j.data.results as { bookId: string; ok: boolean; code?: string }[];
+    setGone((g) => new Set([...g, ...results.filter((r) => r.ok).map((r) => r.bookId)]));
+    setErrs((e) => ({ ...e, ...Object.fromEntries(results.filter((r) => !r.ok).map((r) => [r.bookId, L.errors[r.code ?? "GENERIC"] ?? L.errors.GENERIC])) }));
+    router.refresh();
+  }
+  const sc = "w-full rounded-lg border border-line bg-paper px-2 py-1 text-xs";
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold">{t.reviewTitle} ({visible.length})</h2>
+        {confirmable.length > 0 && (
+          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy} onClick={() => confirm(confirmable)}>{t.confirmAll} ({confirmable.length})</button>
+        )}
+      </div>
+      <p className="text-sm text-muted">{t.reviewHint}</p>
+      {visible.length === 0 && <p className="rounded-xl border border-line bg-surface p-6 text-center text-muted">{t.reviewEmpty}</p>}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {visible.map((c) => {
+          const g = get(c);
+          const needsOcr = c.status === "FAILED" && (c.error === "NEEDS_OCR" || c.error === "CANCELLED");
+          return (
+            <article key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.sure && complete(c) ? "border-brand/50" : "border-line"} bg-surface`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/v1/admin/books/${c.id}/cover`} alt="" loading="lazy" className="h-44 w-32 shrink-0 rounded-lg border border-line bg-line object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                  {c.working ? <span className="text-muted">{t.working}{c.pageCount ? ` ${c.processedPages}/${c.pageCount}` : ""}</span>
+                    : c.sure ? <span className="rounded-full bg-brand-soft px-2 py-0.5 text-brand">✓ {t.sureTag}</span>
+                    : <span className="rounded-full bg-accent-soft px-2 py-0.5 text-danger">⚠ {t.checkTag}</span>}
+                  {c.autoLinked && c.linked && <span className="text-muted">· {t.autoTag}</span>}
+                  {needsOcr && <span className="text-danger">· {t.needsOcrTag}</span>}
+                </div>
+                <div className="truncate text-[11px] text-muted" dir="auto" title={c.name}>{c.name}</div>
+                <select className={sc} value={g.grade} onChange={(e) => set(c, { grade: e.target.value })} aria-label={t.grade}><option value="">{t.pickGrade}</option>{grades.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                <select className={sc} value={g.subject} onChange={(e) => set(c, { subject: e.target.value })} aria-label={t.subject}><option value="">{t.pickSubject}</option>{subjects.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                <div className="flex gap-1.5">
+                  <select className={sc} value={g.kind} onChange={(e) => set(c, { kind: e.target.value })} aria-label={t.kind}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                  <select className={sc} value={g.track} onChange={(e) => set(c, { track: e.target.value })} aria-label={t.track}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                </div>
+                {c.evidence && <div className="line-clamp-2 text-[11px] text-muted" dir="auto">{c.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{c.evidence}»</div>}
+                {errs[c.id] && <div role="alert" className="text-xs text-danger">{errs[c.id]}</div>}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <button className="rounded-lg bg-brand px-3 py-1 text-xs font-semibold text-white disabled:opacity-40 dark:text-paper" disabled={busy || !complete(c)} onClick={() => confirm([c])}>{t.confirm}</button>
+                  {needsOcr && <button className="rounded-lg border border-brand px-3 py-1 text-xs text-brand" onClick={async () => { await fetch(`/api/v1/admin/books/${c.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reprocess" }) }); router.refresh(); }}>{t.readOcr}</button>}
+                  <button className="rounded-lg border border-line px-3 py-1 text-xs text-danger" onClick={async () => {
+                    if (!window.confirm(L.confirm)) return;
+                    const r = await fetch(`/api/v1/admin/books/${c.id}`, { method: "DELETE" });
+                    if (r.ok) { setGone((x) => new Set([...x, c.id])); router.refresh(); }
+                  }}>{t.remove}</button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -102,113 +206,6 @@ export function LinkSelect({ bookId, value, options, none, L }: { bookId: string
       </select>
       {err && <span className="text-xs text-danger">{err}</span>}
     </span>
-  );
-}
-
-export type BulkLabels = { detect: string; detecting: string; detectDone: string; fromCover: string; fromName: string; unsure: string; bulkTitle: string; bulkHint: string; bulkTrack: string; bulkApply: string; bulkNeed: string; pickGrade: string; pickSubject: string; bulkDone: string; created: string; linked: string; kind: string; name: string };
-type Item = { id: string; name: string; grade: string; subject: string; kind: string; on: boolean; sure: boolean; evidence: string | null; source: string | null; result?: string };
-export type BulkInitial = { id: string; name: string; grade: string | null; subject: string | null; kind: string; sure: boolean; evidence: string | null; source: string | null; pending: boolean };
-
-/** مراجعة اقتراحات الربط (صف/مادة/نوع من اسم الملف) ثم إنشاء المناهج وربط الكتب دفعة واحدة */
-export function BulkLink({ t, L, tracks, grades, subjects, kinds, initial }: {
-  t: BulkLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][];
-  initial: BulkInitial[];
-}) {
-  const router = useRouter();
-  const [track, setTrack] = useState(tracks.find(([k]) => k === "GENERAL")?.[0] ?? tracks[0]?.[0] ?? "");
-  const toItem = (x: BulkInitial): Item => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: x.sure && !!(x.grade && x.subject), sure: x.sure, evidence: x.evidence, source: x.source });
-  const [rows, setRows] = useState<Item[]>(() => initial.map(toItem));
-  const [detecting, setDetecting] = useState(false);
-  const polls = useRef(0);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const set = (i: number, p: Partial<Item>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...p } : x)));
-  const sel = "rounded-lg border border-line bg-paper px-2 py-1 text-xs";
-  const ready = rows.filter((r) => r.on && r.grade && r.subject);
-  const incomplete = rows.some((r) => r.on && !(r.grade && r.subject));
-  // كتب جديدة أو نتائج تعرّف وصلت بعد فتح الصفحة: تُضاف/تُحدَّث دون فقد ما عدّله المستخدم يدوياً
-  useEffect(() => {
-    setRows((cur) => {
-      const byId = new Map(cur.map((x) => [x.id, x]));
-      const next = [...cur];
-      for (const x of initial) {
-        const have = byId.get(x.id);
-        if (!have) next.push(toItem(x));
-        else if (!have.result && have.source !== x.source && have.grade === "" && have.subject === "") {
-          // صفّ بلا اختيارات بعد: ملؤه بنتيجة التعرّف الجديدة
-          next[next.indexOf(have)] = toItem(x);
-        }
-      }
-      return next;
-    });
-  }, [initial]);
-  // أثناء «جارٍ التعرّف»: حدّث الصفحة كل 3 ثوانٍ (حتى دقيقتين) إلى أن ينتهي كل ما كان معلّقاً
-  const pending = initial.filter((x) => x.pending).length;
-  useEffect(() => {
-    if (!detecting) return;
-    if (pending === 0 && polls.current > 0) { setDetecting(false); return; }
-    if (polls.current >= 40) { setDetecting(false); return; }
-    const id = setTimeout(() => { polls.current++; router.refresh(); }, 3000);
-    return () => clearTimeout(id);
-  }, [detecting, pending, router, initial]);
-  async function detect() {
-    setErr(null); polls.current = 0; setDetecting(true);
-    const res = await fetch("/api/v1/admin/books/detect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ force: true }) });
-    if (!res.ok) { setDetecting(false); const j = await res.json().catch(() => ({})); setErr(L.errors[j.error?.code] ?? L.errors.GENERIC); }
-  }
-  if (rows.length === 0) return null;
-
-  async function apply() {
-    setBusy(true); setErr(null);
-    const res = await fetch("/api/v1/admin/books/link", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackCode: track, items: ready.map((r) => ({ bookId: r.id, gradeCode: r.grade, subjectCode: r.subject, kind: r.kind })) }),
-    });
-    const j = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) return setErr(L.errors[j.error?.code] ?? L.errors.GENERIC);
-    const by = new Map<string, { ok: boolean; created?: boolean; code?: string }>((j.data.results as { bookId: string; ok: boolean; created?: boolean; code?: string }[]).map((x) => [x.bookId, x]));
-    setRows((r) => r.map((x) => {
-      const o = by.get(x.id);
-      return o ? { ...x, on: !o.ok, result: o.ok ? (o.created ? t.created : t.linked) : (L.errors[o.code ?? "GENERIC"] ?? L.errors.GENERIC) } : x;
-    }));
-    router.refresh();
-  }
-  return (
-    <section className="mb-6 space-y-3 rounded-xl border border-brand/40 bg-surface p-4">
-      <h2 className="font-semibold">{t.bulkTitle}</h2>
-      <p className="text-sm text-muted">{t.bulkHint}</p>
-      <label className="flex items-center gap-2 text-sm"><span className="text-muted">{t.bulkTrack}</span>
-        <select className={sel} value={track} onChange={(e) => setTrack(e.target.value)}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-      <div className="flex flex-wrap items-center gap-3">
-        <button className="rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand disabled:opacity-50" disabled={detecting} onClick={detect}>{t.detect}</button>
-        {detecting && <span className="text-sm text-muted">{t.detecting}</span>}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id} className="border-t border-line/60">
-                <td className="p-2"><input type="checkbox" checked={r.on} disabled={!!r.result && !r.on} onChange={(e) => set(i, { on: e.target.checked })} /></td>
-                <td className="max-w-64 break-words p-2 text-xs">
-                  <div dir="auto">{(!(r.grade && r.subject) || !r.sure) && <span title={r.sure ? t.bulkNeed : t.unsure}>⚠ </span>}{r.name}</div>
-                  {r.evidence && <div className="mt-1 text-[11px] text-muted" dir="auto">{r.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{r.evidence}»</div>}
-                </td>
-                <td className="p-2"><select className={sel} value={r.grade} onChange={(e) => set(i, { grade: e.target.value, on: !!(e.target.value && r.subject) || r.on })}><option value="">{t.pickGrade}</option>{grades.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                <td className="p-2"><select className={sel} value={r.subject} onChange={(e) => set(i, { subject: e.target.value, on: !!(r.grade && e.target.value) || r.on })}><option value="">{t.pickSubject}</option>{subjects.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                <td className="p-2"><select className={sel} value={r.kind} onChange={(e) => set(i, { kind: e.target.value })}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                <td className="p-2 text-xs">{r.result && <span className={r.on ? "text-danger" : "text-brand"}>{r.result}</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <button className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || ready.length === 0 || incomplete} onClick={apply}>{t.bulkApply} ({ready.length})</button>
-        {incomplete && <span className="text-xs text-danger">{t.bulkNeed}</span>}
-        {err && <span role="alert" className="text-sm text-danger">{err}</span>}
-      </div>
-    </section>
   );
 }
 

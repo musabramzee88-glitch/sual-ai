@@ -65,3 +65,8 @@ npm run typecheck && npm run lint && npm run build
 ## التعرّف من الغلاف
 - `src/server/books/cover.ts` (دوال نقية، اختباراتها بنصوص أغلفة عراقية/إنكليزية): ثقة `high` تتطلب عبارة الصف الصريحة. لا تُرفع الثقة لتخمين عام من النص كله.
 - `detectBook` يُستدعى في نهاية `processBook` (فشله غير قاتل) ويقرأ أول صفحتين بـ OCR عند الحاجة عبر نفس الطابور. `proposeLinks` يفضّل `detected` ويستعمل اسم الملف احتياطاً فقط.
+
+## تدفق المراجعة (الكتب)
+- `placement.ts: placeBook(actor, bookId, placement, "auto"|"confirm")`: الوحيد الذي يضع كتاباً في منهجه (ينشئ المنهج عبر `createEntity`). "auto" لا يتجاوز ربطاً قائماً ولا يضع `confirmedAt`؛ "confirm" يضعه. قائمة المراجعة = `confirmedAt IS NULL` (`listReview`).
+- لا تُنشئ مسار ربط جديداً يتجاوز `placeBook` (يفقد التحقق والتدقيق).
+- صور الأغلفة تمر بسقف الذاكرة المشترك (`withExtractSlot`) لأن الصفحة تطلب عشرات الصور معاً.

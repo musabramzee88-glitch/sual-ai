@@ -29,12 +29,13 @@ export async function POST(req: Request) {
   const file = form.get("file");
   if (!(file instanceof File)) return fail(400, "VALIDATION_ERROR", "file is required");
   const cid = form.get("curriculumId");
-  const r = await uploadBook(actorOf(g.admin, req), { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, typeof cid === "string" && cid ? cid : null);
+  const actor = actorOf(g.admin, req);
+  const r = await uploadBook(actor, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, typeof cid === "string" && cid ? cid : null);
   if (!r.ok) {
     const status = r.code === "FILE_TOO_LARGE" ? 413 : r.code === "DUPLICATE" ? 409 : 400;
     return Response.json({ error: { code: r.code, message: "Upload rejected", ...("existingId" in r ? { existingId: r.existingId } : {}) } }, { status });
   }
   const ocr = form.get("ocr") !== "0"; // يمكن رفع عشرات الكتب دون OCR ثم تشغيله لما يلزم فقط
-  after(() => processBook(r.id, { ocr }));
+  after(() => processBook(r.id, { ocr, actor }));
   return Response.json({ data: { id: r.id, status: "UPLOADED" } }, { status: 201 });
 }

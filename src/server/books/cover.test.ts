@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guessFromCover } from "./cover";
+import { guessFromCover, guessSubjectFromContent } from "./cover";
 
 // نصوص أغلفة بأسلوب الكتب العراقية (استخراج PDF/OCR: ترتيب السطور قد يختلف، والتشكيل قد يوجد)
 const cases: [string, string, { gradeCode: string | null; subjectCode: string | null; kind: string; confidence: string }][] = [
@@ -52,5 +52,17 @@ describe("guessFromCover", () => {
     const g = guessFromCover("الرياضيات\n\nللصف الأول الابتدائي  " + "x".repeat(400));
     expect(g.evidence.length).toBeLessThanOrEqual(160);
     expect(g.evidence).toContain("الرياضيات للصف الأول الابتدائي");
+  });
+});
+
+describe("guessSubjectFromContent (weak fallback)", () => {
+  const rep = (w: string, n: number) => Array.from({ length: n }, () => w).join(" ");
+  it("needs a clear majority of subject words and enough text", () => {
+    const math = `${rep("اجمع العددين ثم اطرح الناتج وارسم المثلث والمربع", 12)} ${rep("نص عادي كثير من الكلمات المختلفة للحشو", 10)}`;
+    expect(guessSubjectFromContent(math)).toBe("MATH");
+    expect(guessSubjectFromContent(`${rep("النبات والحيوان والماء والهواء والطاقة", 10)} ${rep("حشو حشو حشو حشو حشو", 20)}`)).toBe("SCIENCE");
+    expect(guessSubjectFromContent("جمع طرح")).toBeNull(); // نص قصير
+    expect(guessSubjectFromContent(rep("كلمات عشوائية لا علاقة لها بمادة", 40))).toBeNull();
+    expect(guessSubjectFromContent(rep("This is a long English text about my family and school day", 40))).toBe("ENGLISH");
   });
 });

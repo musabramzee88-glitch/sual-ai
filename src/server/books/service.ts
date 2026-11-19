@@ -7,7 +7,8 @@ import { env } from "../env";
 import { audit, type Actor } from "../admin/audit";
 import { extractPdfPages } from "./extract";
 import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
-import { guessFromCover, type CoverGuess } from "./cover";
+import { guessFromCover, guessSubjectFromContent, type CoverGuess } from "./cover";
+import { placeBook } from "./placement";
 import { hasRealText } from "./text";
 
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
@@ -20,7 +21,7 @@ class CancelledError extends Error {}
 const EXTRACT_SLOTS = 2;
 let active = 0;
 const waiters: (() => void)[] = [];
-async function withExtractSlot<T>(fn: () => Promise<T>): Promise<T> {
+export async function withExtractSlot<T>(fn: () => Promise<T>): Promise<T> {
   if (active >= EXTRACT_SLOTS) await new Promise<void>((r) => waiters.push(r));
   active++;
   try {
@@ -36,11 +37,14 @@ const fail = <C extends string>(code: C): Fail<C> => ({ ok: false, code });
 
 /** التخزين خارج public دائماً؛ المفتاح يولَّد داخلياً فقط (لا أسماء من المستخدم في المسار) */
 const root = () => path.resolve(env.STORAGE_DIR);
-const fileOf = (key: string) => {
+export const fileOf = (key: string) => {
   const p = path.resolve(root(), key);
   if (!p.startsWith(root() + path.sep)) throw new Error("Invalid storage key");
   return p;
 };
+
+/** صورة الغلاف المصغّرة (تُنشأ عند أول طلب وتُخزَّن) */
+export const coverFile = (id: string) => fileOf(`covers/${id}.jpg`);
 
 const cleanName = (n: string) => n.replace(/[\u0000-\u001F<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) || "book.pdf";
 
@@ -78,7 +82,7 @@ export async function uploadBook(actor: Actor, file: { name: string; bytes: Uint
  * الصفحات التي لا نص فيها (صور) تُقرأ بـ OCR محلي إن كان مفعّلاً؛ وتُعلَّم isOcr والكتاب يحمل تنبيه OCR_USED.
  * كتاب بلا أي نص بعد المحاولة → FAILED/NEEDS_OCR؛ نص جزئي → READY مع PARTIAL_TEXT.
  */
-export async function processBook(id: string, opts: { ocr?: boolean } = {}, now = new Date()) {
+export async function processBook(id: string, opts: { ocr?: boolean; actor?: Actor } = {}, now = new Date()) {
   const wantOcr = (opts.ocr ?? true) && ocrEnabled();
   const claimed = await db.uploadedBook.updateMany({
     where: { id, OR: [{ status: { in: ["UPLOADED", "FAILED"] } }, { status: "PROCESSING", updatedAt: { lt: new Date(now.getTime() - STALE_MS) } }, { status: "READY" }] },
@@ -133,7 +137,7 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
       });
     }, { timeout: 120_000 });
     // التعرّف على الكتاب من غلافه (فشله لا يفشل المعالجة)
-    await detectBook(id).catch((e) => console.error(`[books] detection failed for ${id}: ${(e as Error).name}`));
+    await detectBook(id, opts.actor).catch((e) => console.error(`[books] detection failed for ${id}: ${(e as Error).name}`));
     return { ok: true as const, pageCount: pages.length, textPages, ocrPages: pages.filter((p) => p.isOcr).length };
   } catch (e) {
     if (e instanceof CancelledError) return fail("CANCELLED");
@@ -151,33 +155,48 @@ export type Detected = Pick<CoverGuess, "gradeCode" | "subjectCode" | "kind" | "
  * تفقد حروفها العربية. الصفحات المصوّرة: يقرأ أول صفحتين فقط بـ OCR (ثوانٍ) ولو كان OCR الكتاب مطفأً.
  * إن لم تحمل الصفحات الأولى عبارة «للصف …» صريحة تُجرَّب قراءة الصفحتين الأوليين بـ OCR أيضاً وتُؤخذ الأفضل.
  */
-export async function detectBook(id: string): Promise<Detected | null> {
+export async function detectBook(id: string, actor?: Actor): Promise<Detected | null> {
   const b = await db.uploadedBook.findUnique({
     where: { id },
-    select: { storageKey: true, pageCount: true, pages: { where: { pageNumber: { lte: 4 } }, orderBy: { pageNumber: "asc" }, select: { text: true } } },
+    select: { storageKey: true, pageCount: true, curriculumId: true, pages: { where: { pageNumber: { lte: 10 } }, orderBy: { pageNumber: "asc" }, select: { pageNumber: true, text: true } } },
   });
   if (!b) return null;
-  let text = b.pages.map((p) => p.text).join("\n");
-  let best: Detected = { ...guessFromCover(text), source: "text" };
-  const needOcr = !hasRealText(text) || best.confidence === "low";
+  const textOf = (max: number) => b.pages.filter((p) => p.pageNumber <= max).map((p) => p.text).join("\n");
+  const front = textOf(4);
+  let best: Detected = { ...guessFromCover(front), source: "text" };
+  // عبارة «للصف …» قد تكون في صفحة العنوان الداخلية لا الغلاف
+  if (best.confidence !== "high") {
+    const wide: Detected = { ...guessFromCover(textOf(10)), source: "text" };
+    if (wide.confidence === "high") best = wide;
+  }
+  const needOcr = !hasRealText(front) || best.confidence === "low";
   if (needOcr && ocrEnabled() && (b.pageCount ?? 0) > 0) {
     try {
       const bytes = new Uint8Array(await readFile(fileOf(b.storageKey)));
       const res = await runOcrExclusive(() => ocrPdfPages(bytes, [1, 2].filter((n) => n <= (b.pageCount ?? 0))));
-      text = res.map((r) => r.text).join("\n");
-      const viaOcr: Detected = { ...guessFromCover(text), source: "ocr" };
-      if (viaOcr.confidence === "high" || !hasRealText(b.pages.map((p) => p.text).join("\n"))) best = viaOcr;
+      const viaOcr: Detected = { ...guessFromCover(res.map((r) => r.text).join("\n")), source: "ocr" };
+      if (viaOcr.confidence === "high" || !hasRealText(front)) best = viaOcr;
     } catch (e) {
       console.error(`[books] cover OCR failed for ${id}: ${(e as Error).name}`);
     }
   }
+  // احتياط ضعيف: مادة من كلمات المحتوى إن غابت من الغلاف (الثقة تبقى low)
+  if (!best.subjectCode) {
+    const c = guessSubjectFromContent(textOf(10));
+    if (c) best = { ...best, subjectCode: c };
+  }
   await db.uploadedBook.update({ where: { id }, data: { detected: best } });
+  // تعرّف واثق → يوضع في مكانه تلقائياً (يبقى ينتظر مراجعتك). لا يلمس كتاباً ربطه المستخدم.
+  if (actor && !b.curriculumId && best.confidence === "high" && best.gradeCode && best.subjectCode) {
+    const r = await placeBook(actor, id, { trackCode: "GENERAL", gradeCode: best.gradeCode, subjectCode: best.subjectCode, kind: best.kind }, "auto");
+    if (!r.ok && r.code !== "NO_CURRENT_YEAR" && r.code !== "ALREADY_LINKED") console.error(`[books] auto placement failed for ${id}: ${r.code}`);
+  }
   return best;
 }
 
 /** يجري التعرّف على الكتب المحدّدة بالتتابع (للكتب المرفوعة قبل هذه الميزة) */
-export async function detectMany(ids: string[]) {
-  for (const id of ids) await detectBook(id).catch(() => null);
+export async function detectMany(ids: string[], actor?: Actor) {
+  for (const id of ids) await detectBook(id, actor).catch(() => null);
 }
 
 async function assertStillProcessing(id: string) {
@@ -199,8 +218,8 @@ export async function cancelProcessing(actor: Actor, ids?: string[]) {
 }
 
 /** معالجة عدة كتب بالتتابع (دفعة «إعادة معالجة كل المصوَّرة») */
-export async function processMany(ids: string[]) {
-  for (const id of ids) await processBook(id);
+export async function processMany(ids: string[], actor?: Actor) {
+  for (const id of ids) await processBook(id, { actor });
 }
 
 export async function linkBook(actor: Actor, id: string, curriculumId: string | null) {
@@ -225,6 +244,7 @@ export async function deleteBook(actor: Actor, id: string) {
     await audit(tx, actor, { action: "book.delete", targetType: "UploadedBook", targetId: id, before: { name: b.originalName, sha256: b.sha256 } });
   });
   await rm(fileOf(b.storageKey), { force: true });
+  await rm(coverFile(id), { force: true });
   return { ok: true as const };
 }
 
@@ -233,7 +253,7 @@ export const listLibraryBooks = () =>
     where: { ownerId: null },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, updatedAt: true, detected: true, status: true, error: true, createdAt: true, curriculumId: true,
+      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, updatedAt: true, detected: true, confirmedAt: true, status: true, error: true, createdAt: true, curriculumId: true,
       curriculum: { select: { title: true, grade: { select: { nameAr: true, nameEn: true } }, subject: { select: { nameAr: true, nameEn: true } } } },
     },
   });

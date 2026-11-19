@@ -797,6 +797,10 @@ model UploadedBook {
   processedPages Int @default(0)
   /// نتيجة التعرّف على الكتاب من غلافه {gradeCode, subjectCode, kind, confidence, evidence, source}؛ null = لم تُجرَّ
   detected Json?
+  /// ربطه بالمنهج تلقائياً النظام (تعرّف واثق) لا المستخدم
+  autoLinked Boolean @default(false)
+  /// تأكيد المستخدم لمكانه (null = ينتظر المراجعة)
+  confirmedAt DateTime?
   status        BookStatus   @default(UPLOADED)
   error         String?
   createdAt     DateTime     @default(now())

@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!b) return fail(404, "NOT_FOUND", "Book not found");
     // قيد المعالجة فعلاً (نبض حديث) → ارفض؛ العالق (بلا نبض) يجوز إعادة معالجته
     if (b.status === "PROCESSING" && Date.now() - b.updatedAt.getTime() < STALE_MS) return fail(409, "BUSY_OR_MISSING", "Already processing");
-    after(() => processBook(id, { ocr: body.ocr ?? true }));
+    after(() => processBook(id, { ocr: body.ocr ?? true, actor }));
     return ok({ queued: true });
   });
 }

@@ -3,91 +3,65 @@ import { z } from "zod";
 import { db } from "../db";
 import { codeSchema } from "../http";
 import type { Actor } from "../admin/audit";
-import { createEntity } from "../admin/curriculum";
-import { guessFromName, languageOf, type BookGuess } from "./names";
-import { linkBook, type Detected } from "./service";
+import { guessFromName, type BookGuess } from "./names";
+import { placeBook } from "./placement";
+import type { Detected } from "./service";
 
-export const applySchema = z.object({
-  trackCode: codeSchema,
+export const confirmSchema = z.object({
   items: z.array(z.object({
     bookId: z.string().min(10).max(40),
+    trackCode: codeSchema,
     gradeCode: codeSchema,
     subjectCode: codeSchema,
     kind: z.enum(["TEXTBOOK", "EXERCISES", "ACTIVITY"]),
-  })).min(1).max(100),
+  })).min(1).max(200),
 });
 
+export type ReviewItem = {
+  id: string; originalName: string; status: string; error: string | null; pageCount: number | null; textPageCount: number | null; processedPages: number;
+  trackCode: string; gradeCode: string | null; subjectCode: string | null; kind: BookGuess["kind"];
+  /** واثق: النظام يرجّح صحة الاقتراح (غلاف بعبارة صف صريحة، أو ربط تلقائي سابق) */
+  sure: boolean; linked: boolean; autoLinked: boolean; evidence: string | null; source: string | null;
+  /** ما زال يُقرأ/يُتعرَّف عليه */
+  working: boolean;
+};
+
 /**
- * اقتراحات للكتب غير المربوطة. المصدر الأول محتوى الغلاف (detected)، والاسم احتياط لما يغيب منه
- * (أسماء الملفات المحمّلة قد تفقد حروفها العربية). الصفوف غير الواثقة تُعلَّم لتراجعها.
+ * كتب تنتظر مراجعة المستخدم: كل كتاب لم يُؤكَّد بعد (مربوط تلقائياً أو غير مربوط).
+ * المصدر الأول للاقتراح: منهجه الحالي، ثم محتوى الغلاف، ثم اسم الملف احتياطاً.
  */
-export async function proposeLinks() {
+export async function listReview(): Promise<ReviewItem[]> {
   const books = await db.uploadedBook.findMany({
-    where: { ownerId: null, curriculumId: null },
-    orderBy: { originalName: "asc" },
-    select: { id: true, originalName: true, status: true, error: true, detected: true },
+    where: { ownerId: null, confirmedAt: null },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      id: true, originalName: true, status: true, error: true, pageCount: true, textPageCount: true, processedPages: true, detected: true, autoLinked: true, curriculumId: true,
+      curriculum: { select: { kind: true, grade: { select: { code: true } }, subject: { select: { code: true } }, track: { select: { code: true } } } },
+    },
   });
   return books.map((b) => {
-    const name = guessFromName(b.originalName);
     const d = b.detected as Detected | null;
-    const gradeCode = d?.gradeCode ?? name.gradeCode;
-    const subjectCode = d?.subjectCode ?? name.subjectCode;
-    const kind: BookGuess["kind"] = d && d.kind !== "TEXTBOOK" ? d.kind : name.kind;
-    // واثق: من الغلاف بثقة عالية، أو (بلا تعرّف) من الاسم بصف ومادة معاً
-    const sure = d ? d.confidence === "high" || (!!name.gradeCode && !!name.subjectCode && !d.gradeCode && !d.subjectCode) : !!name.gradeCode && !!name.subjectCode;
+    const name = guessFromName(b.originalName);
+    const c = b.curriculum;
+    const gradeCode = c?.grade.code ?? d?.gradeCode ?? name.gradeCode;
+    const subjectCode = c?.subject.code ?? d?.subjectCode ?? name.subjectCode;
+    const kind: BookGuess["kind"] = c?.kind ?? (d && d.kind !== "TEXTBOOK" ? d.kind : name.kind);
+    const sure = b.autoLinked || (d ? d.confidence === "high" : !!name.gradeCode && !!name.subjectCode);
     return {
-      id: b.id, originalName: b.originalName, status: b.status, error: b.error,
-      guess: { gradeCode, subjectCode, kind } as BookGuess,
-      sure, evidence: d?.evidence ?? null, source: d?.source ?? null,
-      /** لم يُجرَّ التعرّف بعد وهناك صفحات جاهزة له */
-      pending: d === null && b.status !== "PROCESSING" && b.status !== "UPLOADED",
+      id: b.id, originalName: b.originalName, status: b.status, error: b.error, pageCount: b.pageCount, textPageCount: b.textPageCount, processedPages: b.processedPages,
+      trackCode: c?.track.code ?? "GENERAL", gradeCode, subjectCode, kind, sure: sure && !!gradeCode && !!subjectCode,
+      linked: !!b.curriculumId, autoLinked: b.autoLinked, evidence: d?.evidence ?? null, source: d?.source ?? null,
+      working: b.status === "UPLOADED" || b.status === "PROCESSING" || (d === null && b.status !== "FAILED"),
     };
   });
 }
 
-type ItemResult = { bookId: string; ok: boolean; created?: boolean; curriculumId?: string; code?: string };
-
-/** العنوان الافتراضي النظيف للمنهج (لا اسم ملف) */
-const titleOf = (kind: BookGuess["kind"], subject: string, grade: string) =>
-  `${kind === "EXERCISES" ? "تمارين " : kind === "ACTIVITY" ? "نشاط " : ""}${subject} — ${grade}`;
-
-/**
- * لكل كتاب: يجد المنهج (مسار + صف + مادة + السنة الحالية + نوع الكتاب) أو ينشئه، ثم يربط الكتاب به.
- * كل عنصر مستقل (فشل واحد لا يلغي الباقي) وكل عملية في سجل التدقيق عبر الخدمات الأصلية.
- */
-export async function applyLinks(actor: Actor, input: z.infer<typeof applySchema>) {
-  const year = await db.academicYear.findFirst({ where: { isCurrent: true } });
-  if (!year) return { ok: false as const, code: "NO_CURRENT_YEAR" as const };
-  const track = await db.curriculumTrack.findUnique({ where: { code: input.trackCode } });
-  if (!track) return { ok: false as const, code: "REFERENCE_NOT_FOUND" as const };
-
-  const results: ItemResult[] = [];
+/** تأكيد المستخدم (أو تصحيحه): يضع كل كتاب في منهجه ويُعدّه مؤكَّداً. كل عنصر مستقل. */
+export async function confirmPlacements(actor: Actor, input: z.infer<typeof confirmSchema>) {
+  const results: { bookId: string; ok: boolean; created?: boolean; curriculumId?: string; code?: string }[] = [];
   for (const it of input.items) {
-    const [grade, subject, book] = await Promise.all([
-      db.grade.findUnique({ where: { code: it.gradeCode } }),
-      db.subject.findUnique({ where: { code: it.subjectCode } }),
-      db.uploadedBook.findUnique({ where: { id: it.bookId } }),
-    ]);
-    if (!grade || !subject || !book) { results.push({ bookId: it.bookId, ok: false, code: "REFERENCE_NOT_FOUND" }); continue; }
-    if (book.ownerId !== null) { results.push({ bookId: it.bookId, ok: false, code: "FORBIDDEN" }); continue; }
-
-    const language = languageOf(subject.code);
-    let cur = await db.curriculum.findFirst({
-      where: { trackId: track.id, gradeId: grade.id, branchId: null, subjectId: subject.id, academicYearId: year.id, language, kind: it.kind, edition: null },
-      select: { id: true },
-    });
-    let created = false;
-    if (!cur) {
-      const r = await createEntity(actor, "curricula", {
-        trackCode: track.code, gradeCode: grade.code, subjectCode: subject.code, yearLabel: year.label, language, kind: it.kind,
-        title: titleOf(it.kind, subject.nameAr, grade.nameAr),
-      });
-      if (!r.ok) { results.push({ bookId: it.bookId, ok: false, code: r.code }); continue; }
-      cur = { id: r.id };
-      created = true;
-    }
-    const l = await linkBook(actor, it.bookId, cur.id);
-    results.push(l.ok ? { bookId: it.bookId, ok: true, created, curriculumId: cur.id } : { bookId: it.bookId, ok: false, code: l.code });
+    const r = await placeBook(actor, it.bookId, { trackCode: it.trackCode, gradeCode: it.gradeCode, subjectCode: it.subjectCode, kind: it.kind }, "confirm");
+    results.push({ bookId: it.bookId, ...(r.ok ? { ok: true, created: r.created, curriculumId: r.curriculumId } : { ok: false, code: r.code }) });
   }
-  return { ok: true as const, results };
+  return results;
 }
