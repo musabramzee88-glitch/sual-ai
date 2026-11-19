@@ -73,3 +73,6 @@ npm run typecheck && npm run lint && npm run build
 
 ## الأجزاء
 - هوية المنهج صارت: مسار + صف + [فرع] + مادة + سنة + لغة + kind + **part** + [طبعة]. لا تضع جزءين في منهج واحد (ترقيم الصفحات مستقل لكل ملف). `placeBook` يمرّر `part` دائماً (الافتراضي 0).
+
+## فحص الكتب
+- `health.ts` دوال نقية (لا server-only ولا DB)، و`health-data.ts` يأخذ `PrismaClient` ومجلد التخزين وسيطين ليعمل في الواجهة وفي `scripts/check-books.ts`. أي فحص جديد: أضفه في `checkBook` مع رسالة في `MESSAGES` واختباره بمدخلات اصطناعية.

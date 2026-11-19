@@ -10,7 +10,7 @@ const COMMON = new Set([
 ]);
 const ARABIC = /[؀-ۿ]/;
 const words = (s: string) => s.split(/[\s،,.:؛;!?؟()«»"'\-]+/).filter(Boolean);
-const score = (s: string) => {
+export const arabicWordScore = (s: string) => {
   let n = 0;
   for (const w of words(s)) if (COMMON.has(w) || (w.length > 3 && w.startsWith("ال"))) n++;
   return n;
@@ -26,8 +26,8 @@ export function reverseVisual(line: string): string {
 
 export function fixArabicLine(line: string): string {
   if (!ARABIC.test(line)) return line;
-  const normal = score(line);
-  const reversed = score(reverseVisual(line));
+  const normal = arabicWordScore(line);
+  const reversed = arabicWordScore(reverseVisual(line));
   return reversed >= normal + 2 || (normal === 0 && reversed >= 1) ? reverseVisual(line) : line;
 }
 

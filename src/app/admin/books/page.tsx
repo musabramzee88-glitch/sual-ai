@@ -31,6 +31,7 @@ export default async function Page() {
   return (
     <AdminShell brand={site.brand} t={t} perms={admin.permissions} title={b.title}>
       <AutoRefresh active={busy} />
+      <div className="mb-3 text-end"><Link href="/admin/books/health" className="text-sm text-brand">{b.healthLink} ←</Link></div>
       <Dropzone L={L} t={{ dropTitle: b.dropTitle, dropHint: b.dropHint, uploading: b.uploading, queued: b.queued, uploaded: b.uploaded, ocrToggle: b.ocrToggle, ocrToggleHint: b.ocrToggleHint }} />
 
       <div className="my-4 flex flex-wrap items-center gap-3">
