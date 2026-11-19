@@ -36,6 +36,11 @@ describe("PDF text extraction (real files)", () => {
     expect(p[0].text).toContain("apple");
     expect(p[0].text).toContain("library");
   });
+  it("vowelized Arabic never yields wrong stored text: either kept as text or retained as `suspect` for OCR arbitration", async () => {
+    const p = await extractPdfPages(load("vowelized-ar.pdf"));
+    expect(p[0].hasText ? p[0].text.length > 0 : (p[0].suspect ?? "").length > 0).toBe(true);
+    if (!p[0].hasText) expect(p[0].text).toBe("");
+  });
   it("rejects data that is not a PDF", async () => {
     await expect(extractPdfPages(new TextEncoder().encode("not a pdf"))).rejects.toThrow();
   });

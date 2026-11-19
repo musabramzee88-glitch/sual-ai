@@ -113,3 +113,20 @@ describe("report details", () => {
     expect(formatReport(buildReport([b]))).toContain("كتب منهجها بلا فصول (مهمة قادمة، ليست خطأ): 1");
   });
 });
+
+describe("vowelized Arabic is not a false alarm", () => {
+  it("detached diacritics do not trigger LETTER_SPACED_TEXT / UNRELIABLE_TEXT_LAYER", () => {
+    const vow = Array.from({ length: 6 }, () => "المُقَدِّمَة ُكَان َ تَأْلِيْف ِّكِتَاب ُ (اللُّغَة ِ العَرَبِيَّة ِ) ُ يُسْعِدُنَا أَن ْ نُقَدِّم َ لَكُم ْ هَذَا ِّكِتَاب َ").join("\n");
+    const pages = Array.from({ length: 20 }, (_, i) => page(i + 1, vow));
+    const c = codes(base({ pages }));
+    expect(c).not.toContain("LETTER_SPACED_TEXT");
+    expect(c).not.toContain("UNRELIABLE_TEXT_LAYER");
+  });
+  it("pages with corrupted font encodings are reported as an unreliable text layer", () => {
+    const bad = "ُ تُركِّز ُ �صِل�ْصلة ُ كُتب ِ العلوم الم�سرف العلمي ت�أليف م�َسْرُوع الف�صل الثالث";
+    const pages = Array.from({ length: 20 }, (_, i) => page(i + 1, i < 12 ? Array.from({ length: 6 }, () => bad).join("\n") : good(i + 1).text));
+    const r = checkBook(base({ pages })).issues.find((i) => i.code === "UNRELIABLE_TEXT_LAYER");
+    expect(r?.severity).toBe("error"); // 60% من الصفحات
+    expect(r?.detail).toContain("12/20");
+  });
+});

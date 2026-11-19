@@ -9,7 +9,7 @@ import { extractPdfPages } from "./extract";
 import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
 import { guessFromCover, guessSubjectFromContent, type CoverGuess } from "./cover";
 import { placeBook } from "./placement";
-import { hasRealText } from "./text";
+import { chooseBest, hasRealText } from "./text";
 
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
 /** نبض الحياة كل صفحة؛ كتاب بلا نبض 5 دقائق يُعدّ عالقاً (خادم أُغلق) ويجوز إعادة معالجته */
@@ -92,7 +92,7 @@ export async function processBook(id: string, opts: { ocr?: boolean; actor?: Act
   const book = await db.uploadedBook.findUniqueOrThrow({ where: { id } });
   try {
     const bytes = new Uint8Array(await readFile(fileOf(book.storageKey)));
-    const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean }[] = (await withExtractSlot(() => extractPdfPages(bytes))).map((p) => ({ ...p, isOcr: false }));
+    const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean; suspect?: string }[] = (await withExtractSlot(() => extractPdfPages(bytes))).map((p) => ({ ...p, isOcr: false }));
     // الإلغاء أثناء الاستخراج: التحديث الشرطي لا يمس شيئاً إن لم تعد الحالة PROCESSING
     if ((await db.uploadedBook.updateMany({ where: { id, status: "PROCESSING" }, data: { pageCount: pages.length, processedPages: pages.length } })).count !== 1) throw new CancelledError();
 
@@ -112,13 +112,20 @@ export async function processBook(id: string, opts: { ocr?: boolean; actor?: Act
       });
       for (const r of results) {
         const p = pages[r.pageNumber - 1];
-        // نتيجة OCR التي لا حروف كافية فيها لا تحلّ محل الأصل (ولا تُعلَّم OCR)
-        if (!r.hasText) continue;
-        p.text = r.text;
+        // تحكيم بالجودة بين OCR وطبقة النص المعطوبة (OCR يسيء قراءة النص المشكَّل كلياً مثلاً)
+        const best = chooseBest(r.hasText ? r.text : null, p.suspect ?? null);
+        if (!best) continue; // لا OCR مفيد ولا طبقة صالحة: تبقى الصفحة بلا نص
+        p.text = best.text;
         p.hasText = true;
-        p.isOcr = true;
-        ocrUsed = true;
+        p.isOcr = best.source === "ocr";
+        if (p.isOcr) ocrUsed = true;
       }
+    }
+    // OCR مطفأ/لم يُفد: أفضل ما في الطبقة المعطوبة يُحفظ إن بلغ حدّ الجودة (بدل فقدان الصفحة)، ويظل الفحص يعلّمها غير موثوقة
+    for (const p of pages) {
+      if (p.hasText || !p.suspect) continue;
+      const best = chooseBest(null, p.suspect);
+      if (best) { p.text = best.text; p.hasText = true; }
     }
 
     const textPages = pages.filter((p) => p.hasText).length;

@@ -43,6 +43,7 @@ const cleanSymbolFont = (t: string) => t.replace(/[\uF000-\uF0FF]/g, (c) => SYMB
 
 export function cleanPageText(raw: string): string {
   return cleanSymbolFont(raw)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "") // محارف تحكم/NUL (خطوط بلا ToUnicode)
     .normalize("NFKC")
     .replace(/ـ/g, "") // تطويل
     .replace(/[​-‏‪-‮⁦-⁩]/g, "") // محارف اتجاه/صفرية العرض
@@ -151,7 +152,8 @@ export function cleanOcrText(raw: string): string {
     .replace(/[​-‏‪-‮⁦-⁩]/g, "")
     .split("\n")
     .map((l) => l.replace(/[ \t]+/g, " ").trim())
-    .filter((l) => l.length > 1)
+    // أسطر ضجيج من حافة الصفحة: حرف أو حرفان متفرقان («ع ع»)
+    .filter((l) => l.length > 1 && !(l.split(" ").length <= 3 && l.split(" ").every((t) => [...t].length <= 1)))
     .join("\n");
 }
 
@@ -160,21 +162,50 @@ export const hasOcrText = (t: string) => (t.match(/[\p{L}]/gu)?.length ?? 0) >= 
 
 const EN_STOP = new Set(["the", "a", "an", "is", "are", "am", "i", "my", "you", "your", "he", "she", "it", "we", "they", "and", "to", "of", "in", "on", "at", "this", "that", "what", "how", "can", "have", "has", "do", "does", "name", "hello", "look", "me", "his", "her", "like", "go", "see", "one", "two", "yes", "no", "not", "with", "for", "from", "here", "there"]);
 
-/** نسبة «الكلمات» العربية المؤلفة من حرف واحد (علامة استخراج حرفاً حرفاً) */
-function singleLetterShare(text: string): number {
-  const toks = text.split(/\s+/).filter((t) => /[\u0600-\u06FF]/.test(t));
-  return toks.length < 20 ? 0 : toks.filter((t) => [...t].length === 1).length / toks.length;
+/**
+ * حروف عربية أساسية فقط (بلا علامات التشكيل U+064B–065F وU+0670 ولا التطويل).
+ * مهم: النص المشكَّل يُستخرج غالباً بحركات منفصلة («ُ» «َ» كأنها كلمات)، فلا تُعدّ هذه حروفاً.
+ */
+const AR_LETTER = /[\u0621-\u064A\u066E-\u06D3\u06FA-\u06FF]/;
+const AR_LETTER_G = new RegExp(AR_LETTER.source, "g");
+const arTokens = (text: string) => text.split(/\s+/).filter((t) => AR_LETTER.test(t));
+
+/** نسبة «الكلمات» العربية المؤلفة من حرف أساسي واحد (علامة استخراج حرفاً حرفاً) — التشكيل المنفصل لا يُحتسب */
+export function singleLetterShare(text: string): number {
+  const toks = arTokens(text);
+  if (toks.length < 20) return 0;
+  const single = toks.filter((t) => [...t].filter((c) => AR_LETTER.test(c)).length === 1).length;
+  return single / toks.length;
 }
 
 /**
- * نص مستخرج من طبقة نص معطوبة (ترميز خطوط بلا ToUnicode): إما عربية حرفاً حرفاً، أو «لاتينية» بلا أي كلمة إنكليزية حقيقية.
- * مثل هذه الصفحة تُعامَل كأنها بلا نص فتُقرأ بـ OCR بدل اعتماد نص فاسد.
+ * طبقة نص عربية غير موثوقة (ترميز خطوط معطوب): كلمات عربية اختلط فيها حروف لاتينية أو رموز رياضية بدل الحروف/الحركات
+ * (مثل «lمn≤oدuمnة»)، أو علامة الاستبدال U+FFFD داخل الكلمات (حروف ضائعة أو مبدَّلة: «م�َسْرُوع»، «�صِل�ْصلة»).
+ * هذه الصفحات لا يُوثق بنصها، فتُقرأ بـ OCR.
+ */
+export function unreliableArabic(text: string): boolean {
+  const toks = arTokens(text);
+  if (toks.length < 15) return false;
+  const mixed = toks.filter((t) => /[A-Za-z\uFFFD\u00C0-\u024F\u0192\u2190-\u22FF]/.test(t)).length;
+  if (mixed / toks.length >= 0.12) return true;
+  const fffd = text.match(/\uFFFD/g)?.length ?? 0;
+  const letters = text.match(AR_LETTER_G)?.length ?? 0;
+  return fffd >= 3 && letters > 0 && fffd / letters >= 0.005;
+}
+
+/**
+ * نص مستخرج من طبقة نص معطوبة: عربية حرفاً حرفاً، أو عربية اختلط فيها لاتيني/رموز/FFFD، أو «لاتينية» بلا معنى،
+ * أو لاتينية فيها رموز رياضية كثيرة (عربية مرسومة برموز Latin-1). مثل هذه الصفحة تُعامَل كأنها بلا نص فتُقرأ بـ OCR.
  */
 export function isGarbageText(text: string): boolean {
   if (singleLetterShare(text) > 0.3) return true;
+  if (unreliableArabic(text)) return true;
   const ar = text.match(/[\u0600-\u06FF]/g)?.length ?? 0;
   const la = text.match(/[A-Za-z]/g)?.length ?? 0;
   if (la > 60 && la > ar * 3) {
+    // عربية مرسومة برموز Latin-1 والرياضيات («áneqón≤aodG è pgÉnæn rŸG ≈n∏»): نسبة الرموز الغريبة عالية
+    const noise = text.match(/[\u0192\u00A3\u00A5\u00A4\u0178\u00E6\u00C6\u2190-\u22FF\u2020-\u2022]/g)?.length ?? 0;
+    if (noise >= 6 && noise / (la + noise) >= 0.02) return true;
     // الإنكليزية الحقيقية (حتى قوائم المفردات بلا كلمات رابطة) نسبة حروفها العلّة ≈ 35–40%؛ الهراء الناتج عن ترميز خطوط
     // معطوب أقل بكثير. نشترط الشرطين معاً (قلة الكلمات الرابطة ونسبة العلّة المنخفضة) حتى لا تُرفض صفحة إنكليزية سليمة.
     const words = text.toLowerCase().split(/[^a-z']+/).filter((w) => w.length > 0);
@@ -182,4 +213,29 @@ export function isGarbageText(text: string): boolean {
     if (words.length >= 20 && vowels < 0.22 && words.filter((w) => EN_STOP.has(w)).length / words.length < 0.05) return true;
   }
   return false;
+}
+
+/**
+ * جودة نص مستخرج (0..1): حصة الكلمات «النظيفة» (حروف/أرقام فقط، بلا خلط عربي-لاتيني ولا U+FFFD ولا رموز)
+ * مع كثافة الكلمات العربية الشائعة. تُستعمل للتحكيم بين طبقة نص معطوبة ونتيجة OCR لصفحة واحدة.
+ */
+export function textQuality(text: string): number {
+  const toks = text.normalize("NFKC").replace(/[\u064B-\u065F\u0670\u0640]/g, "").split(/\s+/).filter((t) => /\p{L}/u.test(t));
+  if (toks.length < 5) return 0;
+  const clean = toks.filter((t) => /^[\p{L}\p{N}.,:;!?()«»"'\-–/%+=×÷]+$/u.test(t) && !(/[\u0600-\u06FF]/.test(t) && /[A-Za-z]/.test(t))).length / toks.length;
+  const common = Math.min(1, (arabicWordScore(text) / toks.length) * 3);
+  return clean * 0.3 + common * 0.7;
+}
+
+/**
+ * يختار لصفحة واحدة بين نص طبقة معطوبة (suspect) ونتيجة OCR: الأعلى جودة، مع تفضيل OCR عند التقارب (هامش 0.05).
+ * suspect يُنظَّف من U+FFFD. يعيد null إن لم يصلح أيٌّ منهما.
+ */
+export function chooseBest(ocr: string | null, suspect: string | null): { text: string; source: "ocr" | "layer" } | null {
+  const layer = suspect ? suspect.replace(/\uFFFD/g, "") : null;
+  const qo = ocr && hasOcrText(ocr) ? textQuality(ocr) : -1;
+  const ql = layer && hasRealText(layer) ? textQuality(layer) : -1;
+  if (qo < 0 && ql < 0) return null;
+  if (ql > qo + 0.05 && ql >= 0.5) return { text: layer!, source: "layer" };
+  return qo >= 0 ? { text: ocr!, source: "ocr" } : ql >= 0.5 ? { text: layer!, source: "layer" } : null;
 }

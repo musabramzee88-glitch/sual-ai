@@ -27,6 +27,15 @@ describe("OCR (local Tesseract, Arabic + English)", () => {
     expect(p.text).not.toMatch(/[‎‏]/); // علامات الاتجاه تُزال
   }, 120_000);
 
+  it("parallel workers give the same text per page, in order, with progress per batch", async () => {
+    const progress: number[] = [];
+    const pages = await ocrPdfPages(fx("text-ar.pdf"), [1, 2], (n) => void progress.push(n), 2);
+    expect(pages.map((p) => p.pageNumber)).toEqual([1, 2]);
+    expect(progress).toEqual([2]); // دفعة واحدة بخيطين
+    const single = await ocrPdfPages(fx("text-ar.pdf"), [1, 2], undefined, 1);
+    expect(single.map((p) => p.text)).toEqual(pages.map((p) => p.text));
+  }, 180_000);
+
   it("runs OCR jobs one at a time", async () => {
     const order: string[] = [];
     const slow = (n: string, ms: number) => runOcrExclusive(async () => { order.push(`start ${n}`); await new Promise((r) => setTimeout(r, ms)); order.push(`end ${n}`); });
@@ -36,6 +45,7 @@ describe("OCR (local Tesseract, Arabic + English)", () => {
 
   it("cleans OCR output: drops diacritics, bidi marks and 1-char noise lines", () => {
     expect(cleanOcrText("‎Unit‏ 1\nمَدْرَسَتِي\n.\n\nx")).toBe("Unit 1\nمدرستي");
+    expect(cleanOcrText("ع ع\nالدرس الأول\nو ا")).toBe("الدرس الأول"); // ضجيج الحواف
     expect(hasOcrText("a .")).toBe(false);
     expect(hasOcrText("مدرستي الجميلة")).toBe(true);
   });

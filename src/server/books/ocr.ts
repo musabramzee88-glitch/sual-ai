@@ -63,36 +63,53 @@ export function runOcrExclusive<T>(fn: () => Promise<T>): Promise<T> {
 export type OcrPage = { pageNumber: number; text: string; hasText: boolean };
 
 /** يقرأ الصفحات المطلوبة فقط من PDF. onPage يُستدعى بعد كل صفحة (للتقدّم ونبض الحياة). */
-export async function ocrPdfPages(data: Uint8Array, pageNumbers: number[], onPage?: (done: number, total: number) => Promise<void> | void): Promise<OcrPage[]> {
+/**
+ * يقرأ الصفحات المطلوبة فقط من PDF. onPage يُستدعى بعد كل دفعة (للتقدّم ونبض الحياة).
+ * يعمل بعدة خيوط Tesseract (OCR_WORKERS، الافتراضي 2): الرسم متتابع والتعرّف متوازٍ، فيتسارع العمل بنحو عدد الخيوط
+ * على أجهزة متعددة النوى (وتزداد الحرارة/الذاكرة؛ اجعلها 1 للجهاز الضعيف).
+ */
+export async function ocrPdfPages(data: Uint8Array, pageNumbers: number[], onPage?: (done: number, total: number) => Promise<void> | void, workersOverride?: number): Promise<OcrPage[]> {
   const [{ createWorker }, { createCanvas }, pdfjs, langPath] = await Promise.all([
     import("tesseract.js"), import("@napi-rs/canvas"), import("pdfjs-dist/legacy/build/pdf.mjs"), ensureLangDir(),
   ]);
   const doc = await pdfjs.getDocument({ data: data.slice(), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
-  const worker = await createWorker("ara+eng", 1, { langPath, gzip: true, cacheMethod: "none", logger: () => {} });
+  const nWorkers = Math.max(1, Math.min(4, workersOverride ?? env.OCR_WORKERS, pageNumbers.length || 1));
+  const workers = await Promise.all(Array.from({ length: nWorkers }, () => createWorker("ara+eng", 1, { langPath, gzip: true, cacheMethod: "none", logger: () => {} })));
   try {
     const out: OcrPage[] = [];
-    for (const [i, n] of pageNumbers.entries()) {
-      const page = await doc.getPage(n);
-      const base = page.getViewport({ scale: 1 });
-      const scale = Math.min(SCALE, MAX_SIDE / Math.max(base.width, base.height));
-      const vp = page.getViewport({ scale });
-      const canvas = createCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx as unknown as CanvasRenderingContext2D, viewport: vp }).promise;
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      autoLevel(img.data);
-      ctx.putImageData(img, 0, 0);
-      const { data: r } = await worker.recognize(canvas.toBuffer("image/png"));
-      const text = cleanOcrText(r.text);
-      out.push({ pageNumber: n, text, hasText: hasOcrText(text) });
-      page.cleanup();
-      await onPage?.(i + 1, pageNumbers.length);
+    let done = 0;
+    for (let i = 0; i < pageNumbers.length; i += nWorkers) {
+      const batch = pageNumbers.slice(i, i + nWorkers);
+      // رسم الدفعة بالتتابع (يستعمل pdf.js والرسم نفس الخيط)…
+      const pngs: Buffer[] = [];
+      for (const n of batch) {
+        const page = await doc.getPage(n);
+        const base = page.getViewport({ scale: 1 });
+        const scale = Math.min(SCALE, MAX_SIDE / Math.max(base.width, base.height));
+        const vp = page.getViewport({ scale });
+        const canvas = createCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx as unknown as CanvasRenderingContext2D, viewport: vp }).promise;
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        autoLevel(img.data);
+        ctx.putImageData(img, 0, 0);
+        pngs.push(canvas.toBuffer("image/png"));
+        page.cleanup();
+      }
+      // …والتعرّف على الدفعة بالتوازي
+      const texts = await Promise.all(pngs.map(async (png, k) => (await workers[k].recognize(png)).data.text));
+      for (const [k, n] of batch.entries()) {
+        const text = cleanOcrText(texts[k]);
+        out.push({ pageNumber: n, text, hasText: hasOcrText(text) });
+      }
+      done += batch.length;
+      await onPage?.(done, pageNumbers.length);
     }
     return out;
   } finally {
-    await worker.terminate();
+    await Promise.all(workers.map((w) => w.terminate()));
     await doc.destroy();
   }
 }

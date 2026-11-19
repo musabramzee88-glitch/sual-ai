@@ -34,6 +34,8 @@ const schema = z.object({
   STORAGE_DIR: z.string().default("./storage"),
   // قراءة الكتب المصوّرة بـ OCR محلي (مكلفة على المعالج). false لتعطيلها.
   OCR_ENABLED: z.enum(["true", "false"]).default("true"),
+  // عدد خيوط OCR المتوازية (1–4): أعلى = أسرع وأسخن وأكثر ذاكرة
+  OCR_WORKERS: z.coerce.number().int().min(1).max(4).default(2),
 });
 
 // المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة

@@ -3,7 +3,7 @@
  * كل فحص يُنتج مشكلة بشدّة: error (لا تعتمد على الكتاب قبل إصلاحها) · warn (راجع) · info (للعلم).
  */
 import { createHash } from "node:crypto";
-import { arabicWordScore, reverseVisual } from "./text";
+import { arabicWordScore, isGarbageText, reverseVisual, singleLetterShare } from "./text";
 
 export type Severity = "error" | "warn" | "info";
 export type Issue = { code: string; severity: Severity; detail?: string };
@@ -36,12 +36,8 @@ const LATIN = /[A-Za-z]/g;
 const count = (s: string, rx: RegExp) => s.match(rx)?.length ?? 0;
 const letters = (s: string) => count(s, /\p{L}/gu);
 
-/** نسبة الحروف العربية المفردة المفصولة بمسافات («ا ل ر ي ا ض ي ا ت»): علامة استخراج حرفاً حرفاً */
-export function letterSpacedRatio(text: string): number {
-  const toks = text.split(/\s+/).filter((t) => /[؀-ۿ]/.test(t));
-  if (toks.length < 20) return 0;
-  return toks.filter((t) => [...t].length === 1 && /[؀-ۿ]/.test(t)).length / toks.length;
-}
+/** نسبة الحروف العربية المفردة المفصولة بمسافات («ا ل ر ي ا ض ي ا ت»): علامة استخراج حرفاً حرفاً. التشكيل المنفصل لا يُحتسب. */
+export const letterSpacedRatio = singleLetterShare;
 
 /** مجموع نقاط الكلمات الشائعة بالترتيب الحالي مقابل المعكوس (تراكمي على سطور النص) */
 export function orderScores(text: string): { normal: number; reversed: number } {
@@ -122,6 +118,9 @@ export function checkBook(b: BookCheckInput): BookReport {
     const all = native.map((p) => p.text).join("\n");
     const { normal, reversed } = orderScores(all);
     if (reversed >= 8 && reversed > normal * 1.5) add("REVERSED_TEXT", "error", `${reversed}/${normal}`);
+    // صفحات طبقة نصها غير موثوقة (حروف مستبدلة بلاتيني/رموز أو FFFD داخل الكلمات): تحتاج OCR
+    const bad = native.filter((p) => isGarbageText(p.text));
+    if (bad.length > 0) add("UNRELIABLE_TEXT_LAYER", bad.length / native.length > 0.3 ? "error" : "warn", `${bad.length}/${native.length} صفحة`);
     const spaced = letterSpacedRatio(all);
     if (spaced > 0.35) add("LETTER_SPACED_TEXT", "error", spaced.toFixed(2));
     if (avgArabicTokenLength(all) > 14) add("MISSING_SPACES", "warn");
@@ -209,6 +208,7 @@ const MESSAGES: Record<string, string> = {
   STILL_PROCESSING: "ما زال قيد المعالجة", PARTIAL_TEXT: "نص جزئي: كثير من الصفحات بلا نص", TOO_FEW_PAGES: "عدد صفحاته قليل جداً", TOO_MANY_PAGES: "عدد صفحاته كبير جداً",
   OCR_USED: "بعض صفحاته مقروءة بـ OCR (قد تحوي أخطاء، خصوصاً الأرقام)", MANY_BLANK_PAGES: "أكثر من 30% من الصفحات بلا نص (رسوم؟ أم فشل استخراج؟)",
   REVERSED_TEXT: "العربية مقلوبة (حروف الكلمات بترتيب معكوس)", LETTER_SPACED_TEXT: "العربية مستخرجة حرفاً حرفاً (طبقة النص في الـPDF معطوبة): أعد معالجة الكتاب ليُقرأ بـ OCR", MISSING_SPACES: "المسافات بين الكلمات ضائعة",
+  UNRELIABLE_TEXT_LAYER: "طبقة النص في بعض الصفحات غير موثوقة (حروف عربية مستبدلة برموز أو ضائعة): أعد معالجة الكتاب لتُقرأ تلك الصفحات بـ OCR",
   GARBAGE_CHARS: "رموز تالفة في النص", LANGUAGE_MISMATCH: "لغة النص لا تطابق المادة (غالباً طبقة نص معطوبة: أعد معالجة الكتاب)", NOT_LINKED: "غير مربوط بمنهج", NOT_CONFIRMED: "ينتظر تأكيدك", LOW_CONFIDENCE: "التعرّف على غلافه غير مؤكد",
   COVER_MISMATCH: "ما يقوله الغلاف يختلف عن المنهج المربوط به", SHARED_CURRICULUM: "أكثر من كتاب في المنهج نفسه (تتعارض أرقام الصفحات والفصول؛ افصلها بالجزء أو النوع)",
   NO_CHAPTERS: "منهجه بلا فصول (تُدخل قبل معالج الامتحان)", CHAPTER_PAGE_OUT_OF_RANGE: "فصل يتجاوز عدد صفحات الكتاب", CHAPTER_PAGES_OVERLAP: "صفحات فصلين متداخلة",

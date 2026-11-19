@@ -1,7 +1,8 @@
 import "server-only";
 import { assembleLines, cleanPageText, hasRealText, isGarbageText, type PositionedItem } from "./text";
 
-export type ExtractedPage = { pageNumber: number; text: string; hasText: boolean };
+/** suspect: نص طبقة معطوبة لم يُعتمد (للتحكيم مع OCR لاحقاً) */
+export type ExtractedPage = { pageNumber: number; text: string; hasText: boolean; suspect?: string };
 
 /**
  * يستخرج نص كل صفحة من PDF (بلا OCR). يُرجع الصفحات بالترتيب؛ الصفحة المصوّرة نصها فارغ تقريباً.
@@ -26,7 +27,7 @@ export async function extractPdfPages(data: Uint8Array, onPage?: (n: number, tot
       // طبقة نص معطوبة: لا نخزّن الفاسد، وتُعامل الصفحة كبلا نص (تُقرأ بـ OCR إن كان مفعّلاً)
       const garbage = isGarbageText(raw);
       const text = garbage ? "" : raw;
-      pages.push({ pageNumber: i, text, hasText: !garbage && hasRealText(text) });
+      pages.push({ pageNumber: i, text, hasText: !garbage && hasRealText(text), ...(garbage && raw ? { suspect: raw } : {}) });
       page.cleanup();
       onPage?.(i, doc.numPages);
     }
