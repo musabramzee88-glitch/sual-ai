@@ -94,6 +94,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
             <Td>{pick(r.grade)}{r.branch && <div className="text-xs text-muted">{pick(r.branch)}</div>}</Td><Td>{pick(r.track)}</Td><Td>{pick(r.subject)}</Td><Td><span dir="ltr">{r.academicYear.label}</span></Td>
             <Td>{r._count.chapters}</Td><Td><Pill>{r.isActive ? t.common.yes : t.common.no}</Pill></Td>
             <Td><div className="flex flex-wrap gap-1"><Link href={`/admin/curriculum/curricula/${r.id}`} className="rounded-lg border border-line px-3 py-1 text-xs">{c.editChapters}</Link>
+              <Act L={L} method="PATCH" url={api(r.id)} label={c.rename} ask={{ field: "title", label: c.ctitle }} />
               <Act L={L} method="PATCH" url={api(r.id)} body={{ isActive: !r.isActive }} label={r.isActive ? c.disable : c.enable} tone={r.isActive ? "danger" : "ok"} confirmText /></div></Td>
           </tr>)}</tbody></TableWrap>
         <h2 className="mb-3 mt-8 font-semibold">{t.common.create}</h2>
