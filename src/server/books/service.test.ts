@@ -45,7 +45,7 @@ describe("book library", () => {
     expect(b.originalName).not.toContain("/");
     expect(existsSync(path.join(tmp, b.storageKey))).toBe(true);
 
-    expect(await processBook(r.id)).toEqual({ ok: true, pageCount: 1, textPages: 1 });
+    expect(await processBook(r.id)).toEqual({ ok: true, pageCount: 1, textPages: 1, ocrPages: 0 });
     const done = await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } });
     expect(done).toMatchObject({ status: "READY", pageCount: 1, textPageCount: 1, error: null });
     expect((await getBookPage(r.id, 1))?.text).toContain("حل المعادلة 3x + 5 = 20 ثم تحقق.");
@@ -54,14 +54,28 @@ describe("book library", () => {
     expect(dup).toEqual({ ok: false, code: "DUPLICATE", existingId: r.id });
   });
 
-  it("marks image-only books as needing OCR (not usable), and can reprocess", async () => {
-    const r = await uploadBook(actor, { name: "مصور.pdf", bytes: fx("scanned.pdf") });
+  it("image-only books: NEEDS_OCR when OCR is off; with OCR they become READY (OCR_USED) and pages are flagged isOcr", async () => {
+    const r = await uploadBook(actor, { name: "مصور.pdf", bytes: fx("scanned-ar.pdf") });
     if (!r.ok) throw new Error(r.code);
     ids.push(r.id);
-    await processBook(r.id);
+    await processBook(r.id, { ocr: false });
     expect(await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: "FAILED", error: "NEEDS_OCR", textPageCount: 0 });
-    expect((await processBook(r.id)).ok).toBe(true); // إعادة المعالجة مسموحة
-  });
+
+    const res = await processBook(r.id, { ocr: true }); // إعادة المعالجة مسموحة
+    expect(res).toEqual({ ok: true, pageCount: 1, textPages: 1, ocrPages: 1 });
+    expect(await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: "READY", error: "OCR_USED", textPageCount: 1, processedPages: 1 });
+    const pg = await getBookPage(r.id, 1);
+    expect(pg?.isOcr).toBe(true);
+    expect(pg?.text).toContain("الأعداد الطبيعية");
+  }, 180_000);
+
+  it("a pure image (no letters) stays unusable even with OCR", async () => {
+    const r = await uploadBook(actor, { name: "رسم.pdf", bytes: fx("blank.pdf") });
+    if (!r.ok) throw new Error(r.code);
+    ids.push(r.id);
+    await processBook(r.id, { ocr: true });
+    expect(await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: "FAILED", error: "NEEDS_OCR", textPageCount: 0 });
+  }, 120_000);
 
   it("never processes the same book twice at once", async () => {
     const r = await uploadBook(actor, { name: "نص.pdf", bytes: fx("text-ar.pdf") });

@@ -9,7 +9,7 @@ export type ExtractedPage = { pageNumber: number; text: string; hasText: boolean
  */
 export async function extractPdfPages(data: Uint8Array, onPage?: (n: number, total: number) => void): Promise<ExtractedPage[]> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, stopAtErrors: false, verbosity: 0 }).promise;
+  const doc = await pdfjs.getDocument({ data: data.slice(), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, stopAtErrors: false, verbosity: 0 }).promise;
   try {
     const pages: ExtractedPage[] = [];
     for (let i = 1; i <= doc.numPages; i++) {

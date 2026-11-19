@@ -6,6 +6,7 @@ import { db } from "../db";
 import { env } from "../env";
 import { audit, type Actor } from "../admin/audit";
 import { extractPdfPages } from "./extract";
+import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
 
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
 const STALE_MS = 15 * 60_000;
@@ -54,40 +55,70 @@ export async function uploadBook(actor: Actor, file: { name: string; bytes: Uint
 
 /**
  * يستخرج نص كل صفحة ويخزّنه. يحجز الكتاب أولاً (لا معالجتان متزامنتان للكتاب نفسه).
- * الكتاب بلا نص (مصوَّر) → FAILED/NEEDS_OCR؛ نص جزئي → READY مع تحذير PARTIAL_TEXT.
+ * الصفحات التي لا نص فيها (صور) تُقرأ بـ OCR محلي إن كان مفعّلاً؛ وتُعلَّم isOcr والكتاب يحمل تنبيه OCR_USED.
+ * كتاب بلا أي نص بعد المحاولة → FAILED/NEEDS_OCR؛ نص جزئي → READY مع PARTIAL_TEXT.
  */
-export async function processBook(id: string, now = new Date()) {
+export async function processBook(id: string, opts: { ocr?: boolean } = {}, now = new Date()) {
   const claimed = await db.uploadedBook.updateMany({
     where: { id, OR: [{ status: { in: ["UPLOADED", "FAILED"] } }, { status: "PROCESSING", updatedAt: { lt: new Date(now.getTime() - STALE_MS) } }, { status: "READY" }] },
-    data: { status: "PROCESSING", error: null },
+    data: { status: "PROCESSING", error: null, processedPages: 0 },
   });
   if (claimed.count !== 1) return fail("BUSY_OR_MISSING");
   const book = await db.uploadedBook.findUniqueOrThrow({ where: { id } });
   try {
-    const pages = await extractPdfPages(new Uint8Array(await readFile(fileOf(book.storageKey))));
+    const bytes = new Uint8Array(await readFile(fileOf(book.storageKey)));
+    const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean }[] = (await extractPdfPages(bytes)).map((p) => ({ ...p, isOcr: false }));
+    await db.uploadedBook.update({ where: { id }, data: { pageCount: pages.length, processedPages: pages.length } });
+
+    const blank = pages.filter((p) => !p.hasText).map((p) => p.pageNumber);
+    let ocrUsed = false;
+    if (blank.length > 0 && (opts.ocr ?? ocrEnabled())) {
+      // نبض الحياة: كل صفحة تحدّث updatedAt فلا يُعاد حجز كتاب يُعالَج منذ دقائق
+      let done = 0;
+      const results = await runOcrExclusive(() =>
+        ocrPdfPages(bytes, blank, async (n) => {
+          done = n;
+          await db.uploadedBook.update({ where: { id }, data: { processedPages: pages.length - blank.length + done } });
+        }),
+      );
+      for (const r of results) {
+        const p = pages[r.pageNumber - 1];
+        p.text = r.text;
+        p.hasText = r.hasText;
+        p.isOcr = r.hasText; // لا نعلّم صفحة فارغة بأنها OCR
+        if (r.hasText) ocrUsed = true;
+      }
+    }
+
     const textPages = pages.filter((p) => p.hasText).length;
     await db.$transaction(async (tx) => {
       await tx.bookPage.deleteMany({ where: { bookId: id } });
       for (let i = 0; i < pages.length; i += 200) {
-        await tx.bookPage.createMany({ data: pages.slice(i, i + 200).map((p) => ({ bookId: id, pageNumber: p.pageNumber, text: p.text })) });
+        await tx.bookPage.createMany({ data: pages.slice(i, i + 200).map((p) => ({ bookId: id, pageNumber: p.pageNumber, text: p.text, isOcr: p.isOcr })) });
       }
       await tx.uploadedBook.update({
         where: { id },
         data: {
           pageCount: pages.length,
           textPageCount: textPages,
+          processedPages: pages.length,
           status: textPages === 0 ? "FAILED" : "READY",
-          error: textPages === 0 ? "NEEDS_OCR" : textPages < pages.length * 0.6 ? "PARTIAL_TEXT" : null,
+          error: textPages === 0 ? "NEEDS_OCR" : textPages < pages.length * 0.6 ? "PARTIAL_TEXT" : ocrUsed ? "OCR_USED" : null,
         },
       });
     }, { timeout: 120_000 });
-    return { ok: true as const, pageCount: pages.length, textPages };
+    return { ok: true as const, pageCount: pages.length, textPages, ocrPages: pages.filter((p) => p.isOcr).length };
   } catch (e) {
     // لا نخزّن تفاصيل داخلية؛ رمز خطأ مفهوم فقط
-    console.error(`[books] extraction failed for ${id}: ${(e as Error).name}`);
+    console.error(`[books] processing failed for ${id}: ${(e as Error).name}: ${(e as Error).message?.slice(0, 160)}`);
     await db.uploadedBook.update({ where: { id }, data: { status: "FAILED", error: "EXTRACT_FAILED" } });
     return fail("EXTRACT_FAILED");
   }
+}
+
+/** معالجة عدة كتب بالتتابع (دفعة «إعادة معالجة كل المصوَّرة») */
+export async function processMany(ids: string[]) {
+  for (const id of ids) await processBook(id);
 }
 
 export async function linkBook(actor: Actor, id: string, curriculumId: string | null) {
@@ -120,7 +151,7 @@ export const listLibraryBooks = () =>
     where: { ownerId: null },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, status: true, error: true, createdAt: true, curriculumId: true,
+      id: true, originalName: true, sizeBytes: true, pageCount: true, textPageCount: true, processedPages: true, status: true, error: true, createdAt: true, curriculumId: true,
       curriculum: { select: { title: true, grade: { select: { nameAr: true, nameEn: true } }, subject: { select: { nameAr: true, nameEn: true } } } },
     },
   });

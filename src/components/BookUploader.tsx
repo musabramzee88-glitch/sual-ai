@@ -174,3 +174,23 @@ export function BulkLink({ t, L, tracks, grades, subjects, kinds, initial }: {
     </section>
   );
 }
+
+/** يعيد معالجة كل الكتب الفاشلة بـ NEEDS_OCR (تُعالَج بالتتابع في الخلفية) */
+export function ReprocessFailed({ L, label, queued }: { L: ActLabels; label: string; queued: string }) {
+  const router = useRouter();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <button className="rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand disabled:opacity-50" disabled={busy} onClick={async () => {
+        setBusy(true); setMsg(null);
+        const res = await fetch("/api/v1/admin/books/reprocess-failed", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const j = await res.json().catch(() => ({}));
+        setBusy(false);
+        setMsg(res.ok ? `${queued} ${j.data.queued}` : (L.errors[j.error?.code] ?? L.errors.GENERIC));
+        router.refresh();
+      }}>{label}</button>
+      {msg && <span className="text-sm text-muted">{msg}</span>}
+    </div>
+  );
+}

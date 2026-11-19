@@ -28,7 +28,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   // مكتبات Node تُحمَّل كما هي على الخادم (لا تُجمَّع)
-  serverExternalPackages: ["pdfjs-dist", "argon2"],
+  serverExternalPackages: ["pdfjs-dist", "argon2", "tesseract.js", "@napi-rs/canvas"],
   experimental: {
     // الـ middleware يمر على /api؛ بدون هذا تُقصّ ملفات الكتب الأكبر من 10MB
     middlewareClientMaxBodySize: "110mb",

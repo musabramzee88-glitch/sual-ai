@@ -56,3 +56,8 @@ npm run typecheck && npm run lint && npm run build
 - هوية المنهج = مسار + صف + [فرع] + مادة + سنة + لغة + **kind** + [طبعة]. أي كود يبحث/ينشئ منهجاً يجب أن يمرّر `kind`. الفرادة مفروضة بقيد Prisma + فهرس تعبيري `Curriculum_identity_nulls_key` (لا تُنشئ فهرساً ثانياً بنفس الغرض).
 - `src/server/books/names.ts`: تخمين من اسم الملف (دوال نقية، اختبارها بأسماء حقيقية). `bulk.ts` يعيد استعمال `createEntity` و`linkBook` (التحقق والتدقيق نفسهما).
 - اختبارات التكامل تعمل بالتتابع (`fileParallelism: false`) لأنها تشترك في قاعدة واحدة وحالة عامة (السنة الحالية).
+
+## OCR للكتب المصوّرة
+- `src/server/books/ocr.ts`: `ocrPdfPages(data, pages, onPage)` و`runOcrExclusive` (طابور واحد). نسخة `@napi-rs/canvas` **يجب أن تطابق** نسخة pdfjs-dist الداخلية (0.1.100) وإلا يحدث segfault. pdf.js يستولي على المخزن الممرَّر له، فانسخه (`data.slice()`) قبل إعادة استعماله.
+- مسار ملفات اللغة من `process.cwd()` لا `require.resolve` (Next يكسره بعد التجميع). أي تعديل في OCR يُختبر أيضاً على الخادم المبني (`npm run build && npm start`) لا بالاختبارات وحدها.
+- صفحات OCR تُعلَّم `isOcr`؛ لا تعاملها كنص موثوق في التوليد (الأرقام خصوصاً).

@@ -32,6 +32,8 @@ const schema = z.object({
   PAYMENT_PROVIDER: z.string().optional(),
   // التخزين
   STORAGE_DIR: z.string().default("./storage"),
+  // قراءة الكتب المصوّرة بـ OCR محلي (مكلفة على المعالج). false لتعطيلها.
+  OCR_ENABLED: z.enum(["true", "false"]).default("true"),
 });
 
 // المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة

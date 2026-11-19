@@ -23,6 +23,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         {n < book.pageCount && nav(n + 1, b.next)}
         <form className="flex items-center gap-1"><input name="page" type="number" min={1} max={book.pageCount} defaultValue={n} className="w-20 rounded-lg border border-line bg-paper px-2 py-1 text-sm" /><button className="rounded-lg border border-line px-3 py-1 text-sm">↵</button></form>
       </div>
+      {page?.isOcr && <p className="mb-2 rounded-lg bg-accent-soft px-3 py-2 text-sm">{b.ocrPage}</p>}
       <pre className="whitespace-pre-wrap rounded-xl border border-line bg-surface p-4 font-sans text-base leading-8">{page?.text || b.noText}</pre>
       <Link href="/admin/books" className="mt-6 inline-block text-sm text-brand">{b.back}</Link>
     </AdminShell>

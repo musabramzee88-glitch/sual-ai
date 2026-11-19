@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Act } from "@/components/AdminActions";
+import { ReprocessFailed } from "@/components/BookUploader";
 import { AdminShell, Pill, TableWrap, Td, Th } from "@/components/AdminShell";
 import { AutoRefresh, BookUploader, BulkLink, LinkSelect } from "@/components/BookUploader";
 import { db } from "@/server/db";
@@ -26,6 +27,7 @@ export default async function Page() {
     <AdminShell brand={site.brand} t={t} perms={admin.permissions} title={b.title}>
       <AutoRefresh active={busy} />
       <p className="mb-4 text-sm text-muted">{b.hint}</p>
+      {books.some((x) => x.status === "FAILED" && x.error === "NEEDS_OCR") && <ReprocessFailed L={L} label={b.reprocessFailed} queued={b.reprocessQueued} />}
       <BookUploader L={L} t={{ choose: b.choose, upload: b.upload, uploading: b.uploading, queued: b.queued, uploaded: b.uploaded }} />
       <div className="mt-6">
         <BulkLink L={L} t={{ ...b, kind: t.cur.kind, name: b.name }} tracks={tracks.map((x) => [x.code, pick(x)])} grades={grades.map((x) => [x.code, pick(x)])} subjects={subjects.map((x) => [x.code, pick(x)])}
@@ -40,7 +42,7 @@ export default async function Page() {
                 <Td><span dir="ltr">{(x.sizeBytes / 1048576).toFixed(1)} MB</span></Td>
                 <Td>{x.pageCount ?? "—"}</Td>
                 <Td>{x.textPageCount ?? "—"}</Td>
-                <Td><Pill>{b.st[x.status]}</Pill>{x.error && <div className={`mt-1 text-xs ${x.status === "FAILED" ? "text-danger" : "text-muted"}`}>{b.err[x.error] ?? x.error}</div>}</Td>
+                <Td><Pill>{b.st[x.status]}</Pill>{x.status === "PROCESSING" && x.pageCount ? <div className="mt-1 text-xs text-muted">{b.reading}: <span dir="ltr">{x.processedPages}/{x.pageCount}</span></div> : null}{x.error && <div className={`mt-1 text-xs ${x.status === "FAILED" ? "text-danger" : "text-muted"}`}>{b.err[x.error] ?? x.error}</div>}</Td>
                 <Td><LinkSelect L={L} bookId={x.id} value={x.curriculumId} options={opts} none={b.none} /></Td>
                 <Td><div className="flex flex-wrap gap-1">
                   {x.pageCount ? <Link href={`/admin/books/${x.id}`} className="rounded-lg border border-line px-3 py-1 text-xs">{b.preview}</Link> : null}

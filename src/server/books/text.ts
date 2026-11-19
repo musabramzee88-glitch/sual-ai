@@ -129,3 +129,21 @@ export function assembleLines(items: PositionedItem[]): string {
     })
     .join("\n");
 }
+
+/**
+ * تنظيف مخرجات OCR: لا نطبّق تخمين «الكلمات المقلوبة» (OCR يُخرج الترتيب المنطقي أصلاً).
+ * التشكيل يُحذف لأن قراءته بالـ OCR غير موثوقة وتشوّه الكلمات.
+ */
+export function cleanOcrText(raw: string): string {
+  return raw
+    .normalize("NFKC")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[​-‏‪-‮⁦-⁩]/g, "")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter((l) => l.length > 1)
+    .join("\n");
+}
+
+/** صفحة OCR تُعدّ ذات نص إذا فيها 10 أحرف على الأقل (عتبة أخفض من النص الأصلي) */
+export const hasOcrText = (t: string) => (t.match(/[\p{L}]/gu)?.length ?? 0) >= 10;
