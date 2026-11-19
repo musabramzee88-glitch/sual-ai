@@ -44,14 +44,19 @@ export async function deepCheckBook(t: DeepTarget, storageDir: string): Promise<
 
   const stored = new Map(t.pages.map((p) => [p.pageNumber, p]));
   let compared = 0, differ = 0;
+  let sample = "";
   for (const f of fresh) {
     const s = stored.get(f.pageNumber);
     if (!s || s.isOcr) continue; // صفحات OCR لا مصدر نصي لها لمقارنتها
     // الصفحات الفارغة عند الطرفين (رسوم/أغلفة) لا تُقارَن
     if ((s.text.match(/\p{L}/gu)?.length ?? 0) < 10 && (f.text.match(/\p{L}/gu)?.length ?? 0) < 10) continue;
     compared++;
-    if (norm(s.text) !== norm(f.text)) differ++;
+    if (norm(s.text) !== norm(f.text)) {
+      differ++;
+      // عيّنة أول فرق: المخزَّن مقابل الحالي (فارغ الحالي ⇒ صفحة تُعدّ الآن فاسدة)
+      if (!sample) sample = ` · ص${f.pageNumber}: المخزَّن «${s.text.replace(/\s+/g, " ").slice(0, 40)}» ↔ الحالي «${f.text.replace(/\s+/g, " ").slice(0, 40)}»`;
+    }
   }
-  if (compared > 0 && differ / compared > 0.05) issues.push({ code: "STORED_TEXT_DRIFT", severity: "warn", detail: `${differ}/${compared}` });
+  if (compared > 0 && differ / compared > 0.05) issues.push({ code: "STORED_TEXT_DRIFT", severity: "warn", detail: `${differ}/${compared}${sample}` });
   return issues;
 }

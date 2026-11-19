@@ -25,6 +25,14 @@ describe("arabic text cleanup", () => {
   });
 });
 
+describe("cleanPageText: Symbol/Wingdings private-use glyphs", () => {
+  it("turns F020 into a space, keeps math symbols, drops decorative icons", () => {
+    expect(cleanPageText("12\uF0B4\uF0203 =\uF02036")).toBe("12× 3 = 36");
+    expect(cleanPageText("6\uF0B84\uF0B1\uF0A5 \uF06E\uF047 نص")).toBe("6÷4±∞ نص");
+    expect(cleanPageText("\uF06E\uF047\uF068")).toBe("");
+  });
+});
+
 describe("isGarbageText (broken font encodings)", () => {
   const AR = "في هذا الدرس نتعلم كيف نجمع الأعداد الطبيعية ثم نقارن الناتج مع العدد الأول ونكتب الجواب في الدفتر. ";
   it("flags letter-by-letter Arabic and meaningless Latin; keeps real Arabic, math and English", () => {
@@ -34,5 +42,7 @@ describe("isGarbageText (broken font encodings)", () => {
     expect(isGarbageText("حل المعادلة 3x + 5 = 20 ثم تحقق من الناتج y = 2x في الدفتر والكتاب والصفحة ".repeat(3))).toBe(false);
     expect(isGarbageText("Unit 2: Hello, my name is Sara. I am eight years old. This is my family and I like my school. What is your name? ".repeat(3))).toBe(false);
     expect(isGarbageText("")).toBe(false);
+    // انحدار فعلي: صفحة مفردات إنكليزية سليمة (بلا كلمات رابطة تقريباً) لا تُعدّ فاسدة
+    expect(isGarbageText("apple banana orange pencil bag book desk chair table window door teacher student school garden flower river mountain picture bridge market kitchen bedroom library ".repeat(3))).toBe(false);
   });
 });

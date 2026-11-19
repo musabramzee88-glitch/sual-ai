@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, checkBook, contentFingerprint, formatReport, letterSpacedRatio, topGarbage, type BookCheckInput } from "./health";
+import { buildReport, checkBook, contentFingerprint, fffdNature, formatReport, letterSpacedRatio, topGarbage, type BookCheckInput } from "./health";
 import { reverseVisual } from "./text";
 
 const PARA = "في هذا الدرس نتعلم كيف نجمع الأعداد الطبيعية ثم نقارن الناتج مع العدد الأول ونكتب الجواب في الدفتر، وبعد ذلك نحل التمارين التي على الصفحة.";
@@ -83,6 +83,19 @@ describe("buildReport", () => {
     expect(txt).toContain("✗ x.pdf");
     expect(txt).toContain("ملف الكتاب غير موجود على القرص");
     expect(formatReport(buildReport([base()]))).toContain("✓ كتاب.pdf");
+  });
+});
+
+describe("U+FFFD diagnosis", () => {
+  it("separates replacement characters inside words (lost letters) from standalone ones (icons), with context", () => {
+    const n = fffdNature("كتاب العل\uFFFDم الجميل \uFFFD عنوان \uFFFD\n");
+    expect(n.inside).toBe(1);
+    expect(n.alone).toBe(2);
+    expect(n.samples[0]).toContain("العل\uFFFDم");
+    const garbage = Array.from({ length: 20 }, (_, i) => ({ pageNumber: i + 1, text: `${PARA}\n${"كلمة\uFFFDضائعة ".repeat(15)}`, isOcr: false }));
+    const detail = checkBook(base({ pages: garbage })).issues.find((x) => x.code === "GARBAGE_CHARS")?.detail ?? "";
+    expect(detail).toContain("FFFD داخل كلمات");
+    expect(detail).toContain("U+FFFD×");
   });
 });
 

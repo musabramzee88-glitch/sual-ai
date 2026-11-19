@@ -64,6 +64,22 @@ export function avgArabicTokenLength(text: string): number {
 
 const GARBAGE = /[�-\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
 
+/**
+ * طبيعة U+FFFD (حرف لم يُفهم): داخل كلمات عربية (حروف ضائعة ⇒ نص فاسد) أم منفردة (أيقونات ⇒ غالباً بلا ضرر)،
+ * مع مقتطفين من سياقها لتشخيص العيّنة بالعين.
+ */
+export function fffdNature(text: string): { inside: number; alone: number; samples: string[] } {
+  let inside = 0, alone = 0;
+  const samples: string[] = [];
+  for (const m of text.matchAll(/\uFFFD/g)) {
+    const i = m.index!;
+    const near = text.slice(Math.max(0, i - 1), i) + text.slice(i + 1, i + 2);
+    if (/[\u0600-\u06FFA-Za-z0-9]/.test(near)) inside++; else alone++;
+    if (samples.length < 2 && /[\u0600-\u06FF]/.test(text.slice(Math.max(0, i - 12), i + 12))) samples.push(text.slice(Math.max(0, i - 12), i + 13).replace(/\n/g, "↵"));
+  }
+  return { inside, alone, samples };
+}
+
 /** أكثر الرموز التالفة تكراراً (U+XXXX×n) لتمييز رموز الأيقونات/النقاط (PUA) من التلف الحقيقي */
 export function topGarbage(text: string, n = 3): string {
   const m = new Map<string, number>();
@@ -110,7 +126,10 @@ export function checkBook(b: BookCheckInput): BookReport {
     if (spaced > 0.35) add("LETTER_SPACED_TEXT", "error", spaced.toFixed(2));
     if (avgArabicTokenLength(all) > 14) add("MISSING_SPACES", "warn");
     const garbage = count(all, GARBAGE);
-    if (garbage / Math.max(1, all.length) > 0.002) add("GARBAGE_CHARS", "warn", topGarbage(all));
+    if (garbage / Math.max(1, all.length) > 0.002) {
+      const f = fffdNature(all);
+      add("GARBAGE_CHARS", "warn", `${topGarbage(all)}${f.inside + f.alone > 0 ? ` · FFFD داخل كلمات ${f.inside} / منفردة ${f.alone}${f.samples.length ? ` · «${f.samples.join("» «")}»` : ""}` : ""}`);
+    }
     const ar = count(all, ARABIC), la = count(all, LATIN);
     const subject = b.curriculum?.subjectCode ?? b.detected?.subjectCode ?? null;
     if (subject && ar + la > 200) {

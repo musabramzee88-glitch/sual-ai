@@ -31,8 +31,18 @@ export function fixArabicLine(line: string): string {
   return reversed >= normal + 2 || (normal === 0 && reversed >= 1) ? reverseVisual(line) : line;
 }
 
+/**
+ * رموز خط Symbol/Wingdings تأتي من PDF في المنطقة الخاصة U+F0xx (الرمز = F000 + رمز الخط).
+ * F020 هي المسافة، وبعضها رموز رياضية نحافظ عليها؛ وباقيها أيقونات/نقاط تزيين تُحذف.
+ */
+const SYMBOL_FONT: Record<string, string> = {
+  "\uF020": " ", "\uF0B1": "±", "\uF0B4": "×", "\uF0B8": "÷", "\uF0A3": "≤", "\uF0B3": "≥", "\uF0B9": "≠", "\uF0BB": "≈",
+  "\uF0D6": "√", "\uF070": "π", "\uF0A5": "∞", "\uF0D0": "∠", "\uF0B0": "°", "\uF0AE": "→", "\uF0AC": "←",
+};
+const cleanSymbolFont = (t: string) => t.replace(/[\uF000-\uF0FF]/g, (c) => SYMBOL_FONT[c] ?? "");
+
 export function cleanPageText(raw: string): string {
-  return raw
+  return cleanSymbolFont(raw)
     .normalize("NFKC")
     .replace(/ـ/g, "") // تطويل
     .replace(/[​-‏‪-‮⁦-⁩]/g, "") // محارف اتجاه/صفرية العرض
@@ -165,8 +175,11 @@ export function isGarbageText(text: string): boolean {
   const ar = text.match(/[\u0600-\u06FF]/g)?.length ?? 0;
   const la = text.match(/[A-Za-z]/g)?.length ?? 0;
   if (la > 60 && la > ar * 3) {
+    // الإنكليزية الحقيقية (حتى قوائم المفردات بلا كلمات رابطة) نسبة حروفها العلّة ≈ 35–40%؛ الهراء الناتج عن ترميز خطوط
+    // معطوب أقل بكثير. نشترط الشرطين معاً (قلة الكلمات الرابطة ونسبة العلّة المنخفضة) حتى لا تُرفض صفحة إنكليزية سليمة.
     const words = text.toLowerCase().split(/[^a-z']+/).filter((w) => w.length > 0);
-    if (words.length >= 20 && words.filter((w) => EN_STOP.has(w)).length / words.length < 0.05) return true;
+    const vowels = (text.match(/[aeiouyAEIOUY]/g)?.length ?? 0) / la;
+    if (words.length >= 20 && vowels < 0.22 && words.filter((w) => EN_STOP.has(w)).length / words.length < 0.05) return true;
   }
   return false;
 }

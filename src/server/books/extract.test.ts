@@ -29,6 +29,13 @@ describe("PDF text extraction (real files)", () => {
     expect(p).toHaveLength(1);
     expect(p[0].hasText).toBe(false);
   });
+  it("keeps a genuine English vocabulary page (regression: it was wrongly discarded as a broken text layer)", async () => {
+    const p = await extractPdfPages(load("english-vocab.pdf"));
+    expect(p[0].hasText).toBe(true);
+    expect(p[0].text).toContain("Unit 4 Vocabulary");
+    expect(p[0].text).toContain("apple");
+    expect(p[0].text).toContain("library");
+  });
   it("rejects data that is not a PDF", async () => {
     await expect(extractPdfPages(new TextEncoder().encode("not a pdf"))).rejects.toThrow();
   });
