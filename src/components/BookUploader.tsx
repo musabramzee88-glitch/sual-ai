@@ -100,3 +100,77 @@ export function LinkSelect({ bookId, value, options, none, L }: { bookId: string
     </span>
   );
 }
+
+export type BulkLabels = { bulkTitle: string; bulkHint: string; bulkTrack: string; bulkApply: string; bulkNeed: string; pickGrade: string; pickSubject: string; bulkDone: string; created: string; linked: string; kind: string; name: string };
+type Item = { id: string; name: string; grade: string; subject: string; kind: string; on: boolean; result?: string };
+
+/** مراجعة اقتراحات الربط (صف/مادة/نوع من اسم الملف) ثم إنشاء المناهج وربط الكتب دفعة واحدة */
+export function BulkLink({ t, L, tracks, grades, subjects, kinds, initial }: {
+  t: BulkLabels; L: ActLabels; tracks: [string, string][]; grades: [string, string][]; subjects: [string, string][]; kinds: [string, string][];
+  initial: { id: string; name: string; grade: string | null; subject: string | null; kind: string }[];
+}) {
+  const router = useRouter();
+  const [track, setTrack] = useState(tracks.find(([k]) => k === "GENERAL")?.[0] ?? tracks[0]?.[0] ?? "");
+  const [rows, setRows] = useState<Item[]>(() => initial.map((x) => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: !!(x.grade && x.subject) })));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (i: number, p: Partial<Item>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const sel = "rounded-lg border border-line bg-paper px-2 py-1 text-xs";
+  const ready = rows.filter((r) => r.on && r.grade && r.subject);
+  const incomplete = rows.some((r) => r.on && !(r.grade && r.subject));
+  // كتب جديدة رُفعت بعد فتح الصفحة تُضاف للقائمة دون فقد ما عدّله المستخدم
+  useEffect(() => {
+    setRows((cur) => {
+      const have = new Set(cur.map((x) => x.id));
+      const add = initial.filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, name: x.name, grade: x.grade ?? "", subject: x.subject ?? "", kind: x.kind, on: !!(x.grade && x.subject) }));
+      return add.length ? [...cur, ...add] : cur;
+    });
+  }, [initial]);
+  if (rows.length === 0) return null;
+
+  async function apply() {
+    setBusy(true); setErr(null);
+    const res = await fetch("/api/v1/admin/books/link", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trackCode: track, items: ready.map((r) => ({ bookId: r.id, gradeCode: r.grade, subjectCode: r.subject, kind: r.kind })) }),
+    });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setErr(L.errors[j.error?.code] ?? L.errors.GENERIC);
+    const by = new Map<string, { ok: boolean; created?: boolean; code?: string }>((j.data.results as { bookId: string; ok: boolean; created?: boolean; code?: string }[]).map((x) => [x.bookId, x]));
+    setRows((r) => r.map((x) => {
+      const o = by.get(x.id);
+      return o ? { ...x, on: !o.ok, result: o.ok ? (o.created ? t.created : t.linked) : (L.errors[o.code ?? "GENERIC"] ?? L.errors.GENERIC) } : x;
+    }));
+    router.refresh();
+  }
+  return (
+    <section className="mb-6 space-y-3 rounded-xl border border-brand/40 bg-surface p-4">
+      <h2 className="font-semibold">{t.bulkTitle}</h2>
+      <p className="text-sm text-muted">{t.bulkHint}</p>
+      <label className="flex items-center gap-2 text-sm"><span className="text-muted">{t.bulkTrack}</span>
+        <select className={sel} value={track} onChange={(e) => setTrack(e.target.value)}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[44rem] text-sm">
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.id} className="border-t border-line/60">
+                <td className="p-2"><input type="checkbox" checked={r.on} disabled={!!r.result && !r.on} onChange={(e) => set(i, { on: e.target.checked })} /></td>
+                <td className="max-w-56 break-words p-2 text-xs" dir="auto">{!(r.grade && r.subject) && <span title={t.bulkNeed}>⚠ </span>}{r.name}</td>
+                <td className="p-2"><select className={sel} value={r.grade} onChange={(e) => set(i, { grade: e.target.value, on: !!(e.target.value && r.subject) || r.on })}><option value="">{t.pickGrade}</option>{grades.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+                <td className="p-2"><select className={sel} value={r.subject} onChange={(e) => set(i, { subject: e.target.value, on: !!(r.grade && e.target.value) || r.on })}><option value="">{t.pickSubject}</option>{subjects.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+                <td className="p-2"><select className={sel} value={r.kind} onChange={(e) => set(i, { kind: e.target.value })}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
+                <td className="p-2 text-xs">{r.result && <span className={r.on ? "text-danger" : "text-brand"}>{r.result}</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || ready.length === 0 || incomplete} onClick={apply}>{t.bulkApply} ({ready.length})</button>
+        {incomplete && <span className="text-xs text-danger">{t.bulkNeed}</span>}
+        {err && <span role="alert" className="text-sm text-danger">{err}</span>}
+      </div>
+    </section>
+  );
+}

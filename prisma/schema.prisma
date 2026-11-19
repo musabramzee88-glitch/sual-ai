@@ -34,6 +34,13 @@ enum Locale {
   EN
 }
 
+/// نوع الكتاب ضمن المادة الواحدة: كتاب الطالب الأساسي، أو كتاب التمارين، أو كتاب النشاط
+enum CurriculumKind {
+  TEXTBOOK
+  EXERCISES
+  ACTIVITY
+}
+
 /// مستوى أمان الدخول: رمز واحد (على قناة الدخول) أو رمزان معاً (بريد + هاتف) بطلب المستخدم
 enum LoginSecurity {
   SINGLE
@@ -382,6 +389,8 @@ model Curriculum {
   subjectId      String
   academicYearId String
   language       Locale              @default(AR)
+  /// كتاب الطالب / التمارين / النشاط — يميّز كتابين لنفس المادة والصف والسنة
+  kind           CurriculumKind      @default(TEXTBOOK)
   title          String
   edition        String?
   isActive       Boolean             @default(true)
@@ -396,7 +405,7 @@ model Curriculum {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  @@unique([trackId, gradeId, branchId, subjectId, academicYearId, language, edition])
+  @@unique([trackId, gradeId, branchId, subjectId, academicYearId, language, kind, edition])
   @@index([gradeId, subjectId])
 }
 

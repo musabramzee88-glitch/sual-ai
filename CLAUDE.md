@@ -51,3 +51,8 @@ npm run typecheck && npm run lint && npm run build
 - `src/server/books/text.ts` (دوال نقية): `assembleLines` يرتّب حسب الموضع، `visualVotes` يكشف الكلمات المقلوبة بأشكال العرض العربية (جدول مولَّد من unicodedata — لا يُعدَّل يدوياً). أي تعديل يجب أن يمر باختبارات `extract.test.ts` على `test/fixtures`.
 - `src/server/books/service.ts`: الرفع/المعالجة/الربط/الحذف. المعالجة تحجز الكتاب بـ `updateMany` شرطي. المسار المخزَّن يولَّد داخلياً ويُتحقق أنه داخل `STORAGE_DIR`.
 - الرفع multipart يمر بالـ middleware؛ لذلك `experimental.middlewareClientMaxBodySize` في `next.config.ts`.
+
+## نوع الكتاب والربط الجماعي
+- هوية المنهج = مسار + صف + [فرع] + مادة + سنة + لغة + **kind** + [طبعة]. أي كود يبحث/ينشئ منهجاً يجب أن يمرّر `kind`. الفرادة مفروضة بقيد Prisma + فهرس تعبيري `Curriculum_identity_nulls_key` (لا تُنشئ فهرساً ثانياً بنفس الغرض).
+- `src/server/books/names.ts`: تخمين من اسم الملف (دوال نقية، اختبارها بأسماء حقيقية). `bulk.ts` يعيد استعمال `createEntity` و`linkBook` (التحقق والتدقيق نفسهما).
+- اختبارات التكامل تعمل بالتتابع (`fileParallelism: false`) لأنها تشترك في قاعدة واحدة وحالة عامة (السنة الحالية).
