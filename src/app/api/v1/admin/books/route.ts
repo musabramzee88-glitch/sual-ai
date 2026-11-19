@@ -15,7 +15,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const g = await requireAdmin("MANAGE_CURRICULUM");
   if ("res" in g) return g.res;
-  const rl = await limit([[`books:${g.admin.adminId}`, 60, 3600]]);
+  // مدير مصادَق يرفع مكتبة كاملة (مئات الكتب)؛ الحد لحماية الخادم من الإساءة لا لمنع العمل الطبيعي
+  const rl = await limit([[`books:${g.admin.adminId}`, 1000, 3600]]);
   if (rl) return rl;
   if (Number(req.headers.get("content-length") ?? 0) > MAX_BOOK_BYTES + 1024 * 1024) return fail(413, "FILE_TOO_LARGE", "Max 100MB");
   if (!req.headers.get("content-type")?.startsWith("multipart/form-data")) return fail(415, "UNSUPPORTED_MEDIA_TYPE", "multipart/form-data required");

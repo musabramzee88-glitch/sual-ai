@@ -11,6 +11,21 @@ import { ocrEnabled, ocrPdfPages, runOcrExclusive } from "./ocr";
 export const MAX_BOOK_BYTES = 100 * 1024 * 1024;
 const STALE_MS = 15 * 60_000;
 
+/** استخراج النص يحمّل الملف كاملاً بالذاكرة: لا أكثر من 2 في وقت واحد (رفع 20 كتاباً معاً لا يستنزف الذاكرة) */
+const EXTRACT_SLOTS = 2;
+let active = 0;
+const waiters: (() => void)[] = [];
+async function withExtractSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= EXTRACT_SLOTS) await new Promise<void>((r) => waiters.push(r));
+  active++;
+  try {
+    return await fn();
+  } finally {
+    active--;
+    waiters.shift()?.();
+  }
+}
+
 type Fail<C extends string> = { ok: false; code: C };
 const fail = <C extends string>(code: C): Fail<C> => ({ ok: false, code });
 
@@ -67,7 +82,7 @@ export async function processBook(id: string, opts: { ocr?: boolean } = {}, now 
   const book = await db.uploadedBook.findUniqueOrThrow({ where: { id } });
   try {
     const bytes = new Uint8Array(await readFile(fileOf(book.storageKey)));
-    const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean }[] = (await extractPdfPages(bytes)).map((p) => ({ ...p, isOcr: false }));
+    const pages: { pageNumber: number; text: string; hasText: boolean; isOcr: boolean }[] = (await withExtractSlot(() => extractPdfPages(bytes))).map((p) => ({ ...p, isOcr: false }));
     await db.uploadedBook.update({ where: { id }, data: { pageCount: pages.length, processedPages: pages.length } });
 
     const blank = pages.filter((p) => !p.hasText).map((p) => p.pageNumber);
