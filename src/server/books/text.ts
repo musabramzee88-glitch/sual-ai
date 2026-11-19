@@ -147,3 +147,26 @@ export function cleanOcrText(raw: string): string {
 
 /** صفحة OCR تُعدّ ذات نص إذا فيها 10 أحرف على الأقل (عتبة أخفض من النص الأصلي) */
 export const hasOcrText = (t: string) => (t.match(/[\p{L}]/gu)?.length ?? 0) >= 10;
+
+const EN_STOP = new Set(["the", "a", "an", "is", "are", "am", "i", "my", "you", "your", "he", "she", "it", "we", "they", "and", "to", "of", "in", "on", "at", "this", "that", "what", "how", "can", "have", "has", "do", "does", "name", "hello", "look", "me", "his", "her", "like", "go", "see", "one", "two", "yes", "no", "not", "with", "for", "from", "here", "there"]);
+
+/** نسبة «الكلمات» العربية المؤلفة من حرف واحد (علامة استخراج حرفاً حرفاً) */
+function singleLetterShare(text: string): number {
+  const toks = text.split(/\s+/).filter((t) => /[\u0600-\u06FF]/.test(t));
+  return toks.length < 20 ? 0 : toks.filter((t) => [...t].length === 1).length / toks.length;
+}
+
+/**
+ * نص مستخرج من طبقة نص معطوبة (ترميز خطوط بلا ToUnicode): إما عربية حرفاً حرفاً، أو «لاتينية» بلا أي كلمة إنكليزية حقيقية.
+ * مثل هذه الصفحة تُعامَل كأنها بلا نص فتُقرأ بـ OCR بدل اعتماد نص فاسد.
+ */
+export function isGarbageText(text: string): boolean {
+  if (singleLetterShare(text) > 0.3) return true;
+  const ar = text.match(/[\u0600-\u06FF]/g)?.length ?? 0;
+  const la = text.match(/[A-Za-z]/g)?.length ?? 0;
+  if (la > 60 && la > ar * 3) {
+    const words = text.toLowerCase().split(/[^a-z']+/).filter((w) => w.length > 0);
+    if (words.length >= 20 && words.filter((w) => EN_STOP.has(w)).length / words.length < 0.05) return true;
+  }
+  return false;
+}

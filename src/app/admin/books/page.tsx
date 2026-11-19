@@ -26,7 +26,7 @@ export default async function Page() {
   const isStuck = (x: (typeof books)[number]) => x.status === "PROCESSING" && Date.now() - x.updatedAt.getTime() > STALE_MS;
   const running = books.filter((x) => (x.status === "UPLOADED" || x.status === "PROCESSING") && !isStuck(x)).length;
   const busy = running > 0 || review.some((r) => r.working);
-  const needOcr = books.some((x) => x.status === "FAILED" && (x.error === "NEEDS_OCR" || x.error === "CANCELLED"));
+  const needOcr = books.some((x) => (x.status === "FAILED" && (x.error === "NEEDS_OCR" || x.error === "CANCELLED" || x.error === "EXTRACT_FAILED")) || isStuck(x));
 
   return (
     <AdminShell brand={site.brand} t={t} perms={admin.permissions} title={b.title}>
@@ -67,6 +67,7 @@ export default async function Page() {
                   <Td><LinkSelect L={L} bookId={x.id} value={x.curriculumId} options={opts} none={b.none} /></Td>
                   <Td><div className="flex flex-wrap gap-1">
                     {x.pageCount ? <Link href={`/admin/books/${x.id}`} className="rounded-lg border border-line px-3 py-1 text-xs">{b.preview}</Link> : null}
+                    <Act L={L} url={`/api/v1/admin/books/${x.id}`} body={{ action: "reopen" }} label={b.reopen} />
                     {(x.status !== "PROCESSING" || isStuck(x)) && <Act L={L} url={`/api/v1/admin/books/${x.id}`} body={{ action: "reprocess" }} label={x.status === "FAILED" && (x.error === "NEEDS_OCR" || x.error === "CANCELLED") ? b.readOcr : b.reprocess} />}
                     {(x.status !== "PROCESSING" || isStuck(x)) && <Act L={L} method="DELETE" url={`/api/v1/admin/books/${x.id}`} label={b.remove} tone="danger" confirmText />}
                   </div></Td>

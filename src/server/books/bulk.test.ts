@@ -124,4 +124,14 @@ describe("placing and confirming books", () => {
     await expect(db.curriculum.create({ data: { trackId: c.trackId, gradeId: c.gradeId, subjectId: c.subjectId, academicYearId: c.academicYearId, language: c.language, kind: "TEXTBOOK", part: 1, title: "dup" } })).rejects.toThrow();
     await expect(db.curriculum.create({ data: { trackId: c.trackId, gradeId: c.gradeId, subjectId: c.subjectId, academicYearId: c.academicYearId, language: c.language, kind: "TEXTBOOK", part: 9, title: "bad" } })).rejects.toThrow(); // CHECK 0..5
   });
+
+  it("review prefers a confident cover reading over a wrong existing placement (so mistakes surface)", async () => {
+    const wrong = await mkBook("wrong.pdf");
+    await db.uploadedBook.update({ where: { id: wrong }, data: { detected: { gradeCode: "PRI_1", subjectCode: "MATH", kind: "TEXTBOOK", part: 0, confidence: "high", evidence: "الرياضيات للصف الأول الابتدائي", source: "text" } } });
+    await confirmPlacements(actor, { items: [item(wrong, "INT_1", "MATH", "TEXTBOOK")] }); // وُضع خطأً في المتوسط
+    await db.uploadedBook.update({ where: { id: wrong }, data: { confirmedAt: null } }); // «تعديل المكان»
+    const card = (await listReview()).find((x) => x.id === wrong)!;
+    expect([card.gradeCode, card.subjectCode]).toEqual(["PRI_1", "MATH"]); // لا INT_1
+    expect(card.problems.some((p) => p.text.includes("الغلاف يختلف عن المنهج"))).toBe(true);
+  });
 });

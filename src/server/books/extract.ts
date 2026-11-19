@@ -1,5 +1,5 @@
 import "server-only";
-import { assembleLines, cleanPageText, hasRealText, type PositionedItem } from "./text";
+import { assembleLines, cleanPageText, hasRealText, isGarbageText, type PositionedItem } from "./text";
 
 export type ExtractedPage = { pageNumber: number; text: string; hasText: boolean };
 
@@ -22,8 +22,11 @@ export async function extractPdfPages(data: Uint8Array, onPage?: (n: number, tot
         items.push({ str: item.str, x: e, y: f, w: item.width, h: item.height || Math.hypot(a, b) });
       }
       // الترتيب حسب الموضع لا حسب التخزين (كثير من ملفات PDF العربية مخزّنة بالترتيب المرئي)
-      const text = cleanPageText(assembleLines(items));
-      pages.push({ pageNumber: i, text, hasText: hasRealText(text) });
+      const raw = cleanPageText(assembleLines(items));
+      // طبقة نص معطوبة: لا نخزّن الفاسد، وتُعامل الصفحة كبلا نص (تُقرأ بـ OCR إن كان مفعّلاً)
+      const garbage = isGarbageText(raw);
+      const text = garbage ? "" : raw;
+      pages.push({ pageNumber: i, text, hasText: !garbage && hasRealText(text) });
       page.cleanup();
       onPage?.(i, doc.numPages);
     }

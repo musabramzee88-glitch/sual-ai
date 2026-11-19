@@ -47,6 +47,8 @@ export async function deepCheckBook(t: DeepTarget, storageDir: string): Promise<
   for (const f of fresh) {
     const s = stored.get(f.pageNumber);
     if (!s || s.isOcr) continue; // صفحات OCR لا مصدر نصي لها لمقارنتها
+    // الصفحات الفارغة عند الطرفين (رسوم/أغلفة) لا تُقارَن
+    if ((s.text.match(/\p{L}/gu)?.length ?? 0) < 10 && (f.text.match(/\p{L}/gu)?.length ?? 0) < 10) continue;
     compared++;
     if (norm(s.text) !== norm(f.text)) differ++;
   }

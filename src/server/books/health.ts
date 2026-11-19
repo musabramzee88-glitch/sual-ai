@@ -64,6 +64,16 @@ export function avgArabicTokenLength(text: string): number {
 
 const GARBAGE = /[�-\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
 
+/** أكثر الرموز التالفة تكراراً (U+XXXX×n) لتمييز رموز الأيقونات/النقاط (PUA) من التلف الحقيقي */
+export function topGarbage(text: string, n = 3): string {
+  const m = new Map<string, number>();
+  for (const ch of text.match(GARBAGE) ?? []) {
+    const k = ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0");
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, c]) => `U+${k}×${c}`).join(" ");
+}
+
 const EXPECT_LATIN = new Set(["ENGLISH", "FRENCH"]);
 
 export function checkBook(b: BookCheckInput): BookReport {
@@ -100,7 +110,7 @@ export function checkBook(b: BookCheckInput): BookReport {
     if (spaced > 0.35) add("LETTER_SPACED_TEXT", "error", spaced.toFixed(2));
     if (avgArabicTokenLength(all) > 14) add("MISSING_SPACES", "warn");
     const garbage = count(all, GARBAGE);
-    if (garbage / Math.max(1, all.length) > 0.002) add("GARBAGE_CHARS", "warn", String(garbage));
+    if (garbage / Math.max(1, all.length) > 0.002) add("GARBAGE_CHARS", "warn", topGarbage(all));
     const ar = count(all, ARABIC), la = count(all, LATIN);
     const subject = b.curriculum?.subjectCode ?? b.detected?.subjectCode ?? null;
     if (subject && ar + la > 200) {
@@ -125,7 +135,7 @@ export function checkBook(b: BookCheckInput): BookReport {
       if (diffs.length) add("COVER_MISMATCH", "warn", diffs.join(" · "));
     }
     if (c.booksCount > 1) add("SHARED_CURRICULUM", "error", String(c.booksCount));
-    if (b.confirmed && c.chapters.length === 0) add("NO_CHAPTERS", "warn");
+    if (b.confirmed && c.chapters.length === 0) add("NO_CHAPTERS", "info");
     // أرقام فصول مقابل صفحات الكتاب (الفصول تخص منهجاً بكتاب واحد)
     if (c.booksCount === 1) {
       const bad = c.chapters.filter((ch) => ch.pageEnd != null && pageCount > 0 && ch.pageEnd > pageCount);
@@ -179,10 +189,10 @@ const MESSAGES: Record<string, string> = {
   FILE_MISSING: "ملف الكتاب غير موجود على القرص", FILE_SIZE_MISMATCH: "حجم الملف على القرص يختلف عن المسجَّل (تالف أو معدَّل)", STUCK: "عالق في المعالجة بلا نبض",
   STILL_PROCESSING: "ما زال قيد المعالجة", PARTIAL_TEXT: "نص جزئي: كثير من الصفحات بلا نص", TOO_FEW_PAGES: "عدد صفحاته قليل جداً", TOO_MANY_PAGES: "عدد صفحاته كبير جداً",
   OCR_USED: "بعض صفحاته مقروءة بـ OCR (قد تحوي أخطاء، خصوصاً الأرقام)", MANY_BLANK_PAGES: "أكثر من 30% من الصفحات بلا نص (رسوم؟ أم فشل استخراج؟)",
-  REVERSED_TEXT: "العربية مقلوبة (حروف الكلمات بترتيب معكوس)", LETTER_SPACED_TEXT: "العربية مستخرجة حرفاً حرفاً (مسافة بين كل حرفين)", MISSING_SPACES: "المسافات بين الكلمات ضائعة",
-  GARBAGE_CHARS: "رموز تالفة في النص", LANGUAGE_MISMATCH: "لغة النص لا تطابق المادة", NOT_LINKED: "غير مربوط بمنهج", NOT_CONFIRMED: "ينتظر تأكيدك", LOW_CONFIDENCE: "التعرّف على غلافه غير مؤكد",
+  REVERSED_TEXT: "العربية مقلوبة (حروف الكلمات بترتيب معكوس)", LETTER_SPACED_TEXT: "العربية مستخرجة حرفاً حرفاً (طبقة النص في الـPDF معطوبة): أعد معالجة الكتاب ليُقرأ بـ OCR", MISSING_SPACES: "المسافات بين الكلمات ضائعة",
+  GARBAGE_CHARS: "رموز تالفة في النص", LANGUAGE_MISMATCH: "لغة النص لا تطابق المادة (غالباً طبقة نص معطوبة: أعد معالجة الكتاب)", NOT_LINKED: "غير مربوط بمنهج", NOT_CONFIRMED: "ينتظر تأكيدك", LOW_CONFIDENCE: "التعرّف على غلافه غير مؤكد",
   COVER_MISMATCH: "ما يقوله الغلاف يختلف عن المنهج المربوط به", SHARED_CURRICULUM: "أكثر من كتاب في المنهج نفسه (تتعارض أرقام الصفحات والفصول؛ افصلها بالجزء أو النوع)",
-  NO_CHAPTERS: "منهجه بلا فصول (يلزم إدخالها لمعالج الامتحان)", CHAPTER_PAGE_OUT_OF_RANGE: "فصل يتجاوز عدد صفحات الكتاب", CHAPTER_PAGES_OVERLAP: "صفحات فصلين متداخلة",
+  NO_CHAPTERS: "منهجه بلا فصول (تُدخل قبل معالج الامتحان)", CHAPTER_PAGE_OUT_OF_RANGE: "فصل يتجاوز عدد صفحات الكتاب", CHAPTER_PAGES_OVERLAP: "صفحات فصلين متداخلة",
   DUPLICATE_CONTENT: "محتواه يطابق كتاباً آخر", FAILED: "فشلت المعالجة", FAILED_NEEDS_OCR: "لم يُستخرج منه نص (مصوَّر ولم يُقرأ بـ OCR)", FAILED_CANCELLED: "أُوقفت معالجته", FAILED_EXTRACT_FAILED: "تعذّر قراءة الملف (تالف؟)",
 };
 export const issueMessage = (code: string) => MESSAGES[code] ?? code;
@@ -190,7 +200,8 @@ export const issueMessage = (code: string) => MESSAGES[code] ?? code;
 /** تقرير نصي مختصر يمكن نسخه وإرساله (لا يحوي أسراراً: أسماء الملفات والأعداد فقط) */
 export function formatReport(r: Report): string {
   const icon = { error: "✗", warn: "!", ok: "✓" } as const;
-  const lines = [`فحص الكتب — ${r.generatedAt}`, `الإجمالي ${r.summary.total}: سليم ${r.summary.ok} · تنبيه ${r.summary.warn} · خطأ ${r.summary.error}`, ""];
+  const noCh = r.books.filter((b) => b.issues.some((i) => i.code === "NO_CHAPTERS")).length;
+  const lines = [`فحص الكتب — ${r.generatedAt}`, `الإجمالي ${r.summary.total}: سليم ${r.summary.ok} · تنبيه ${r.summary.warn} · خطأ ${r.summary.error}`, ...(noCh ? [`كتب منهجها بلا فصول (مهمة قادمة، ليست خطأ): ${noCh}`] : []), ""];
   for (const b of r.books) {
     lines.push(`${icon[b.level]} ${b.name}  [${b.stats.pages} ص، نص ${b.stats.textPages}، OCR ${b.stats.ocrPages}]`);
     for (const i of b.issues.filter((x) => x.severity !== "info")) lines.push(`    ${i.severity === "error" ? "خطأ" : "تنبيه"}: ${issueMessage(i.code)}${i.detail ? ` (${i.detail})` : ""}`);

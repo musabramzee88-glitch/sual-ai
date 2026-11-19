@@ -3,7 +3,7 @@ import { z } from "zod";
 import { fail, ok } from "@/server/http";
 import { actorOf, requireAdmin } from "@/server/admin/guard";
 import { adminMutation, adminRead, respond } from "@/server/admin/route";
-import { cancelProcessing, deleteBook, getBook, getBookPage, linkBook, processBook, STALE_MS } from "@/server/books/service";
+import { cancelProcessing, deleteBook, getBook, getBookPage, linkBook, processBook, reopenBook, STALE_MS } from "@/server/books/service";
 
 export const runtime = "nodejs";
 
@@ -22,6 +22,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link"), curriculumId: z.string().min(10).max(40).nullable() }),
   z.object({ action: z.literal("reprocess"), ocr: z.boolean().optional() }),
   z.object({ action: z.literal("cancel") }),
+  z.object({ action: z.literal("reopen") }),
 ]);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return adminMutation(req, "MANAGE_CURRICULUM", schema, async ({ actor, body }) => {
     if (body.action === "link") return respond(await linkBook(actor, id, body.curriculumId));
     if (body.action === "cancel") return ok(await cancelProcessing(actor, [id]));
+    if (body.action === "reopen") return respond(await reopenBook(actor, id));
     const b = await getBook(id);
     if (!b) return fail(404, "NOT_FOUND", "Book not found");
     // قيد المعالجة فعلاً (نبض حديث) → ارفض؛ العالق (بلا نبض) يجوز إعادة معالجته

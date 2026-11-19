@@ -53,10 +53,12 @@ export async function listReview(): Promise<ReviewItem[]> {
     const d = b.detected as Detected | null;
     const name = guessFromName(b.originalName);
     const c = b.curriculum;
-    const gradeCode = c?.grade.code ?? d?.gradeCode ?? name.gradeCode;
-    const subjectCode = c?.subject.code ?? d?.subjectCode ?? name.subjectCode;
-    const kind: BookGuess["kind"] = c?.kind ?? (d && d.kind !== "TEXTBOOK" ? d.kind : name.kind);
-    const part = c ? c.part : (d?.part || name.part || 0);
+    // قراءة الغلاف الواثقة تتقدم على المنهج الحالي: إن اختلفا فالأرجح أن المنهج وُضع خطأً (يظهر تنبيه COVER_MISMATCH في البطاقة)
+    const cover = d && d.confidence === "high" ? d : null;
+    const gradeCode = cover?.gradeCode ?? c?.grade.code ?? d?.gradeCode ?? name.gradeCode;
+    const subjectCode = cover?.subjectCode ?? c?.subject.code ?? d?.subjectCode ?? name.subjectCode;
+    const kind: BookGuess["kind"] = cover && cover.kind !== "TEXTBOOK" ? cover.kind : (c?.kind ?? (d && d.kind !== "TEXTBOOK" ? d.kind : name.kind));
+    const part = cover && cover.part ? cover.part : c ? c.part : (d?.part || name.part || 0);
     const sure = b.autoLinked || (d ? d.confidence === "high" : !!name.gradeCode && !!name.subjectCode);
     return {
       id: b.id, originalName: b.originalName, status: b.status, error: b.error, pageCount: b.pageCount, textPageCount: b.textPageCount, processedPages: b.processedPages,

@@ -12,7 +12,7 @@ const tmp = vi.hoisted(() => {
 });
 
 import { db } from "../db";
-import { cancelProcessing, deleteBook, getBookPage, linkBook, processBook, uploadBook } from "./service";
+import { cancelProcessing, deleteBook, getBookPage, linkBook, processBook, reopenBook, STALE_MS, uploadBook } from "./service";
 import { runOcrExclusive } from "./ocr";
 
 const fx = (f: string) => new Uint8Array(readFileSync(path.resolve(__dirname, "../../../test/fixtures", f)));
@@ -91,6 +91,36 @@ describe("book library", () => {
     // يمكن إعادة المحاولة بعد الإلغاء
     expect((await processBook(r2.id, { ocr: true })).ok).toBe(true);
   }, 180_000);
+
+  it("a broken text layer (gibberish over a good image) is not trusted: OCR reads the real page; without OCR it is NEEDS_OCR", async () => {
+    const r = await uploadBook(actor, { name: "طبقة-معطوبة.pdf", bytes: fx("garbled-layer.pdf") });
+    if (!r.ok) throw new Error(r.code);
+    ids.push(r.id);
+    await processBook(r.id, { ocr: false });
+    expect(await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: "FAILED", error: "NEEDS_OCR", textPageCount: 0 });
+    expect((await getBookPage(r.id, 1))?.text).toBe(""); // الفاسد لا يُخزَّن
+
+    expect(await processBook(r.id, { ocr: true })).toEqual({ ok: true, pageCount: 1, textPages: 1, ocrPages: 1 });
+    const pg = await getBookPage(r.id, 1);
+    expect(pg?.isOcr).toBe(true);
+    expect(pg?.text).toContain("الأعداد الطبيعية");
+    expect(pg?.text).not.toMatch(/Ib dg|Kjq/);
+  }, 240_000);
+
+  it("a book stuck in PROCESSING without a heartbeat can be reclaimed; a fresh one cannot; reopen returns a confirmed book to review", async () => {
+    const r = await uploadBook(actor, { name: "عالق.pdf", bytes: new Uint8Array([...fx("math-ar.pdf"), 10, 37, 37, 115, 116, 107]) });
+    if (!r.ok) throw new Error(r.code);
+    ids.push(r.id);
+    await db.uploadedBook.update({ where: { id: r.id }, data: { status: "PROCESSING" } });
+    expect(await processBook(r.id, { ocr: false })).toEqual({ ok: false, code: "BUSY_OR_MISSING" }); // نبض حديث
+    await db.$executeRaw`UPDATE "UploadedBook" SET "updatedAt" = now() - make_interval(secs => ${STALE_MS / 1000 + 60}) WHERE id = ${r.id}`;
+    expect((await processBook(r.id, { ocr: false })).ok).toBe(true); // عالق ⇒ يُستعاد
+
+    await db.uploadedBook.update({ where: { id: r.id }, data: { confirmedAt: new Date() } });
+    expect((await reopenBook(actor, r.id)).ok).toBe(true);
+    expect((await db.uploadedBook.findUniqueOrThrow({ where: { id: r.id } })).confirmedAt).toBeNull();
+    expect(await reopenBook(actor, "nope")).toEqual({ ok: false, code: "NOT_FOUND" });
+  }, 120_000);
 
   it("a pure image (no letters) stays unusable even with OCR", async () => {
     const r = await uploadBook(actor, { name: "رسم.pdf", bytes: fx("blank.pdf") });

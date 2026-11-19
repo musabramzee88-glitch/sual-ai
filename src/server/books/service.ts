@@ -112,10 +112,12 @@ export async function processBook(id: string, opts: { ocr?: boolean; actor?: Act
       });
       for (const r of results) {
         const p = pages[r.pageNumber - 1];
+        // نتيجة OCR التي لا حروف كافية فيها لا تحلّ محل الأصل (ولا تُعلَّم OCR)
+        if (!r.hasText) continue;
         p.text = r.text;
-        p.hasText = r.hasText;
-        p.isOcr = r.hasText; // لا نعلّم صفحة فارغة بأنها OCR
-        if (r.hasText) ocrUsed = true;
+        p.hasText = true;
+        p.isOcr = true;
+        ocrUsed = true;
       }
     }
 
@@ -202,6 +204,17 @@ export async function detectMany(ids: string[], actor?: Actor) {
 async function assertStillProcessing(id: string) {
   const b = await db.uploadedBook.findUnique({ where: { id }, select: { status: true } });
   if (b?.status !== "PROCESSING") throw new CancelledError();
+}
+
+/** يُعيد كتاباً مؤكَّداً إلى قائمة المراجعة (لتعديل صفه/مادته/نوعه/جزئه) */
+export async function reopenBook(actor: Actor, id: string) {
+  return db.$transaction(async (tx) => {
+    const b = await tx.uploadedBook.findUnique({ where: { id } });
+    if (!b || b.ownerId !== null) return fail("NOT_FOUND");
+    await tx.uploadedBook.update({ where: { id }, data: { confirmedAt: null } });
+    await audit(tx, actor, { action: "book.reopen", targetType: "UploadedBook", targetId: id, before: { confirmedAt: b.confirmedAt?.toISOString() ?? null } });
+    return { ok: true as const };
+  });
 }
 
 /** إيقاف معالجة كتاب (جارية أو بالانتظار). المهمة الجارية تتوقف عند الصفحة التالية. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, checkBook, contentFingerprint, formatReport, letterSpacedRatio, type BookCheckInput } from "./health";
+import { buildReport, checkBook, contentFingerprint, formatReport, letterSpacedRatio, topGarbage, type BookCheckInput } from "./health";
 import { reverseVisual } from "./text";
 
 const PARA = "في هذا الدرس نتعلم كيف نجمع الأعداد الطبيعية ثم نقارن الناتج مع العدد الأول ونكتب الجواب في الدفتر، وبعد ذلك نحل التمارين التي على الصفحة.";
@@ -83,5 +83,20 @@ describe("buildReport", () => {
     expect(txt).toContain("✗ x.pdf");
     expect(txt).toContain("ملف الكتاب غير موجود على القرص");
     expect(formatReport(buildReport([base()]))).toContain("✓ كتاب.pdf");
+  });
+});
+
+describe("report details", () => {
+  it("shows which garbage code points dominate (icon bullets vs real corruption)", () => {
+    expect(topGarbage("a\uF0B7\uF0B7\uF0B7b\uFFFD")).toBe("U+F0B7×3 U+FFFD×1");
+    const garbage = Array.from({ length: 20 }, (_, i) => ({ pageNumber: i + 1, text: `${PARA}\n${"\uF0B7".repeat(40)}`, isOcr: false }));
+    expect(checkBook(base({ pages: garbage })).issues.find((i) => i.code === "GARBAGE_CHARS")?.detail).toContain("U+F0B7");
+  });
+  it("a missing-chapters curriculum is informational, not a warning, and is counted in the header", () => {
+    const b = base({ curriculum: { ...base().curriculum!, chapters: [] } });
+    const r = checkBook(b);
+    expect(r.issues.find((i) => i.code === "NO_CHAPTERS")?.severity).toBe("info");
+    expect(r.level).toBe("ok");
+    expect(formatReport(buildReport([b]))).toContain("كتب منهجها بلا فصول (مهمة قادمة، ليست خطأ): 1");
   });
 });

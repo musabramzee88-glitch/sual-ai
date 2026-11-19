@@ -77,3 +77,7 @@ npm run typecheck && npm run lint && npm run build
 ## فحص الكتب
 - `health.ts` دوال نقية (لا server-only ولا DB)، و`health-data.ts` يأخذ `PrismaClient` ومجلد التخزين وسيطين ليعمل في الواجهة وفي `scripts/check-books.ts`. أي فحص جديد: أضفه في `checkBook` مع رسالة في `MESSAGES` واختباره بمدخلات اصطناعية.
 - الفحص العميق (`health-deep.ts`) يستورد `server-only`، لذلك سكربت `books:check` يعمل بـ `tsx --conditions=react-server` ويحمّله بـ `import()` عند `--deep` فقط.
+
+## طبقات النص المعطوبة
+- `extractPdfPages` لا يخزّن نصاً يعدّه `isGarbageText` فاسداً (يعيده فارغاً فتقرؤه OCR). لا تُلغِ هذا الفحص: كتب عراقية فعلية فيها طبقة نص معطوبة فوق صور سليمة. أي تعديل على العتبات يُختبر بـ `garbled-layer.pdf` وملفات `test/fixtures` الأخرى حتى لا تُعدّ العربية السليمة أو الإنكليزية الحقيقية فاسدة.
+- لا تعتمد نتيجة OCR فيها أقل من 10 حروف كنص (`hasOcrText`)، ولا تعلّم صفحة isOcr إلا إذا اعتُمد نصها.
