@@ -1,0 +1,99 @@
+import type { Locale } from "./dictionaries";
+
+/** نصوص الامتحانات (قيم نصية فقط — تُمرَّر إلى مكوّنات العميل) */
+const ar = {
+  title: "امتحاناتي", newExam: "امتحان جديد", empty: "لم تنشئ امتحاناً بعد.", back: "لوحة المدرس", open: "فتح",
+  noAccess: "إنشاء الامتحانات متاح للمشتركين فقط.", subscribe: "الاشتراك",
+  status: { DRAFT: "مسودة", GENERATING: "جارٍ التوليد", READY: "جاهز", FAILED: "فشل التوليد", ARCHIVED: "مؤرشف" } as Record<string, string>,
+  marks: "الدرجة", marksShort: "درجة", total: "المجموع", questions: "سؤالاً",
+  wizard: {
+    title: "إنشاء امتحان", grade: "الصف", subject: "المادة", book: "الكتاب", pick: "— اختر —",
+    noOptions: "لا توجد كتب جاهزة بعد. يجب أن يرفع المسؤول الكتب ويؤكدها.",
+    source: "المصدر", chapters: "الفصول", byPages: "نطاق صفحات", from: "من صفحة", to: "إلى صفحة", pagesOf: "صفحات الكتاب",
+    noChapters: "هذا الكتاب بلا فصول بعد: حدّد نطاق الصفحات.", pickChapter: "اختر فصلاً واحداً على الأقل",
+    sections: "أقسام الامتحان", type: "نوع السؤال", count: "العدد", marksEach: "درجة السؤال", addSection: "+ إضافة قسم", remove: "حذف",
+    difficulty: "الصعوبة", kind: "نوع الامتحان", examTitle: "عنوان الامتحان (اختياري)", duration: "المدة بالدقائق (اختياري)",
+    generate: "توليد الأسئلة", generating: "جارٍ قراءة الصفحات وكتابة الأسئلة… قد يستغرق ذلك دقيقة أو أكثر. لا تغلق الصفحة.",
+    summary: "المجموع: {q} سؤالاً — {m} درجة",
+    reviewNote: "الأسئلة يكتبها الذكاء الاصطناعي من صفحات الكتاب فقط، وكل سؤال يذكر صفحته. راجعها قبل الطباعة.",
+  },
+  difficulties: { MIXED: "متنوعة", EASY: "سهلة", MEDIUM: "متوسطة", HARD: "صعبة" } as Record<string, string>,
+  kinds: { QUIZ: "اختبار قصير", MONTHLY: "امتحان شهري", MIDTERM: "نصف السنة", FINAL: "نهاية السنة", MINISTERIAL_STYLE: "بأسلوب الوزاري" } as Record<string, string>,
+  bookKinds: { TEXTBOOK: "كتاب الطالب", EXERCISES: "كتاب التمارين", ACTIVITY: "كتاب النشاط" } as Record<string, string>,
+  qt: {
+    MCQ: "اختيار من متعدد", TRUE_FALSE: "صح وخطأ", FILL_BLANK: "املأ الفراغ", JUSTIFY: "علّل", DEFINE: "عرّف", COMPARE: "قارن",
+    PROBLEM: "مسائل", PROOF: "إثبات", ESSAY: "أسئلة مقالية", APPLIED: "تطبيقية", COMPREHENSION: "فهم واستيعاب", GRAMMAR_PARSING: "إعراب", EQUATION_BALANCING: "معادلات كيميائية",
+  } as Record<string, string>,
+  editor: {
+    review: "راجع الأسئلة", page: "ص", answer: "الإجابة", showAnswers: "إظهار الإجابات", edit: "تعديل", save: "حفظ", cancel: "إلغاء",
+    regenerate: "سؤال بديل", undo: "تراجع", del: "حذف", confirmDel: "حذف هذا السؤال؟", prompt: "نص السؤال", options: "الخيارات (خيار في كل سطر)",
+    print: "طباعة الامتحان", printKey: "طباعة الإجابات النموذجية", deleteExam: "حذف الامتحان", confirmDeleteExam: "حذف الامتحان كله؟",
+    shortfall: "طُلب {r} سؤالاً وكُتب {m} فقط: أسئلة لم تستند إلى صفحات المصدر أُسقطت تلقائياً. أضف أسئلة بديلة أو أعد التوليد.",
+    ocrWarn: "بعض صفحات المصدر مصوّرة ({n} صفحة) وقُرئت بالصور: راجع الأرقام والأسماء بعناية.",
+    truncated: "النطاق كبير، فأُخذت عيّنة موزّعة من صفحاته.",
+    failed: "تعذّر توليد هذا الامتحان.", busy: "جارٍ…",
+  },
+  print: { republic: "جمهورية العراق", ministry: "وزارة التربية", subject: "المادة", grade: "الصف", time: "الزمن", minutes: "دقيقة", total: "الدرجة الكلية", model: "النموذج", keyTitle: "الإجابات النموذجية", doPrint: "طباعة", q: "س", note: "ملاحظة: الإجابة على ورقة الأسئلة نفسها" },
+  errors: {
+    AI_QUOTA: "انتهت الحصة اليومية لخدمة الذكاء الاصطناعي. حاول لاحقاً.",
+    AI_UNAVAILABLE: "خدمة الذكاء الاصطناعي غير مهيأة على الخادم.",
+    AI_FAILED: "تعذّر توليد الأسئلة الآن (الخدمة مشغولة أو الرد غير صالح). حاول مرة أخرى.",
+    RATE_LIMITED: "طلبات كثيرة متتالية. انتظر دقيقة ثم حاول.",
+    TYPE_NOT_ALLOWED: "نوع سؤال غير متاح لهذه المادة.", PAGE_OUT_OF_RANGE: "الصفحات خارج نطاق الكتاب.",
+    NO_BOOK: "لا يوجد كتاب جاهز لهذا المنهج.", CHAPTER_NOT_FOUND: "فصل غير موجود أو بلا صفحات.", SOURCE_REQUIRED: "حدّد الفصول أو نطاق الصفحات.",
+    TOO_MANY_QUESTIONS: "الحد الأقصى 40 سؤالاً.", DUPLICATE_SECTION: "لا تكرر نوع السؤال في قسمين.",
+    SUBSCRIPTION_REQUIRED: "يتطلب اشتراكاً فعالاً.", SUBSCRIPTION_EXPIRED: "انتهى اشتراكك.", NOTHING_TO_UNDO: "لا يوجد تغيير للتراجع عنه.",
+    ANSWER_NOT_IN_OPTIONS: "الإجابة يجب أن تطابق أحد الخيارات.", GENERIC: "حدث خطأ. حاول مرة أخرى.",
+  } as Record<string, string>,
+};
+
+type ExamDict = typeof ar;
+
+const en: ExamDict = {
+  title: "My exams", newExam: "New exam", empty: "You have not created an exam yet.", back: "Dashboard", open: "Open",
+  noAccess: "Creating exams is available to subscribers only.", subscribe: "Subscribe",
+  status: { DRAFT: "Draft", GENERATING: "Generating", READY: "Ready", FAILED: "Generation failed", ARCHIVED: "Archived" },
+  marks: "Marks", marksShort: "marks", total: "Total", questions: "questions",
+  wizard: {
+    title: "Create an exam", grade: "Grade", subject: "Subject", book: "Book", pick: "— choose —",
+    noOptions: "No books are ready yet. An administrator must upload and confirm them.",
+    source: "Source", chapters: "Chapters", byPages: "Page range", from: "From page", to: "To page", pagesOf: "pages in the book",
+    noChapters: "This book has no chapters yet: choose a page range.", pickChapter: "Choose at least one chapter",
+    sections: "Exam sections", type: "Question type", count: "Count", marksEach: "Marks each", addSection: "+ Add section", remove: "Remove",
+    difficulty: "Difficulty", kind: "Exam type", examTitle: "Exam title (optional)", duration: "Duration in minutes (optional)",
+    generate: "Generate questions", generating: "Reading the pages and writing questions… this can take a minute or more. Keep this page open.",
+    summary: "Total: {q} questions — {m} marks",
+    reviewNote: "Questions are written by AI from the book pages only, each citing its page. Review them before printing.",
+  },
+  difficulties: { MIXED: "Mixed", EASY: "Easy", MEDIUM: "Medium", HARD: "Hard" },
+  kinds: { QUIZ: "Quiz", MONTHLY: "Monthly", MIDTERM: "Mid-year", FINAL: "Final", MINISTERIAL_STYLE: "Ministerial style" },
+  bookKinds: { TEXTBOOK: "Textbook", EXERCISES: "Exercises book", ACTIVITY: "Activity book" },
+  qt: {
+    MCQ: "Multiple choice", TRUE_FALSE: "True / False", FILL_BLANK: "Fill in the blank", JUSTIFY: "Give reasons", DEFINE: "Define", COMPARE: "Compare",
+    PROBLEM: "Problems", PROOF: "Proof", ESSAY: "Essay", APPLIED: "Applied", COMPREHENSION: "Comprehension", GRAMMAR_PARSING: "Parsing (إعراب)", EQUATION_BALANCING: "Chemical equations",
+  },
+  editor: {
+    review: "Review the questions", page: "p.", answer: "Answer", showAnswers: "Show answers", edit: "Edit", save: "Save", cancel: "Cancel",
+    regenerate: "Replace", undo: "Undo", del: "Delete", confirmDel: "Delete this question?", prompt: "Question", options: "Options (one per line)",
+    print: "Print exam", printKey: "Print answer key", deleteExam: "Delete exam", confirmDeleteExam: "Delete the whole exam?",
+    shortfall: "{r} questions were requested and {m} written: questions not grounded in the source pages were dropped. Replace or regenerate.",
+    ocrWarn: "Some source pages are scanned ({n} pages) and were read from images: check numbers and names carefully.",
+    truncated: "The range is large, so an even sample of its pages was used.",
+    failed: "This exam could not be generated.", busy: "Working…",
+  },
+  print: { republic: "Republic of Iraq", ministry: "Ministry of Education", subject: "Subject", grade: "Grade", time: "Time", minutes: "minutes", total: "Total marks", model: "Model", keyTitle: "Answer key", doPrint: "Print", q: "Q", note: "Note: answer on the question sheet" },
+  errors: {
+    AI_QUOTA: "The AI service's daily quota is used up. Try again later.",
+    AI_UNAVAILABLE: "The AI service is not configured on the server.",
+    AI_FAILED: "Could not generate questions right now (service busy or invalid reply). Try again.",
+    RATE_LIMITED: "Too many requests. Wait a minute and try again.",
+    TYPE_NOT_ALLOWED: "Question type not available for this subject.", PAGE_OUT_OF_RANGE: "Pages are outside the book.",
+    NO_BOOK: "No ready book for this curriculum.", CHAPTER_NOT_FOUND: "Chapter not found or has no pages.", SOURCE_REQUIRED: "Choose chapters or a page range.",
+    TOO_MANY_QUESTIONS: "At most 40 questions.", DUPLICATE_SECTION: "Do not repeat a question type in two sections.",
+    SUBSCRIPTION_REQUIRED: "An active subscription is required.", SUBSCRIPTION_EXPIRED: "Your subscription has expired.", NOTHING_TO_UNDO: "Nothing to undo.",
+    ANSWER_NOT_IN_OPTIONS: "The answer must match one of the options.", GENERIC: "Something went wrong. Try again.",
+  },
+};
+
+export const examDicts: Record<Locale, ExamDict> = { ar, en };
+export type { ExamDict };
