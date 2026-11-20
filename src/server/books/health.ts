@@ -109,7 +109,7 @@ export function checkBook(b: BookCheckInput): BookReport {
   const blankTotal = b.textPageCount != null && pageCount > 0 ? Math.max(0, pageCount - b.textPageCount) : blank.length;
   if (pageCount > 0 && pageCount < 4) add("TOO_FEW_PAGES", "warn", String(pageCount));
   if (pageCount > 600) add("TOO_MANY_PAGES", "warn", String(pageCount));
-  if (ocrPages.length > 0) add("OCR_USED", "warn", `${ocrPages.length}/${pageCount}`);
+  if (ocrPages.length > 0) add("OCR_USED", "info", `${ocrPages.length}/${pageCount}`);
   if (b.status === "READY" && ocrPages.length === 0 && pageCount >= 10 && blankTotal / pageCount > 0.3) add("MANY_BLANK_PAGES", "warn", `${blankTotal}/${pageCount}`);
 
   // ── جودة النص (على الصفحات ذات النص الأصلي، لا OCR فالـOCR له تنبيهه) ──
