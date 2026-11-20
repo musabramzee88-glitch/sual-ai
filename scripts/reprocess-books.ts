@@ -1,6 +1,7 @@
 /**
  * إعادة معالجة الكتب من سطر الأوامر، مستقلة عن خادم الويب (لا تموت إن أُعيد تشغيل الخادم):
  *   npm run books:reprocess                    (المتعثرة: عالقة بلا نبض، موقوفة، NEEDS_OCR، فاشلة الاستخراج)
+ *   npm run books:reprocess -- --damaged        (كتب طبقة نصها معطوبة/رموز تالفة/لغة لا تطابق المادة، أياً كانت حالتها)
  *   npm run books:reprocess -- --match lruqhtn  (أي كتاب يحوي اسمه/معرّفه هذا النص، أياً كانت حالته؛ يتكرر)
  *   npm run books:reprocess -- --no-ocr         (بلا OCR)
  * بعد كل كتاب تُطبع نتيجته. اترك النافذة مفتوحة؛ إن أُغلقت أعد الأمر وسيكمل من المتبقي.
@@ -23,7 +24,20 @@ async function main() {
   const matches = process.argv.flatMap((a, i, all) => (a === "--match" && all[i + 1] ? [all[i + 1]] : []));
   const ocr = !process.argv.includes("--no-ocr");
 
-  const where = matches.length
+  let damagedIds: string[] = [];
+  if (process.argv.includes("--damaged")) {
+    const { PrismaClient } = await import("@prisma/client");
+    const { buildReport } = await import("../src/server/books/health");
+    const { loadBookInputs } = await import("../src/server/books/health-data");
+    const prisma = new PrismaClient();
+    const rep = buildReport(await loadBookInputs(prisma, process.env.STORAGE_DIR || "./storage"));
+    await prisma.$disconnect();
+    const bad = new Set(["UNRELIABLE_TEXT_LAYER", "GARBAGE_CHARS", "LANGUAGE_MISMATCH"]);
+    damagedIds = rep.books.filter((b) => b.issues.some((i) => bad.has(i.code))).map((b) => b.id);
+  }
+  const where = damagedIds.length
+    ? { ownerId: null, id: { in: damagedIds } }
+    : matches.length
     ? { ownerId: null, OR: matches.flatMap((m) => [{ id: { contains: m } }, { originalName: { contains: m } }]) }
     : { ownerId: null, OR: [{ status: "FAILED" as const, error: { in: ["NEEDS_OCR", "CANCELLED", "EXTRACT_FAILED"] } }, { status: "PROCESSING" as const, updatedAt: { lt: new Date(Date.now() - STALE_MS) } }] };
   const rows = await db.uploadedBook.findMany({ where, select: { id: true, originalName: true }, orderBy: { createdAt: "asc" } });

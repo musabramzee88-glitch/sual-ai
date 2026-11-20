@@ -78,3 +78,16 @@ describe("guessSubjectFromContent (weak fallback)", () => {
     expect(guessSubjectFromContent(rep("This is a long English text about my family and school day", 40))).toBe("ENGLISH");
   });
 });
+
+describe("English covers: explicit grade forms only", () => {
+  const cover = (extra: string) => `English for Iraq Pupil's Book Ministry of Education Republic of Iraq published by Garnet Education ${extra}`;
+  it("takes Primary N, never a stray 'first' or Unit 1", () => {
+    expect(guessFromCover(cover("Primary 4 first edition Unit 1")).gradeCode).toBe("PRI_4");
+    expect(guessFromCover(cover("first edition Unit 1 Lesson 1")).gradeCode).toBeNull();
+  });
+  it("an ambiguous series line (Primary 1-6 with Primary 5) is low confidence", () => {
+    const g = guessFromCover(cover("Primary 5 Primary 6"));
+    expect(g.gradeCode).toBeNull();
+    expect(g.confidence).toBe("low");
+  });
+});

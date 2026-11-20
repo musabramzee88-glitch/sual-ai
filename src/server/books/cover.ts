@@ -20,8 +20,12 @@ function guessEnglishCover(raw: string): CoverGuess | null {
   const la = count(raw, /[A-Za-z]/g);
   if (!(la > 30 && la > ar * 1.5 && /english/i.test(raw))) return null;
   const n = raw.toLowerCase();
-  const num = /(?:primary|grade|class)\s*([1-6])\b/.exec(n)?.[1] ?? /\b([1-6])(?:st|nd|rd|th)\s*(?:primary|grade)/.exec(n)?.[1]
-    ?? (() => { const m = /\b(first|second|third|fourth|fifth|sixth)\b[\s-]*(?:primary|grade)?/.exec(n); return m ? String(EN_ORD[m[1]]) : undefined; })();
+  // صيغ صريحة فقط (Primary 4 / Grade 4 / 4th Primary / Fourth Primary)؛ كلمة «first» وحدها أو «Unit 1» لا تكفي.
+  const found = new Set<string>();
+  for (const m of n.matchAll(/\b(?:primary|grade|class)\s*([1-6])\b/g)) found.add(m[1]);
+  for (const m of n.matchAll(/\b([1-6])(?:st|nd|rd|th)\s*(?:primary|grade)\b/g)) found.add(m[1]);
+  for (const m of n.matchAll(/\b(first|second|third|fourth|fifth|sixth)\s*(?:primary|grade)\b/g)) found.add(String(EN_ORD[m[1]]));
+  const num = found.size === 1 ? [...found][0] : undefined; // رقمان مختلفان (مثل سلسلة Primary 1-6) ⇒ غامض
   const primary = /primary|elementary/.test(n) || !!num;
   return {
     gradeCode: num && primary ? `PRI_${num}` : null,

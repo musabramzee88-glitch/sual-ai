@@ -51,7 +51,9 @@ export async function deepCheckBook(t: DeepTarget, storageDir: string): Promise<
     // الصفحات الفارغة عند الطرفين (رسوم/أغلفة) لا تُقارَن
     if ((s.text.match(/\p{L}/gu)?.length ?? 0) < 10 && (f.text.match(/\p{L}/gu)?.length ?? 0) < 10) continue;
     compared++;
-    if (norm(s.text) !== norm(f.text)) {
+    // صفحة تُعدّ الآن فاسدة تُخزَّن بما يحكّم به OCR/الطبقة المنظَّفة: يُقارَن المخزَّن بالطبقة المنظَّفة (لا بالفارغ)
+    const fresh = f.text.trim() === "" && f.suspect ? f.suspect.replace(/\uFFFD/g, "") : f.text;
+    if (norm(s.text) !== norm(fresh) && !(f.suspect && f.text.trim() === "" && s.text.trim() !== "" && norm(s.text) === norm(f.suspect))) {
       differ++;
       // عيّنة أول فرق: المخزَّن مقابل الحالي (فارغ الحالي ⇒ صفحة تُعدّ الآن فاسدة)
       if (!sample) sample = ` · ص${f.pageNumber}: المخزَّن «${s.text.replace(/\s+/g, " ").slice(0, 40)}» ↔ الحالي «${f.text.replace(/\s+/g, " ").slice(0, 40)}»`;

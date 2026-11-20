@@ -48,6 +48,8 @@ export async function placeBook(actor: Actor, bookId: string, p: Placement, mode
     created = true;
   }
   const curriculumId = cur.id;
+  // التلقائي لا يضع كتاباً في منهج فيه كتاب آخر (غالباً جزء ثانٍ): يبقى للمراجعة ليحدَّد الجزء
+  if (mode === "auto" && !created && (await db.uploadedBook.count({ where: { curriculumId, id: { not: bookId } } })) > 0) return { ok: false, code: "OCCUPIED" };
   await db.$transaction(async (tx) => {
     await tx.uploadedBook.update({
       where: { id: bookId },
