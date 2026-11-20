@@ -54,6 +54,8 @@ async function post(path: string, body: unknown, attempts = 5, timeoutMs = 180_0
       if (res.status === 429 && /per day|daily|PerDay/i.test(msg)) throw last;
       if (i + 1 >= attempts) break;
       const wait = retryDelayMs(json) ?? Math.min(60_000, 2000 * 2 ** i);
+      // انتظار يطلبه الخادم أطول من دقيقتين = حصة (يومية غالباً) منتهية: لا ننتظر ساعات
+      if (res.status === 429 && wait > 120_000) throw new AiError("QUOTA", `${msg} (التجديد بعد ~${Math.round(wait / 3600_000)} ساعة)`);
       // يُطبع حتى لا يبدو الأمر معلّقاً (بلا المفتاح)
       console.warn(`[ai] ${res.status === 429 ? "حدّ الطلبات" : `الخادم مشغول (${res.status})`} — إعادة بعد ${Math.round(wait / 1000)} ث (${i + 1}/${attempts - 1})`);
       await sleep(wait);
@@ -64,8 +66,34 @@ async function post(path: string, body: unknown, attempts = 5, timeoutMs = 180_0
   throw last ?? new AiError("HTTP", "فشل الطلب");
 }
 
+/** نماذج نفدت حصتها في هذه الجلسة (لا تُجرَّب ثانية) */
+const exhausted = new Set<string>();
+
+/**
+ * بلا model صريح: GEMINI_MODEL ثم GEMINI_FALLBACK_MODELS بالترتيب عند نفاد الحصة (لكل نموذج حصته اليومية في المجاني).
+ */
 export async function geminiJson<T>(opts: { prompt: string; images?: Image[]; schema: object; maxOutputTokens?: number; model?: string; attempts?: number; timeoutMs?: number }): Promise<T> {
-  const model = opts.model ?? env.GEMINI_MODEL;
+  if (opts.model) return geminiJsonWith<T>(opts.model, opts);
+  const chain = [env.GEMINI_MODEL, ...(env.GEMINI_FALLBACK_MODELS ?? "").split(",").map((m) => m.trim()).filter(Boolean)].filter((m, i, a) => a.indexOf(m) === i);
+  let last: unknown = null;
+  for (const m of chain) {
+    if (exhausted.has(m)) continue;
+    try {
+      return await geminiJsonWith<T>(m, opts);
+    } catch (e) {
+      if (!(e instanceof AiError && e.code === "QUOTA")) throw e;
+      exhausted.add(m);
+      last = e;
+      if (chain.some((x) => !exhausted.has(x))) console.warn(`[ai] نفدت حصة ${m} — أنتقل إلى النموذج التالي`);
+    }
+  }
+  throw last ?? new AiError("QUOTA", "نفدت حصة كل النماذج");
+}
+
+/** النموذج الذي سيُستعمل الآن (لتسجيله مع النتائج المخزنة) */
+export const currentModel = () => [env.GEMINI_MODEL, ...(env.GEMINI_FALLBACK_MODELS ?? "").split(",").map((m) => m.trim()).filter(Boolean)].find((m) => !exhausted.has(m)) ?? env.GEMINI_MODEL;
+
+async function geminiJsonWith<T>(model: string, opts: { prompt: string; images?: Image[]; schema: object; maxOutputTokens?: number; attempts?: number; timeoutMs?: number }): Promise<T> {
   const parts: object[] = [{ text: opts.prompt }, ...(opts.images ?? []).map((im) => ({ inlineData: { mimeType: im.mime, data: im.data.toString("base64") } }))];
   const res = (await post(`models/${encodeURIComponent(model)}:generateContent`, {
     contents: [{ role: "user", parts }],

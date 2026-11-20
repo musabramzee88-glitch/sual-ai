@@ -116,3 +116,19 @@ describe("entries read from contents images (trusted)", () => {
     expect(chaptersFromEntries(p, 100, entries)!.chapters.map((c) => c.pageStart)).toEqual([20, 40, 60, 80]);
   });
 });
+
+describe("offset known from page numbers printed on the images", () => {
+  it("builds chapters from the known offset even when no title can be matched", () => {
+    const entries = [
+      { title: "الدرس ١ مفهوم المئة", printed: 6, level: 2 as const },
+      { title: "الدرس ٢ الأعداد", printed: 8, level: 2 as const },
+      { title: "الدرس ٣ القيمة المكانية", printed: 10, level: 2 as const },
+      { title: "الدرس ٤ قراءة العدد", printed: 12, level: 2 as const },
+    ];
+    const p = Array.from({ length: 40 }, (_, i) => ({ pageNumber: i + 1, text: "ضجيج" }));
+    expect(chaptersFromEntries(p, 40, entries, { trusted: true })).toBeNull();
+    const r = chaptersFromEntries(p, 40, entries, { trusted: true, knownOffset: 2 })!;
+    expect(r.method).toBe("printed");
+    expect(r.chapters.map((c) => c.pageStart)).toEqual([8, 10, 12, 14]);
+  });
+});

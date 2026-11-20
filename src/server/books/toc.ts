@@ -10,7 +10,7 @@
 /** level: 1 وحدة/فصل/باب، 2 درس (يأتي من قراءة الصور؛ من النص يُستنتج بالكلمات) */
 export type TocEntry = { title: string; printed: number | null; level?: 1 | 2 };
 export type ProposedChapter = { title: string; pageStart: number; pageEnd: number };
-export type TocResult = { chapters: ProposedChapter[]; offset: number | null; verified: number; total: number; method: "numbers" | "titles" | "footer" };
+export type TocResult = { chapters: ProposedChapter[]; offset: number | null; verified: number; total: number; method: "numbers" | "titles" | "footer" | "printed" };
 
 const TASHKEEL = /[\u064B-\u065F\u0670\u0640\u06D6-\u06ED]/g;
 export const flat = (s: string) => s.normalize("NFKC").replace(TASHKEEL, "").replace(/[أإآٱ]/g, "ا").replace(/اال/g, "الا") /* لام-ألف مفكوكة بترتيب العرض: «األولى»→«الأولى» */.replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/\s+/g, " ").trim();
@@ -140,7 +140,7 @@ export function footerOffset(pages: Map<number, Page>, pageCount: number): { off
  * trusted: البنود من قراءة صور الفهرس (عناوين وأرقام نظيفة)؛ يُقبل حينها فرق الترقيم المؤيَّد بأرقام ذيل الصفحات
  * حين تعجز مطابقة العناوين (نص OCR مشوَّه).
  */
-export function chaptersFromEntries(pages: { pageNumber: number; text: string }[], pageCount: number, all: TocEntry[], opts: { tocPages?: Set<number>; trusted?: boolean } = {}): TocResult | null {
+export function chaptersFromEntries(pages: { pageNumber: number; text: string }[], pageCount: number, all: TocEntry[], opts: { tocPages?: Set<number>; trusted?: boolean; knownOffset?: number | null } = {}): TocResult | null {
   const sorted = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
   const tocPageNumbers = opts.tocPages ?? new Set<number>();
   const byPage = new Map<number, Page>(sorted.map((p) => [p.pageNumber, { raw: p.text, flat: flat(p.text) }]));
@@ -160,7 +160,14 @@ export function chaptersFromEntries(pages: { pageNumber: number; text: string }[
       const kept = mono.filter((e) => e.printed! + offset <= pageCount);
       return toChapters(kept, kept.map((e) => e.printed! + offset), pageCount);
     };
-    if (best.ok >= Math.ceil(mono.length * 0.6)) {
+    // فرق الترقيم من أرقام الصفحات التي قرأها النموذج في الصور نفسها (دليل مباشر)
+    if (opts.trusted && opts.knownOffset != null && opts.knownOffset >= 0 && opts.knownOffset <= 16) {
+      const ch = build(opts.knownOffset);
+      if (!tooFine(ch) && !partial(ch, pageCount)) return { chapters: ch, offset: opts.knownOffset, verified: best.ok, total: mono.length, method: "printed" };
+    }
+    // البنود من صور الفهرس أنظف من نص OCR للصفحات: يكفي تأييد أقل (35%، وعنوانان على الأقل)
+    const need = opts.trusted ? Math.max(2, Math.ceil(mono.length * 0.35)) : Math.ceil(mono.length * 0.6);
+    if (best.ok >= need) {
       const ch = build(best.offset);
       if (!tooFine(ch) && !partial(ch, pageCount)) return { chapters: ch, offset: best.offset, verified: best.ok, total: mono.length, method: "numbers" };
     }

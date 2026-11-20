@@ -17,6 +17,8 @@ const schema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   // «-latest» اسم مستعار يتبع أحدث نسخة Flash؛ أوامر ai:check تعرض النماذج المتاحة لمفتاحك
   GEMINI_MODEL: z.string().default("gemini-flash-latest"),
+  // نماذج احتياطية مفصولة بفواصل تُستعمل تلقائياً حين تنفد حصة السابق (مثلاً gemini-3.1-flash-lite)
+  GEMINI_FALLBACK_MODELS: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   AI_MODEL: z.string().default("claude-opus-5-5"),
   // البريد
