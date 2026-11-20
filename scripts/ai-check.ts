@@ -25,18 +25,19 @@ async function main() {
   // نماذج نصية/رؤية عامة فقط (لا صوت ولا توليد صور)
   const flash = models.filter((n) => /flash/i.test(n) && !/tts|image|omni/i.test(n));
   const order = [env.GEMINI_MODEL, ...flash.filter((n) => n !== env.GEMINI_MODEL)];
-  const working: string[] = [];
-  for (const m of order) {
+  // كل النماذج بالتوازي: أبطأ نموذج يحدد المدة (≤ 40 ث) بدل جمع مهلها
+  const results = await Promise.all(order.map(async (m) => {
     const t0 = Date.now();
     try {
       const r = await geminiJson<{ answer: string }>({ model: m, attempts: 1, timeoutMs: 40_000, prompt: "أجب بكلمة واحدة: ما عاصمة العراق؟", schema: { type: "OBJECT", properties: { answer: { type: "STRING" } }, required: ["answer"] } });
-      working.push(m);
-      console.log(`  ✓ ${m} — «${r.answer}» (${((Date.now() - t0) / 1000).toFixed(1)} ث)`);
+      return { m, ok: true, line: `  ✓ ${m} — «${r.answer}» (${((Date.now() - t0) / 1000).toFixed(1)} ث)` };
     } catch (e) {
       const msg = (e as Error).name === "TimeoutError" ? "لم يجب خلال 40 ث" : (e as Error).message.replace(/\s+/g, " ").slice(0, 110);
-      console.log(`  ✗ ${m} — ${msg}`);
+      return { m, ok: false, line: `  ✗ ${m} — ${msg}` };
     }
-  }
+  }));
+  for (const r of results) console.log(r.line);
+  const working = results.filter((r) => r.ok).map((r) => r.m);
   if (working.length === 0) { console.log("\nلا نموذج يجيب الآن (غالباً حدود المستوى المجاني). أعد المحاولة بعد دقائق."); process.exitCode = 1; return; }
   if (working.includes(env.GEMINI_MODEL)) console.log(`\n✓ النموذج المضبوط ${env.GEMINI_MODEL} يعمل. لا تغيير مطلوب.`);
   else console.log(`\n→ النموذج المضبوط (${env.GEMINI_MODEL}) لا يجيب. أضف إلى .env السطر:\nGEMINI_MODEL=${working[0]}`);
