@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTocEntries, proposeChapters } from "./toc";
+import { chaptersFromEntries, parseTocEntries, proposeChapters } from "./toc";
 
 const filler = (n: number) => `نص عادي للصفحة ${n} عن التمارين والأنشطة المختلفة`;
 const pages = (n: number, set: Record<number, string>) => Array.from({ length: n }, (_, i) => ({ pageNumber: i + 1, text: set[i + 1] ?? filler(i + 1) }));
@@ -92,5 +92,27 @@ describe("TOC guards from real books", () => {
   it("tests, pre-tests and glossaries are not chapters", () => {
     const e = parseTocEntries(["المحتويات\nالاختبار القبلي 7\nالدرس 1-1 الحساب الذهني 8\nاختبار الفصل 30\nمعجم الطالب 93\nتمرينات الفصول 183"], 196);
     expect(e.map((x) => x.title)).toEqual(["الدرس 1-1 الحساب الذهني"]);
+  });
+});
+
+describe("entries read from contents images (trusted)", () => {
+  it("uses printed page numbers in page footers when OCR titles cannot be matched", () => {
+    const set: Record<number, string> = {};
+    for (let n = 1; n <= 100; n++) set[n] = `ضجيج OCR غير مقروء\n${n - 4}`; // ذيل كل صفحة يحمل رقمها المطبوع (فرق 4)
+    const entries = [
+      { title: "الوحدة الأولى: النبات", printed: 5, level: 1 as const },
+      { title: "الوحدة الثانية: الحيوان", printed: 30, level: 1 as const },
+      { title: "الوحدة الثالثة: الماء", printed: 55, level: 1 as const },
+    ];
+    const p = Array.from({ length: 100 }, (_, i) => ({ pageNumber: i + 1, text: set[i + 1] }));
+    expect(chaptersFromEntries(p, 100, entries)).toBeNull(); // من النص: لا تحقق
+    const r = chaptersFromEntries(p, 100, entries, { trusted: true })!;
+    expect(r.method).toBe("footer");
+    expect(r.chapters.map((c) => c.pageStart)).toEqual([9, 34, 59]);
+  });
+  it("lesson-level entries are dropped when ≥4 units are marked level 1", () => {
+    const entries = [1, 2, 3, 4].flatMap((u) => [{ title: `الوحدة ${u} موضوع ${u}`, printed: u * 20, level: 1 as const }, { title: `درس ${u}`, printed: u * 20 + 5, level: 2 as const }]);
+    const p = Array.from({ length: 100 }, (_, i) => ({ pageNumber: i + 1, text: [1, 2, 3, 4].includes((i + 1) / 20) ? `الوحدة ${(i + 1) / 20} موضوع ${(i + 1) / 20}` : `نص ${i + 1}` }));
+    expect(chaptersFromEntries(p, 100, entries)!.chapters.map((c) => c.pageStart)).toEqual([20, 40, 60, 80]);
   });
 });

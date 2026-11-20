@@ -16,6 +16,8 @@
     "books:reprocess": "tsx --conditions=react-server scripts/reprocess-books.ts",
     "books:fix-placements": "tsx --conditions=react-server scripts/fix-placements.ts",
     "books:chapters": "tsx --conditions=react-server scripts/propose-chapters.ts",
+    "books:chapters:ai": "tsx --conditions=react-server scripts/ai-chapters.ts",
+    "ai:check": "tsx --conditions=react-server scripts/ai-check.ts",
     "books:check": "tsx --conditions=react-server scripts/check-books.ts"
   },
   "dependencies": {

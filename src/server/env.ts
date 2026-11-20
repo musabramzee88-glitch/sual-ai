@@ -12,6 +12,11 @@ const schema = z.object({
   // مفتاح سري لتوقيع/تجزئة الرموز (32 بايت على الأقل)
   AUTH_SECRET: z.string().min(32).optional(),
   // الذكاء الاصطناعي
+  // المزوّد: gemini (مستوى مجاني متاح) أو anthropic. يُبدَّل من .env فقط.
+  AI_PROVIDER: z.enum(["gemini", "anthropic"]).default("gemini"),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  // «-latest» اسم مستعار يتبع أحدث نسخة Flash؛ أوامر ai:check تعرض النماذج المتاحة لمفتاحك
+  GEMINI_MODEL: z.string().default("gemini-flash-latest"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   AI_MODEL: z.string().default("claude-opus-5-5"),
   // البريد

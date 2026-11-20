@@ -7,9 +7,10 @@
  * - المستوى: إن وُجدت ≥ 4 وحدات/فصول/أبواب تؤخذ وحدها؛ وإلا تؤخذ كل البنود (الوحدات مع دروسها).
  * - لا يُقترح شيء إلا إذا تحقق ≥ 60% من العناوين، وإذا لم تكن أغلب البنود صفحة واحدة (فهرس فقرات لا فصول).
  */
-export type TocEntry = { title: string; printed: number | null };
+/** level: 1 وحدة/فصل/باب، 2 درس (يأتي من قراءة الصور؛ من النص يُستنتج بالكلمات) */
+export type TocEntry = { title: string; printed: number | null; level?: 1 | 2 };
 export type ProposedChapter = { title: string; pageStart: number; pageEnd: number };
-export type TocResult = { chapters: ProposedChapter[]; offset: number | null; verified: number; total: number; method: "numbers" | "titles" };
+export type TocResult = { chapters: ProposedChapter[]; offset: number | null; verified: number; total: number; method: "numbers" | "titles" | "footer" };
 
 const TASHKEEL = /[\u064B-\u065F\u0670\u0640\u06D6-\u06ED]/g;
 export const flat = (s: string) => s.normalize("NFKC").replace(TASHKEEL, "").replace(/[أإآٱ]/g, "ا").replace(/اال/g, "الا") /* لام-ألف مفكوكة بترتيب العرض: «األولى»→«الأولى» */.replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/\s+/g, " ").trim();
@@ -74,7 +75,7 @@ export function parseTocEntries(pageTexts: string[], pageCount: number): TocEntr
 
 /** المستوى المعتمد: الوحدات/الفصول وحدها إن كانت ≥ 4، وإلا كل البنود */
 function chooseLevel(entries: TocEntry[]): TocEntry[] {
-  const top = entries.filter((e) => TOP.test(flat(e.title)));
+  const top = entries.some((e) => e.level) ? entries.filter((e) => e.level === 1) : entries.filter((e) => TOP.test(flat(e.title)));
   return top.length >= 4 ? top : entries;
 }
 
@@ -111,11 +112,37 @@ const tooFine = (ch: ProposedChapter[]) => ch.filter((c) => c.pageEnd === c.page
 /** فهرس ناقص: أول فصل يبدأ بعد ثلث الكتاب (صفحة فهرس أولى لم تُقرأ مثلاً) */
 const partial = (ch: ProposedChapter[], pageCount: number) => ch.length > 0 && ch[0].pageStart > pageCount * 0.3;
 
-export function proposeChapters(pages: { pageNumber: number; text: string }[], pageCount: number): TocResult | null {
+/**
+ * فرق الترقيم من أرقام الصفحات المطبوعة في رأس/ذيل الصفحات نفسها (دليل مستقل عن العناوين).
+ * يعيد أفضل فرق ونسبة الصفحات المؤيِّدة له من عيّنة.
+ */
+export function footerOffset(pages: Map<number, Page>, pageCount: number): { offset: number; support: number } {
+  const sample: number[] = [];
+  for (let n = 8; n <= pageCount - 2; n += Math.max(1, Math.floor(pageCount / 40))) sample.push(n);
+  let best = { offset: 0, support: 0 };
+  for (let off = 0; off <= 16; off++) {
+    let ok = 0;
+    for (const n of sample) {
+      const raw = pages.get(n)?.raw;
+      if (!raw) continue;
+      const lines = toLatinDigits(raw).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const edge = [...lines.slice(0, 2), ...lines.slice(-2)];
+      if (edge.some((l) => new RegExp(`(?:^|\\D)${n - off}(?:\\D|$)`).test(l) && l.length <= 12)) ok++;
+    }
+    const support = sample.length ? ok / sample.length : 0;
+    if (support > best.support) best = { offset: off, support };
+  }
+  return best;
+}
+
+/**
+ * يحوّل بنود فهرس (من النص أو من قراءة الصور) إلى فصول متحقَّق من صفحاتها.
+ * trusted: البنود من قراءة صور الفهرس (عناوين وأرقام نظيفة)؛ يُقبل حينها فرق الترقيم المؤيَّد بأرقام ذيل الصفحات
+ * حين تعجز مطابقة العناوين (نص OCR مشوَّه).
+ */
+export function chaptersFromEntries(pages: { pageNumber: number; text: string }[], pageCount: number, all: TocEntry[], opts: { tocPages?: Set<number>; trusted?: boolean } = {}): TocResult | null {
   const sorted = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
-  const scan = sorted.filter((p) => p.pageNumber <= 14 || p.pageNumber > pageCount - 10);
-  const all = parseTocEntries(scan.map((p) => p.text), pageCount);
-  const tocPageNumbers = new Set(scan.filter((p) => TOC_WORD.test(flat(p.text))).map((p) => p.pageNumber));
+  const tocPageNumbers = opts.tocPages ?? new Set<number>();
   const byPage = new Map<number, Page>(sorted.map((p) => [p.pageNumber, { raw: p.text, flat: flat(p.text) }]));
 
   // الطريقة الأولى: أرقام الصفحات + فرق ترقيم متحقَّق منه
@@ -129,10 +156,20 @@ export function proposeChapters(pages: { pageNumber: number; text: string }[], p
       for (const e of mono) { const p = byPage.get(e.printed! + off); if (p && titleOn(p, e.title)) ok++; }
       if (ok > best.ok) best = { offset: off, ok };
     }
+    const build = (offset: number) => {
+      const kept = mono.filter((e) => e.printed! + offset <= pageCount);
+      return toChapters(kept, kept.map((e) => e.printed! + offset), pageCount);
+    };
     if (best.ok >= Math.ceil(mono.length * 0.6)) {
-      const kept = mono.filter((e) => e.printed! + best.offset <= pageCount);
-      const ch = toChapters(kept, kept.map((e) => e.printed! + best.offset), pageCount);
+      const ch = build(best.offset);
       if (!tooFine(ch) && !partial(ch, pageCount)) return { chapters: ch, offset: best.offset, verified: best.ok, total: mono.length, method: "numbers" };
+    }
+    if (opts.trusted) {
+      const f = footerOffset(byPage, pageCount);
+      if (f.support >= 0.4) {
+        const ch = build(f.offset);
+        if (!tooFine(ch) && !partial(ch, pageCount)) return { chapters: ch, offset: f.offset, verified: Math.round(f.support * 100), total: 100, method: "footer" };
+      }
     }
   }
 
@@ -154,4 +191,16 @@ export function proposeChapters(pages: { pageNumber: number; text: string }[], p
   const ch = toChapters(found.map((f) => f.e), found.map((f) => f.page), pageCount);
   if (tooFine(ch) || partial(ch, pageCount)) return null;
   return { chapters: ch, offset: null, verified: found.length, total: titled.length, method: "titles" };
+}
+
+/** صفحات المحتويات المرشّحة (أول 14 وآخر 10) بحسب كلمة «المحتويات/فهرس» في نصها */
+export function tocCandidatePages(pages: { pageNumber: number; text: string }[], pageCount: number): number[] {
+  return pages.filter((p) => (p.pageNumber <= 14 || p.pageNumber > pageCount - 10) && TOC_WORD.test(flat(p.text))).map((p) => p.pageNumber).sort((a, b) => a - b);
+}
+
+export function proposeChapters(pages: { pageNumber: number; text: string }[], pageCount: number): TocResult | null {
+  const sorted = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
+  const scan = sorted.filter((p) => p.pageNumber <= 14 || p.pageNumber > pageCount - 10);
+  const all = parseTocEntries(scan.map((p) => p.text), pageCount);
+  return chaptersFromEntries(sorted, pageCount, all, { tocPages: new Set(tocCandidatePages(sorted, pageCount)) });
 }
