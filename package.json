@@ -14,6 +14,7 @@
     "db:seed": "prisma db seed",
     "admin:create": "tsx scripts/create-admin.ts",
     "books:reprocess": "tsx --conditions=react-server scripts/reprocess-books.ts",
+    "books:fix-placements": "tsx --conditions=react-server scripts/fix-placements.ts",
     "books:check": "tsx --conditions=react-server scripts/check-books.ts"
   },
   "dependencies": {

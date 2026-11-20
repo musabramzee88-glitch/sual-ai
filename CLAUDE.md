@@ -93,3 +93,4 @@ npm run typecheck && npm run lint && npm run build
 - `books:reprocess -- --damaged` يعيد معالجة كل كتاب فحصه الصحي يحوي UNRELIABLE_TEXT_LAYER أو GARBAGE_CHARS أو LANGUAGE_MISMATCH.
 - التعرّف الإنكليزي من الغلاف يقبل صيغ الصف الصريحة فقط (Primary N / Nth Primary)، وأكثر من رقم مختلف ⇒ low. `placeBook("auto")` يرفض منهجاً فيه كتاب آخر (`OCCUPIED`) فيبقى للمراجعة لتحديد الجزء.
 - `books:reprocess -- --detect` يعيد التعرّف من الغلاف لكل الكتب الجاهزة (دون إعادة القراءة) ويضع غير المربوطة الواثقة.
+- `npm run books:fix-placements [-- --dry]` يصحّح الصف/المادة/النوع/الجزء لكتب مؤكَّدة يخالفها غلافها بثقة عالية (عبر `placeBook` + تدقيق). لا يخمّن جزءاً.
