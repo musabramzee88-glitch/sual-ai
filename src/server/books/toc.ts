@@ -108,8 +108,13 @@ function toChapters(entries: TocEntry[], starts: number[], pageCount: number): P
   }));
 }
 
+/** عناوين بلا اسم («الدرس ١»، «الوحدة الثانية»): لا كلمة مميزة بعد حذف الكلمات العامة والأرقام */
+const nameless = (t: string) => ((flat(t).match(AR_WORD) ?? []).filter((w) => !GENERIC.test(w)).length === 0) && !/[A-Za-z]{3,}/.test(t.replace(/\b(?:unit|lesson|chapter|review)\b/gi, ""));
+/** أكثر من 8 بنود أغلبها بلا اسم: لا يُعرف منها ما يدرّسه كل فصل (مثلاً «الدرس ١…٥» مكررة) */
+const tooGeneric = (ch: ProposedChapter[]) => ch.length > 8 && ch.filter((c) => nameless(c.title)).length > ch.length * 0.5;
+
 /** فهرس فقرات لا فصول: أغلب البنود صفحة واحدة */
-const tooFine = (ch: ProposedChapter[]) => ch.filter((c) => c.pageEnd === c.pageStart).length > ch.length * 0.5;
+const tooFine = (ch: ProposedChapter[]) => ch.filter((c) => c.pageEnd === c.pageStart).length > ch.length * 0.5 || tooGeneric(ch);
 
 /**
  * فهرس ناقص: أول فصل يبدأ بعد ثلث الكتاب، أو آخر فصل يبتلع ما بقي من الكتاب (صفحة فهرس ثانية لم تُقرأ):

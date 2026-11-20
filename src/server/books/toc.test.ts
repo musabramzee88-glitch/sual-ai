@@ -147,3 +147,13 @@ describe("incomplete contents are rejected", () => {
     expect(isSkippableTitle("الوحدة الأولى: النبات")).toBe(false);
   });
 });
+
+describe("nameless lesson lists", () => {
+  it("rejects many 'الدرس ١…٥' entries without names, keeps a few named-less units", () => {
+    const lessons = Array.from({ length: 12 }, (_, i) => ({ title: `الدرس ${"١٢٣٤٥"[i % 5]}`, printed: 8 + i * 3, level: 2 as const }));
+    const p = Array.from({ length: 48 }, (_, i) => ({ pageNumber: i + 1, text: "ضجيج" }));
+    expect(chaptersFromEntries(p, 48, lessons, { trusted: true, knownOffset: 0 })).toBeNull();
+    const units = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة"].map((o, i) => ({ title: `الوحدة ${o}`, printed: 4 + i * 9, level: 1 as const }));
+    expect(chaptersFromEntries(p, 48, units, { trusted: true, knownOffset: 0 })!.chapters).toHaveLength(5);
+  });
+});
