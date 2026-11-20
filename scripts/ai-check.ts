@@ -39,8 +39,12 @@ async function main() {
   for (const r of results) console.log(r.line);
   const working = results.filter((r) => r.ok).map((r) => r.m);
   if (working.length === 0) { console.log("\nلا نموذج يجيب الآن (غالباً حدود المستوى المجاني). أعد المحاولة بعد دقائق."); process.exitCode = 1; return; }
-  if (working.includes(env.GEMINI_MODEL)) console.log(`\n✓ النموذج المضبوط ${env.GEMINI_MODEL} يعمل. لا تغيير مطلوب.`);
-  else console.log(`\n→ النموذج المضبوط (${env.GEMINI_MODEL}) لا يجيب. أضف إلى .env السطر:\nGEMINI_MODEL=${working[0]}`);
+  // الأفضل: غير lite بأعلى رقم نسخة (أدق في العربية وقراءة الصور)، ثم lite
+  const ver = (n: string) => Number(/(\d+(?:\.\d+)?)/.exec(n)?.[1] ?? 0);
+  const ranked = [...working].filter((n) => !/latest|preview/.test(n)).sort((a, b) => Number(/lite/.test(a)) - Number(/lite/.test(b)) || ver(b) - ver(a));
+  const best = ranked[0] ?? working[0];
+  if (working.includes(env.GEMINI_MODEL) && env.GEMINI_MODEL === best) console.log(`\n✓ النموذج المضبوط ${env.GEMINI_MODEL} هو الأفضل المتاح.`);
+  else console.log(`\n→ الأفضل المتاح الآن لمفتاحك: ${best}. ضع في .env السطر:\nGEMINI_MODEL=${best}${ranked.find((n) => /lite/.test(n)) ? `\n(إن نفدت حصته اليومية استعمل ${ranked.find((n) => /lite/.test(n))})` : ""}`);
 }
 
 main().catch((e) => { console.error(`✗ ${(e as Error).message}`); process.exit(1); });
