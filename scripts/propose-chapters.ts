@@ -57,7 +57,7 @@ async function main() {
     const r = proposeChapters(pages, b.pageCount);
     if (!r) { none++; console.log(`✗ ${b.originalName}: لا فهرس موثوق (أدخل فصوله يدوياً)`); continue; }
     found++;
-    console.log(`✓ ${b.originalName}: ${r.chapters.length} فصل (تحقق ${r.verified}/${r.total}، فرق الترقيم ${r.offset})`);
+    console.log(`✓ ${b.originalName}: ${r.chapters.length} فصل (تحقق ${r.verified}/${r.total}، ${r.method === "numbers" ? `بأرقام الفهرس، فرق الترقيم ${r.offset}` : "ببحث العناوين في الصفحات"})`);
     for (const c of r.chapters) console.log(`    ${c.pageStart}–${c.pageEnd}  ${c.title}`);
     if (apply) {
       const res = await replaceChapters({ adminId: admin!.id }, b.curriculumId!, { chapters: r.chapters.map((c) => ({ title: c.title.slice(0, 200), pageStart: c.pageStart, pageEnd: c.pageEnd })) });
