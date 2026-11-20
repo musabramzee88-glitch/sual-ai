@@ -2,7 +2,7 @@
  * يقترح فصول المناهج من صفحة «المحتويات» في كتابها المربوط، ويتحقق من أرقام الصفحات بمطابقة العناوين.
  *   npm run books:chapters             (عرض فقط: ما سيُقترح لكل منهج بلا فصول)
  *   npm run books:chapters -- --apply  (يحفظ المقترح الموثوق في المنهج؛ كل حفظ يُسجَّل في التدقيق)
- *   npm run books:chapters -- --debug نص   (يطبع أول 10 صفحات من كتاب بعينه لفحص شكل الفهرس)
+ *   npm run books:chapters -- --debug نص   (يطبع أول 4 وآخر 8 صفحات من كتاب بعينه لفحص شكل الفهرس)
  *   npm run books:chapters -- --clear نص   (يمسح فصول منهج كتاب بعينه)
  * يتجاوز المناهج التي فيها فصول أصلاً، والتي فيها أكثر من كتاب. ما لم يتحقق منه لا يقترحه (راجعه يدوياً).
  */
@@ -31,9 +31,10 @@ async function main() {
   if (dbg || clr) {
     const key = (dbg ?? clr)!;
     const hits = await db.uploadedBook.findMany({ where: { ownerId: null, OR: [{ id: { contains: key } }, { originalName: { contains: key } }] }, select: { id: true, originalName: true, curriculumId: true } });
-    if (hits.length !== 1) { console.log(hits.length === 0 ? "لا كتاب بهذا الاسم" : `${hits.length} كتب تطابق، دقّق النص`); await db.$disconnect(); return; }
+    if (hits.length !== 1) { console.log(hits.length === 0 ? "لا كتاب بهذا الاسم" : `${hits.length} كتب تطابق، دقّق النص:\n${hits.map((h) => `  - ${h.originalName}`).join("\n")}`); await db.$disconnect(); return; }
     if (dbg) {
-      const pgs = await db.bookPage.findMany({ where: { bookId: hits[0].id, pageNumber: { lte: 10 } }, select: { pageNumber: true, text: true }, orderBy: { pageNumber: "asc" } });
+      const total = (await db.uploadedBook.findUnique({ where: { id: hits[0].id }, select: { pageCount: true } }))?.pageCount ?? 0;
+      const pgs = await db.bookPage.findMany({ where: { bookId: hits[0].id, OR: [{ pageNumber: { lte: 4 } }, { pageNumber: { gt: total - 8 } }] }, select: { pageNumber: true, text: true }, orderBy: { pageNumber: "asc" } });
       for (const p of pgs) console.log(`\n===== صفحة ${p.pageNumber} =====\n${p.text.slice(0, 700)}`);
     } else if (hits[0].curriculumId && admin) {
       const r = await replaceChapters({ adminId: admin.id }, hits[0].curriculumId, { chapters: [] });

@@ -41,3 +41,18 @@ describe("TOC guards", () => {
     expect(e.map((x) => x.title)).toEqual(["الفصل الأول: الحركة", "الفصل الثاني: القوة"]);
   });
 });
+
+describe("TOC at the end of the book", () => {
+  it("finds contents in the last pages and tolerates OCR noise in titles", () => {
+    const toc = "الفهرس\nالفصل الأول: الأعداد الطبيعية ........ 5\nالفصل الثاني: الكسور العادية ........ 20\nالفصل الثالث: الهندسة ........ 35";
+    const p = pages(60, {
+      60: toc,
+      9: "الفصل الاول Xx الأعداد الطبيعية تمهيد", // OCR noise inside the title line
+      24: "الفصل الثاني الكسور العادية تمهيد",
+      39: "الفصل الثالث الهندسة تمهيد",
+    });
+    const r = proposeChapters(p, 60)!;
+    expect(r.offset).toBe(4);
+    expect(r.chapters.map((c) => c.pageStart)).toEqual([9, 24, 39]);
+  });
+});

@@ -46,10 +46,19 @@ export function parseTocEntries(pageTexts: string[], pageCount: number): TocEntr
   return out;
 }
 
+/** العنوان ظاهر في الصفحة: بدايته حرفياً، أو (لتسامح OCR) كلمتان على الأقل من أول ثلاث كلمات */
+function titleOn(pageFlat: string, title: string, head: string): boolean {
+  if (head.length >= 4 && pageFlat.includes(head)) return true;
+  const words = flat(title).replace(/^(?:الفصل|الوحده|الباب|الدرس)\s+\S+\s*/, "").split(" ").filter((w) => w.length >= 3).slice(0, 3);
+  return words.length >= 2 && words.filter((w) => pageFlat.includes(w)).length >= 2;
+}
+
 /** يجد أفضل فرق (صفحة الملف − الصفحة المطبوعة) بالتحقق من ظهور بداية العنوان في الصفحة المتوقعة */
 export function proposeChapters(pages: { pageNumber: number; text: string }[], pageCount: number): TocResult | null {
-  const first = [...pages].sort((a, b) => a.pageNumber - b.pageNumber).filter((p) => p.pageNumber <= 14).map((p) => p.text);
-  const entries = parseTocEntries(first, pageCount);
+  // المحتويات في الكتب العراقية قد تكون في أول الكتاب أو في آخره: نفحص أول 14 صفحة وآخر 10
+  const sorted = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
+  const scan = sorted.filter((p) => p.pageNumber <= 14 || p.pageNumber > pageCount - 10).map((p) => p.text);
+  const entries = parseTocEntries(scan, pageCount);
   if (entries.length < 2) return null;
   const byPage = new Map(pages.map((p) => [p.pageNumber, flat(p.text)]));
   const head = (t: string) => flat(t).replace(/^(?:الفصل|الوحده|الباب|الدرس)\s+\S+\s*/, "").replace(/^[:\-\s]+/, "").slice(0, 14);
@@ -59,7 +68,7 @@ export function proposeChapters(pages: { pageNumber: number; text: string }[], p
     for (const e of entries) {
       const p = byPage.get(e.printed + off);
       const h = head(e.title);
-      if (p && h.length >= 4 && p.includes(h)) ok++;
+      if (p && titleOn(p, e.title, h)) ok++;
     }
     if (ok > best.ok) best = { offset: off, ok };
   }
