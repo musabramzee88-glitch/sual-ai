@@ -90,7 +90,7 @@ export type ReviewCard = {
 export type ReviewLabels = {
   reviewTitle: string; reviewEmpty: string; reviewHint: string; confirm: string; confirmAll: string; sureTag: string; checkTag: string; autoTag: string; working: string; needsOcrTag: string; readOcr: string;
   fromCover: string; pickGrade: string; pickSubject: string; track: string; grade: string; subject: string; kind: string; remove: string; ocrPage: string; failedOcr: string;
-  part: string; parts: string[]; partConflict: string;
+  part: string; parts: string[]; partConflict: string; more: string;
 };
 type Sel = { track: string; grade: string; subject: string; kind: string; part: number };
 
@@ -149,7 +149,7 @@ export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds, occu
           return (
             <article key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.sure && complete(c) ? "border-brand/50" : "border-line"} bg-surface`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/v1/admin/books/${c.id}/cover`} alt="" loading="lazy" className="h-44 w-32 shrink-0 rounded-lg border border-line bg-line object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+              <img src={`/api/v1/admin/books/${c.id}/cover`} alt="" loading="lazy" className="h-64 w-44 shrink-0 rounded-lg border border-line bg-line object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-1 text-[11px]">
                   {c.working ? <span className="text-muted">{t.working}{c.pageCount ? ` ${c.processedPages}/${c.pageCount}` : ""}</span>
@@ -161,18 +161,24 @@ export function ReviewBoard({ items, t, L, tracks, grades, subjects, kinds, occu
                 <div className="truncate text-[11px] text-muted" dir="auto" title={c.name}>{c.name}</div>
                 <select className={sc} value={g.grade} onChange={(e) => set(c, { grade: e.target.value })} aria-label={t.grade}><option value="">{t.pickGrade}</option>{grades.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                 <select className={sc} value={g.subject} onChange={(e) => set(c, { subject: e.target.value })} aria-label={t.subject}><option value="">{t.pickSubject}</option>{subjects.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                {/* الصف والمادة فقط ظاهران؛ النوع والمسار والجزء والتفاصيل خلف «المزيد» (تُفتح تلقائياً عند الحاجة) */}
+                <details className="text-xs" open={g.part > 0 || g.kind !== "TEXTBOOK" || conflict(c) || c.problems.some((p) => p.severity === "error")}>
+                  <summary className="cursor-pointer text-muted">{t.more}{c.problems.length > 0 ? ` · ${c.problems.length}` : ""}</summary>
+                  <div className="mt-1.5 space-y-1.5">
                 <div className="flex gap-1.5">
-                  <select className={sc} value={g.kind} onChange={(e) => set(c, { kind: e.target.value })} aria-label={t.kind}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-                  <select className={sc} value={g.track} onChange={(e) => set(c, { track: e.target.value })} aria-label={t.track}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-                </div>
-                <select className={sc} value={g.part} onChange={(e) => set(c, { part: Number(e.target.value) })} aria-label={t.part}>{t.parts.map((l, i) => <option key={i} value={i}>{l}</option>)}</select>
-                {c.problems.length > 0 && (
-                  <ul className="space-y-0.5 text-[11px]">
-                    {c.problems.map((p, k) => <li key={k} className={p.severity === "error" ? "text-danger" : "text-muted"}>{p.severity === "error" ? "✗" : "!"} {p.text}</li>)}
-                  </ul>
-                )}
-                {conflict(c) && <div role="status" className="rounded-lg bg-accent-soft px-2 py-1 text-[11px] text-danger">{t.partConflict}</div>}
-                {c.evidence && <div className="line-clamp-2 text-[11px] text-muted" dir="auto">{c.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{c.evidence}»</div>}
+                    <select className={sc} value={g.kind} onChange={(e) => set(c, { kind: e.target.value })} aria-label={t.kind}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                    <select className={sc} value={g.track} onChange={(e) => set(c, { track: e.target.value })} aria-label={t.track}>{tracks.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                  </div>
+                  <select className={sc} value={g.part} onChange={(e) => set(c, { part: Number(e.target.value) })} aria-label={t.part}>{t.parts.map((l, i) => <option key={i} value={i}>{l}</option>)}</select>
+                  {c.problems.length > 0 && (
+                    <ul className="space-y-0.5 text-[11px]">
+                      {c.problems.map((p, k) => <li key={k} className={p.severity === "error" ? "text-danger" : "text-muted"}>{p.severity === "error" ? "✗" : "!"} {p.text}</li>)}
+                    </ul>
+                  )}
+                  {conflict(c) && <div role="status" className="rounded-lg bg-accent-soft px-2 py-1 text-[11px] text-danger">{t.partConflict}</div>}
+                  {c.evidence && <div className="line-clamp-2 text-[11px] text-muted" dir="auto">{c.source === "ocr" ? "OCR · " : ""}{t.fromCover}: «{c.evidence}»</div>}
+                  </div>
+                </details>
                 {errs[c.id] && <div role="alert" className="text-xs text-danger">{errs[c.id]}</div>}
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <button className="rounded-lg bg-brand px-3 py-1 text-xs font-semibold text-white disabled:opacity-40 dark:text-paper" disabled={busy || !complete(c)} onClick={() => confirm([c])}>{t.confirm}</button>

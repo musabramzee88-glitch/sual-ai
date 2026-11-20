@@ -44,7 +44,7 @@ export default async function Page() {
         items={review.map((r) => ({ ...r, name: r.originalName }))} occupied={occupied}
         tracks={tracks.map((x) => [x.code, pick(x)])} grades={grades.map((x) => [x.code, pick(x)])} subjects={subjects.map((x) => [x.code, pick(x)])} kinds={Object.entries(t.cur.kinds)}
         t={{
-          reviewTitle: b.reviewTitle, reviewEmpty: b.reviewEmpty, reviewHint: b.reviewHint, confirm: b.confirm, confirmAll: b.confirmAll, sureTag: b.sureTag, checkTag: b.checkTag, autoTag: b.autoTag,
+          reviewTitle: b.reviewTitle, reviewEmpty: b.reviewEmpty, reviewHint: b.reviewHint, confirm: b.confirm, confirmAll: b.confirmAll, more: b.more, sureTag: b.sureTag, checkTag: b.checkTag, autoTag: b.autoTag,
           working: b.working, needsOcrTag: b.needsOcrTag, readOcr: b.readOcr, fromCover: b.fromCover, pickGrade: b.pickGrade, pickSubject: b.pickSubject, track: t.cur.track, grade: t.cur.grade, subject: t.cur.subject,
           kind: t.cur.kind, remove: b.remove, ocrPage: b.ocrPage, failedOcr: b.failedOcr, part: t.cur.part, parts: t.cur.parts, partConflict: b.partConflict,
         }}
