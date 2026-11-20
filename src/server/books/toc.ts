@@ -12,13 +12,13 @@ export type ProposedChapter = { title: string; pageStart: number; pageEnd: numbe
 export type TocResult = { chapters: ProposedChapter[]; offset: number | null; verified: number; total: number; method: "numbers" | "titles" };
 
 const TASHKEEL = /[\u064B-\u065F\u0670\u0640\u06D6-\u06ED]/g;
-export const flat = (s: string) => s.normalize("NFKC").replace(TASHKEEL, "").replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/\s+/g, " ").trim();
+export const flat = (s: string) => s.normalize("NFKC").replace(TASHKEEL, "").replace(/[أإآٱ]/g, "ا").replace(/اال/g, "الا") /* لام-ألف مفكوكة بترتيب العرض: «األولى»→«الأولى» */.replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/\s+/g, " ").trim();
 const toLatinDigits = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
 const LEADER = /[\s.·…_\-–—]+/;
 // \b لا يعمل مع الحروف العربية في JS: الحدّ مسافة أو نقطتان أو رقم أو نهاية
 const TOP = /^(?:الفصل|الوحده|الباب|unit|chapter)(?=[\s:\d/]|$)/i;
 const TOC_WORD = /المحتويات|محتويات|المحتوى|فهرس|الفهرست|contents/i;
-const SKIP = /^(?:المقدمه|مقدمه|اسئله الفصل|تمارين الفصل|الموضوع|رقم الصفحه|(?:ت )?الموضوع.*الصفحه.*)$/;
+const SKIP = /^(?:المقدمه|مقدمه|الموضوع|رقم الصفحه|(?:ت )?الموضوع.*الصفحه.*|(?:اسئله|تمارين|اختبار) (?:الفصل|الوحده).*|الاختبار القبلي|تمرينات الفصول|الفصولتمرينات|معجم .*|محتويات الكتاب)$/;
 const AR_WORD = /[\u0621-\u064A]{2,}/g;
 
 /** عنوان نظيف: بلا ترقيم أو رموز OCR في أوله وآخره، ولا أرقام صفحات ملتصقة به */
@@ -78,13 +78,21 @@ function chooseLevel(entries: TocEntry[]): TocEntry[] {
   return top.length >= 4 ? top : entries;
 }
 
+const GENERIC = /^(?:الفصل|الوحده|الباب|الدرس|الجزء|الاول|الاولي|الثاني|الثانيه|الثالث|الثالثه|الرابع|الرابعه|الخامس|الخامسه|السادس|السادسه|السابع|السابعه|الثامن|الثامنه|التاسع|التاسعه|العاشر|العاشره|الحادي|الحاديه|عشر|عشره)$/;
+
+/** أول 4 سطور غير فارغة من الصفحة (مطبّعة) */
+const headLines = (raw: string) => raw.split(/\r?\n/).map(flat).filter((l) => l.length > 0).slice(0, 4);
+
 /** العنوان ظاهر في الصفحة: بدايته حرفياً، أو معظم كلماته (تسامح مع OCR) */
-function titleOn(pageFlat: string, title: string): boolean {
+type Page = { raw: string; flat: string };
+function titleOn(page: Page, title: string): boolean {
+  const pageFlat = page.flat;
   const f = flat(title);
   const head = f.replace(/^(?:الفصل|الوحده|الباب|الدرس)\s+\S+\s*/, "").replace(/^[:\-\s]+/, "").slice(0, 14);
   if (head.length >= 5 && pageFlat.includes(head)) return true;
-  const words = (f.match(AR_WORD) ?? []).filter((w) => w.length >= 3 && !/^(?:الفصل|الوحده|الباب|الدرس|الاول|الثاني|الثالث|الرابع|الخامس|السادس)$/.test(w)).slice(0, 6);
-  if (words.length === 0) return false;
+  const words = (f.match(AR_WORD) ?? []).filter((w) => w.length >= 3 && !GENERIC.test(w)).slice(0, 6);
+  // عنوان عام بلا اسم («الوحدة الأولى»): يُقبل فقط في رأس الصفحة (لا إشارة عابرة إليه في نص آخر)
+  if (words.length === 0) return f.length >= 6 && headLines(page.raw).some((l) => l.startsWith(f) && l.length <= f.length + 25);
   if (words.length === 1) return words[0].length >= 5 && pageFlat.includes(words[0]);
   return words.filter((w) => pageFlat.includes(w)).length >= Math.max(2, Math.ceil(words.length * 0.7));
 }
@@ -100,12 +108,15 @@ function toChapters(entries: TocEntry[], starts: number[], pageCount: number): P
 /** فهرس فقرات لا فصول: أغلب البنود صفحة واحدة */
 const tooFine = (ch: ProposedChapter[]) => ch.filter((c) => c.pageEnd === c.pageStart).length > ch.length * 0.5;
 
+/** فهرس ناقص: أول فصل يبدأ بعد ثلث الكتاب (صفحة فهرس أولى لم تُقرأ مثلاً) */
+const partial = (ch: ProposedChapter[], pageCount: number) => ch.length > 0 && ch[0].pageStart > pageCount * 0.3;
+
 export function proposeChapters(pages: { pageNumber: number; text: string }[], pageCount: number): TocResult | null {
   const sorted = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
   const scan = sorted.filter((p) => p.pageNumber <= 14 || p.pageNumber > pageCount - 10);
   const all = parseTocEntries(scan.map((p) => p.text), pageCount);
   const tocPageNumbers = new Set(scan.filter((p) => TOC_WORD.test(flat(p.text))).map((p) => p.pageNumber));
-  const byPage = new Map(sorted.map((p) => [p.pageNumber, flat(p.text)]));
+  const byPage = new Map<number, Page>(sorted.map((p) => [p.pageNumber, { raw: p.text, flat: flat(p.text) }]));
 
   // الطريقة الأولى: أرقام الصفحات + فرق ترقيم متحقَّق منه
   const numbered = chooseLevel(all.filter((e) => e.printed !== null));
@@ -121,7 +132,7 @@ export function proposeChapters(pages: { pageNumber: number; text: string }[], p
     if (best.ok >= Math.ceil(mono.length * 0.6)) {
       const kept = mono.filter((e) => e.printed! + best.offset <= pageCount);
       const ch = toChapters(kept, kept.map((e) => e.printed! + best.offset), pageCount);
-      if (!tooFine(ch)) return { chapters: ch, offset: best.offset, verified: best.ok, total: mono.length, method: "numbers" };
+      if (!tooFine(ch) && !partial(ch, pageCount)) return { chapters: ch, offset: best.offset, verified: best.ok, total: mono.length, method: "numbers" };
     }
   }
 
@@ -138,8 +149,9 @@ export function proposeChapters(pages: { pageNumber: number; text: string }[], p
       if (t && titleOn(t, e.title)) { found.push({ e, page: p }); cursor = p + 1; break; }
     }
   }
-  if (found.length < 3 || found.length < Math.ceil(titled.length * 0.6)) return null;
+  // البحث بالعناوين أضعف من الأرقام: يلزم العثور على 80% منها
+  if (found.length < 3 || found.length < Math.ceil(titled.length * 0.8)) return null;
   const ch = toChapters(found.map((f) => f.e), found.map((f) => f.page), pageCount);
-  if (tooFine(ch)) return null;
+  if (tooFine(ch) || partial(ch, pageCount)) return null;
   return { chapters: ch, offset: null, verified: found.length, total: titled.length, method: "titles" };
 }

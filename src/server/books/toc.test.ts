@@ -73,3 +73,24 @@ describe("chapters by title search when OCR destroyed the page numbers", () => {
     expect(r.chapters[3].pageEnd).toBe(80);
   });
 });
+
+describe("TOC guards from real books", () => {
+  it("a contents list covering only the second half of the book is rejected (first TOC page missed)", () => {
+    const toc = "المحتويات\nالفصل 5 : الهندسة والقياس 96\nالفصل 6: الهندسة الإحداثية 123\nالفصل 7: الإحصاء والاحتمالات 146";
+    const p = pages(196, { 4: toc, 96: "الفصل 5 الهندسة والقياس", 123: "الفصل 6 الهندسة الإحداثية", 146: "الفصل 7 الإحصاء والاحتمالات" });
+    expect(proposeChapters(p, 196)).toBeNull();
+  });
+  it("generic unit titles are located only at the top of a page, broken lam-alef is normalized", () => {
+    const toc = "المحتويات\nالوحدة األولى\nالوحدة الثانية\nالوحدة الثالثة";
+    const p = pages(60, {
+      3: toc,
+      5: "الوحدة الأولى\nنص", 12: "نتذكر ما درسنا في الوحدة الأولى والوحدة الثانية والوحدة الثالثة", // إشارة عابرة لا تُعدّ
+      20: "الوحدة الثانية\nنص", 40: "الوحدة الثالثة\nنص",
+    });
+    expect(proposeChapters(p, 60)!.chapters.map((c) => c.pageStart)).toEqual([5, 20, 40]);
+  });
+  it("tests, pre-tests and glossaries are not chapters", () => {
+    const e = parseTocEntries(["المحتويات\nالاختبار القبلي 7\nالدرس 1-1 الحساب الذهني 8\nاختبار الفصل 30\nمعجم الطالب 93\nتمرينات الفصول 183"], 196);
+    expect(e.map((x) => x.title)).toEqual(["الدرس 1-1 الحساب الذهني"]);
+  });
+});
