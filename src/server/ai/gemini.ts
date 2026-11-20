@@ -36,14 +36,14 @@ function retryDelayMs(body: unknown): number | null {
   return null;
 }
 
-async function post(path: string, body: unknown, attempts = 5): Promise<unknown> {
+async function post(path: string, body: unknown, attempts = 5, timeoutMs = 180_000): Promise<unknown> {
   let last: AiError | null = null;
   for (let i = 0; i < attempts; i++) {
     const res = await fetch(`${BASE}/${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key() },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const json = await res.json().catch(() => null);
     if (res.ok) return json;
@@ -52,7 +52,11 @@ async function post(path: string, body: unknown, attempts = 5): Promise<unknown>
       last = new AiError(res.status === 429 ? "QUOTA" : "HTTP", msg);
       // حصة يومية منتهية لا تفيد معها إعادة المحاولة القريبة
       if (res.status === 429 && /per day|daily|PerDay/i.test(msg)) throw last;
-      await sleep(retryDelayMs(json) ?? Math.min(60_000, 2000 * 2 ** i));
+      if (i + 1 >= attempts) break;
+      const wait = retryDelayMs(json) ?? Math.min(60_000, 2000 * 2 ** i);
+      // يُطبع حتى لا يبدو الأمر معلّقاً (بلا المفتاح)
+      console.warn(`[ai] ${res.status === 429 ? "حدّ الطلبات" : `الخادم مشغول (${res.status})`} — إعادة بعد ${Math.round(wait / 1000)} ث (${i + 1}/${attempts - 1})`);
+      await sleep(wait);
       continue;
     }
     throw new AiError("HTTP", msg);
@@ -60,13 +64,13 @@ async function post(path: string, body: unknown, attempts = 5): Promise<unknown>
   throw last ?? new AiError("HTTP", "فشل الطلب");
 }
 
-export async function geminiJson<T>(opts: { prompt: string; images?: Image[]; schema: object; maxOutputTokens?: number; model?: string }): Promise<T> {
+export async function geminiJson<T>(opts: { prompt: string; images?: Image[]; schema: object; maxOutputTokens?: number; model?: string; attempts?: number; timeoutMs?: number }): Promise<T> {
   const model = opts.model ?? env.GEMINI_MODEL;
   const parts: object[] = [{ text: opts.prompt }, ...(opts.images ?? []).map((im) => ({ inlineData: { mimeType: im.mime, data: im.data.toString("base64") } }))];
   const res = (await post(`models/${encodeURIComponent(model)}:generateContent`, {
     contents: [{ role: "user", parts }],
     generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: opts.schema, maxOutputTokens: opts.maxOutputTokens ?? 8192 },
-  })) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
+  }, opts.attempts ?? 5, opts.timeoutMs ?? 180_000)) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
   if (res.promptFeedback?.blockReason) throw new AiError("BLOCKED", res.promptFeedback.blockReason);
   const text = res.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   try {
