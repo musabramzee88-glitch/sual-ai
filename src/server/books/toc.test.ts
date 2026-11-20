@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chaptersFromEntries, parseTocEntries, proposeChapters } from "./toc";
+import { chaptersFromEntries, isSkippableTitle, parseTocEntries, proposeChapters } from "./toc";
 
 const filler = (n: number) => `نص عادي للصفحة ${n} عن التمارين والأنشطة المختلفة`;
 const pages = (n: number, set: Record<number, string>) => Array.from({ length: n }, (_, i) => ({ pageNumber: i + 1, text: set[i + 1] ?? filler(i + 1) }));
@@ -120,15 +120,30 @@ describe("entries read from contents images (trusted)", () => {
 describe("offset known from page numbers printed on the images", () => {
   it("builds chapters from the known offset even when no title can be matched", () => {
     const entries = [
-      { title: "الدرس ١ مفهوم المئة", printed: 6, level: 2 as const },
-      { title: "الدرس ٢ الأعداد", printed: 8, level: 2 as const },
-      { title: "الدرس ٣ القيمة المكانية", printed: 10, level: 2 as const },
-      { title: "الدرس ٤ قراءة العدد", printed: 12, level: 2 as const },
+      { title: "الدرس ١ مفهوم المئة", printed: 2, level: 2 as const },
+      { title: "الدرس ٢ الأعداد", printed: 5, level: 2 as const },
+      { title: "الدرس ٣ القيمة المكانية", printed: 8, level: 2 as const },
+      { title: "الدرس ٤ قراءة العدد", printed: 11, level: 2 as const },
     ];
-    const p = Array.from({ length: 40 }, (_, i) => ({ pageNumber: i + 1, text: "ضجيج" }));
-    expect(chaptersFromEntries(p, 40, entries, { trusted: true })).toBeNull();
-    const r = chaptersFromEntries(p, 40, entries, { trusted: true, knownOffset: 2 })!;
+    const p = Array.from({ length: 20 }, (_, i) => ({ pageNumber: i + 1, text: "ضجيج" }));
+    expect(chaptersFromEntries(p, 20, entries, { trusted: true })).toBeNull();
+    const r = chaptersFromEntries(p, 20, entries, { trusted: true, knownOffset: 2 })!;
     expect(r.method).toBe("printed");
-    expect(r.chapters.map((c) => c.pageStart)).toEqual([8, 10, 12, 14]);
+    expect(r.chapters.map((c) => c.pageStart)).toEqual([4, 7, 10, 13]);
+  });
+});
+
+describe("incomplete contents are rejected", () => {
+  it("a last chapter swallowing half the book means a contents page was missed", () => {
+    const entries = [6, 8, 10, 12, 14, 16].map((n, i) => ({ title: `الدرس ${i + 1} موضوع ${i + 1}`, printed: n, level: 2 as const }));
+    const p = Array.from({ length: 180 }, (_, i) => ({ pageNumber: i + 1, text: "ضجيج" }));
+    expect(chaptersFromEntries(p, 180, entries, { trusted: true, knownOffset: 0 })).toBeNull();
+  });
+  it("introduction and contents entries are not chapters", () => {
+    expect(isSkippableTitle("المقدمة")).toBe(true);
+    expect(isSkippableTitle("محتويات الكتاب")).toBe(true);
+    expect(isSkippableTitle("المحتويات")).toBe(true);
+    expect(isSkippableTitle("Contents")).toBe(true);
+    expect(isSkippableTitle("الوحدة الأولى: النبات")).toBe(false);
   });
 });

@@ -3,7 +3,7 @@
  *   npm run books:chapters:ai                (عرض فقط)
  *   npm run books:chapters:ai -- --apply     (يحفظ الموثوق عبر replaceChapters مع التدقيق)
  *   npm run books:chapters:ai -- --match نص  (كتب بعينها)
- *   npm run books:chapters:ai -- --retry     (يعيد سؤال الكتب التي تعذّر التحقق من ردها المخزَّن القديم)
+ *   npm run books:chapters:ai -- --retry     (يعيد سؤال الكتب التي فشلت سابقاً، مرة واحدة لكل كتاب)
  * لكل كتاب طلب واحد (حتى 6 صور). الرد يُحفظ في STORAGE_DIR/ai-cache فإعادة التشغيل (أو --apply بعد العرض) لا تستهلك الحصة.
  * عند انتهاء الحصة اليومية يتوقف، وأعد تشغيله غداً فيكمل الباقي.
  */
@@ -23,7 +23,7 @@ async function main() {
   const apply = process.argv.includes("--apply");
   const matches = process.argv.flatMap((a, i, all) => (a === "--match" && all[i + 1] ? [all[i + 1]] : []));
   const { db } = await import("../src/server/db");
-  const { readTocWithVision, cacheLacksPrinted } = await import("../src/server/books/toc-vision");
+  const { readTocWithVision } = await import("../src/server/books/toc-vision");
   const retry = process.argv.includes("--retry");
   const { replaceChapters } = await import("../src/server/admin/curriculum");
   const { AiError } = await import("../src/server/ai/gemini");
@@ -47,7 +47,7 @@ async function main() {
     try {
       let r = await readTocWithVision(b.id);
       // رد قديم بلا أرقام الصفحات المطبوعة وتعذّر التحقق منه: سؤال جديد (يستهلك طلباً واحداً)
-      if (!r.result && retry && r.cached && (await cacheLacksPrinted(b.id))) r = await readTocWithVision(b.id, { refresh: true });
+      if (!r.result && retry && r.cached) r = await readTocWithVision(b.id, { refresh: true });
       if (!r.result) {
         fail++;
         console.log(`✗ ${tag}: ${r.isContents ? `قُرئ الفهرس (${r.entries} بنداً) لكن تعذّر التحقق من صفحاته` : "لم يُعثر على صفحة محتويات في الصفحات المرسلة"} (ص ${r.sentPages.join("،")})`);

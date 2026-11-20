@@ -39,12 +39,23 @@ function retryDelayMs(body: unknown): number | null {
 async function post(path: string, body: unknown, attempts = 5, timeoutMs = 180_000): Promise<unknown> {
   let last: AiError | null = null;
   for (let i = 0; i < attempts; i++) {
-    const res = await fetch(`${BASE}/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key() },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key() },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (e) {
+      // انقطاع الشبكة أو مهلة: يُعاد مثل 503
+      last = new AiError("HTTP", (e as Error).name === "TimeoutError" ? "انتهت مهلة الطلب" : `تعذّر الاتصال (${(e as Error).message})`);
+      if (i + 1 >= attempts) break;
+      const wait = Math.min(60_000, 3000 * 2 ** i);
+      console.warn(`[ai] ${last.message} — إعادة بعد ${Math.round(wait / 1000)} ث (${i + 1}/${attempts - 1})`);
+      await sleep(wait);
+      continue;
+    }
     const json = await res.json().catch(() => null);
     if (res.ok) return json;
     const msg = (json as { error?: { message?: string } })?.error?.message?.slice(0, 300) ?? `HTTP ${res.status}`;

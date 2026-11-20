@@ -19,7 +19,9 @@ const LEADER = /[\s.·…_\-–—]+/;
 // \b لا يعمل مع الحروف العربية في JS: الحدّ مسافة أو نقطتان أو رقم أو نهاية
 const TOP = /^(?:الفصل|الوحده|الباب|unit|chapter)(?=[\s:\d/]|$)/i;
 const TOC_WORD = /المحتويات|محتويات|المحتوى|فهرس|الفهرست|contents/i;
-const SKIP = /^(?:المقدمه|مقدمه|الموضوع|رقم الصفحه|(?:ت )?الموضوع.*الصفحه.*|(?:اسئله|تمارين|اختبار) (?:الفصل|الوحده).*|الاختبار القبلي|تمرينات الفصول|الفصولتمرينات|معجم .*|محتويات الكتاب)$/;
+const SKIP = /^(?:المقدمه|مقدمه|الموضوع|رقم الصفحه|(?:ت )?الموضوع.*الصفحه.*|(?:اسئله|تمارين|اختبار) (?:الفصل|الوحده).*|الاختبار القبلي|تمرينات الفصول|الفصولتمرينات|معجم .*|(?:محتويات الكتاب|المحتويات|الفهرس|فهرس الكتاب|المصادر|المراجع)|contents|introduction|glossary|word list)$/i;
+/** بند ليس فصلاً (مقدمة، فهرس، اختبار، معجم…) */
+export const isSkippableTitle = (t: string) => SKIP.test(flat(t).replace(/[().:،,-]+$/g, "").trim());
 const AR_WORD = /[\u0621-\u064A]{2,}/g;
 
 /** عنوان نظيف: بلا ترقيم أو رموز OCR في أوله وآخره، ولا أرقام صفحات ملتصقة به */
@@ -109,8 +111,18 @@ function toChapters(entries: TocEntry[], starts: number[], pageCount: number): P
 /** فهرس فقرات لا فصول: أغلب البنود صفحة واحدة */
 const tooFine = (ch: ProposedChapter[]) => ch.filter((c) => c.pageEnd === c.pageStart).length > ch.length * 0.5;
 
-/** فهرس ناقص: أول فصل يبدأ بعد ثلث الكتاب (صفحة فهرس أولى لم تُقرأ مثلاً) */
-const partial = (ch: ProposedChapter[], pageCount: number) => ch.length > 0 && ch[0].pageStart > pageCount * 0.3;
+/**
+ * فهرس ناقص: أول فصل يبدأ بعد ثلث الكتاب، أو آخر فصل يبتلع ما بقي من الكتاب (صفحة فهرس ثانية لم تُقرأ):
+ * آخر فصل أطول من 30% من الكتاب وأطول من ثلاثة أضعاف وسيط الفصول.
+ */
+const partial = (ch: ProposedChapter[], pageCount: number) => {
+  if (ch.length === 0) return false;
+  if (ch[0].pageStart > pageCount * 0.3) return true;
+  const lens = ch.map((c) => c.pageEnd - c.pageStart + 1);
+  const median = [...lens].sort((a, b) => a - b)[Math.floor(lens.length / 2)];
+  const last = lens[lens.length - 1];
+  return ch.length >= 3 && last > pageCount * 0.3 && last > median * 3;
+};
 
 /**
  * فرق الترقيم من أرقام الصفحات المطبوعة في رأس/ذيل الصفحات نفسها (دليل مستقل عن العناوين).
@@ -196,6 +208,9 @@ export function chaptersFromEntries(pages: { pageNumber: number; text: string }[
   // البحث بالعناوين أضعف من الأرقام: يلزم العثور على 80% منها
   if (found.length < 3 || found.length < Math.ceil(titled.length * 0.8)) return null;
   const ch = toChapters(found.map((f) => f.e), found.map((f) => f.page), pageCount);
+  // بالبحث وحده: وحدة من صفحة واحدة بين وحدات قليلة من المستوى نفسه = مطابقة خاطئة غالباً
+  const sameLevel = new Set(found.map((f) => f.e.level ?? (TOP.test(flat(f.e.title)) ? 1 : 2))).size === 1;
+  if (sameLevel && ch.length <= 8 && ch.some((c) => c.pageEnd === c.pageStart)) return null;
   if (tooFine(ch) || partial(ch, pageCount)) return null;
   return { chapters: ch, offset: null, verified: found.length, total: titled.length, method: "titles" };
 }

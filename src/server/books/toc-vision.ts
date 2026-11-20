@@ -6,7 +6,7 @@ import { env } from "../env";
 import { currentModel, geminiJson } from "../ai/gemini";
 import { renderPagesJpeg } from "./page-image";
 import { fileOf } from "./service";
-import { chaptersFromEntries, tocCandidatePages, type TocEntry, type TocResult } from "./toc";
+import { chaptersFromEntries, isSkippableTitle, tocCandidatePages, type TocEntry, type TocResult } from "./toc";
 
 /**
  * قراءة صفحة «المحتويات» بنموذج رؤية (Gemini) لكتب فهرسها جدول مصوَّر أو أفسد OCR أرقامه.
@@ -35,7 +35,8 @@ const SCHEMA = {
 };
 
 const PROMPT = `These images are pages from an Iraqi school textbook (Arabic or English), given in order (image 1, image 2, ...).
-1) If one or more of them is the table of contents (المحتويات / الفهرس / Contents), extract EVERY entry in order:
+1) If one or more of them is the table of contents (المحتويات / الفهرس / Contents, including an English "Course map",
+   "Scope and sequence" or "Map of the book" table that lists units with page numbers), extract EVERY entry in order:
    - title: exactly as printed (keep Arabic spelling), WITHOUT the page number, dots or leaders.
    - page: the printed page number where it starts (convert Arabic-Indic digits ٠-٩ to normal digits), or null if not printed.
    - level: 1 for a unit/chapter/part (الوحدة، الفصل، الباب، Unit, Chapter), 2 for a lesson or sub-topic inside it.
@@ -95,18 +96,24 @@ export async function readTocWithVision(bookId: string, opts: { refresh?: boolea
     const edges = valid([2, 3, 4, 5, pageCount - 1, pageCount]);
     const found = tocCandidatePages(pages, pageCount);
     // الصفحة المرشّحة من النص وتاليتها؛ وإلا أطراف الكتاب حيث يكون الفهرس عادة
-    const first = found.length ? valid(found.flatMap((n) => [n, n + 1])).slice(0, 6) : edges;
+    // الفهرس قد يمتد صفحتين أو ثلاثاً: السابقة والتاليتان
+    const first = found.length ? valid(found.flatMap((n) => [n - 1, n, n + 1, n + 2])).slice(0, 6) : edges;
     data = await ask(book.storageKey, first);
     // الترشيح من النص أخطأ (كلمة «المحتويات» في صفحة أخرى): محاولة ثانية بأطراف الكتاب
     if (!data.isContents && found.length) {
       const rest = edges.filter((n) => !first.includes(n));
       if (rest.length) data = await ask(book.storageKey, rest);
     }
+    // ثالثاً: صفحات 6–9 (كتب الإنكليزي تضع «Course map» بعد صفحات الافتتاح)
+    if (!data.isContents) {
+      const deeper = valid([6, 7, 8, 9]).filter((n) => !data!.pages.includes(n));
+      if (deeper.length) data = await ask(book.storageKey, deeper);
+    }
     await mkdir(path.dirname(cacheFile(bookId)), { recursive: true });
     await writeFile(cacheFile(bookId), JSON.stringify(data, null, 1));
   }
   const entries: TocEntry[] = data.entries
-    .filter((e) => e.title.length >= 2 && (e.page === null || (e.page >= 1 && e.page <= pageCount)))
+    .filter((e) => e.title.length >= 2 && !isSkippableTitle(e.title) && (e.page === null || (e.page >= 1 && e.page <= pageCount)))
     .map((e) => ({ title: e.title.slice(0, 200), printed: e.page, level: e.level as 1 | 2 }));
   const knownOffset = data.printed?.length ? offsetFromPrinted(data.printed) : null;
   const result = data.isContents && entries.length >= 3
