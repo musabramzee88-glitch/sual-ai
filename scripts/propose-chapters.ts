@@ -2,6 +2,8 @@
  * يقترح فصول المناهج من صفحة «المحتويات» في كتابها المربوط، ويتحقق من أرقام الصفحات بمطابقة العناوين.
  *   npm run books:chapters             (عرض فقط: ما سيُقترح لكل منهج بلا فصول)
  *   npm run books:chapters -- --apply  (يحفظ المقترح الموثوق في المنهج؛ كل حفظ يُسجَّل في التدقيق)
+ *   npm run books:chapters -- --debug نص   (يطبع أول 10 صفحات من كتاب بعينه لفحص شكل الفهرس)
+ *   npm run books:chapters -- --clear نص   (يمسح فصول منهج كتاب بعينه)
  * يتجاوز المناهج التي فيها فصول أصلاً، والتي فيها أكثر من كتاب. ما لم يتحقق منه لا يقترحه (راجعه يدوياً).
  */
 import { readFileSync } from "node:fs";
@@ -22,8 +24,24 @@ async function main() {
   const { proposeChapters } = await import("../src/server/books/toc");
   const { replaceChapters } = await import("../src/server/admin/curriculum");
   const admin = await db.adminUser.findFirst({ where: { isActive: true }, orderBy: { createdAt: "asc" } });
-  if (apply && !admin) { console.error("لا يوجد مدير فعّال"); process.exitCode = 1; return; }
+  if ((apply || process.argv.includes("--clear")) && !admin) { console.error("لا يوجد مدير فعّال"); process.exitCode = 1; return; }
 
+  const arg = (n: string) => { const i = process.argv.indexOf(`--${n}`); return i > -1 ? process.argv[i + 1] : undefined; };
+  const dbg = arg("debug"), clr = arg("clear");
+  if (dbg || clr) {
+    const key = (dbg ?? clr)!;
+    const hits = await db.uploadedBook.findMany({ where: { ownerId: null, OR: [{ id: { contains: key } }, { originalName: { contains: key } }] }, select: { id: true, originalName: true, curriculumId: true } });
+    if (hits.length !== 1) { console.log(hits.length === 0 ? "لا كتاب بهذا الاسم" : `${hits.length} كتب تطابق، دقّق النص`); await db.$disconnect(); return; }
+    if (dbg) {
+      const pgs = await db.bookPage.findMany({ where: { bookId: hits[0].id, pageNumber: { lte: 10 } }, select: { pageNumber: true, text: true }, orderBy: { pageNumber: "asc" } });
+      for (const p of pgs) console.log(`\n===== صفحة ${p.pageNumber} =====\n${p.text.slice(0, 700)}`);
+    } else if (hits[0].curriculumId && admin) {
+      const r = await replaceChapters({ adminId: admin.id }, hits[0].curriculumId, { chapters: [] });
+      console.log(`${hits[0].originalName}: ${r.ok ? "مُسحت الفصول ✓" : `تعذّر: ${r.code}`}`);
+    }
+    await db.$disconnect();
+    return;
+  }
   const books = await db.uploadedBook.findMany({
     where: { ownerId: null, status: "READY", curriculumId: { not: null }, curriculum: { chapters: { none: {} } } },
     select: { id: true, originalName: true, pageCount: true, curriculumId: true },

@@ -30,3 +30,14 @@ describe("TOC parsing", () => {
     expect(proposeChapters(pages(60, {}), 60)).toBeNull();
   });
 });
+
+describe("TOC guards", () => {
+  it("returns nothing for a long lesson-level contents list (no chapter level)", () => {
+    const lines = ["المحتويات", ...Array.from({ length: 40 }, (_, i) => `موضوع رقم ${i + 1} ........ ${i + 3}`)].join("\n");
+    expect(parseTocEntries([lines], 100)).toEqual([]);
+  });
+  it("drops 'introduction' and leading numbering from titles", () => {
+    const e = parseTocEntries(["المحتويات\nالمقدمة ........ 3\n5 .... الفصل الأول: الحركة ........ 5\nالفصل الثاني: القوة ........ 15"], 60);
+    expect(e.map((x) => x.title)).toEqual(["الفصل الأول: الحركة", "الفصل الثاني: القوة"]);
+  });
+});

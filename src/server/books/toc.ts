@@ -30,13 +30,16 @@ export function parseTocEntries(pageTexts: string[], pageCount: number): TocEntr
         if (m) { num = Number(m[1]); title = m[2]; }
       }
       if (!title || !Number.isFinite(num) || num < 1 || num > pageCount) continue;
-      title = title.replace(/[.·…_]{2,}/g, " ").replace(/\s+/g, " ").replace(/[\s.:·\-–—]+$/g, "").trim();
+      title = title.replace(/^[\d\s.\-–—·•*]+/, "").replace(/[.·…_]{2,}/g, " ").replace(/\s+/g, " ").replace(/[\s.:·\-–—]+$/g, "").trim();
+      if (/^(?:المقدمه|مقدمه|اسئله الفصل|تمارين الفصل)$/.test(flat(title))) continue;
       if ((title.match(/[ء-يٮ-ۓA-Za-z]/g)?.length ?? 0) < 3 || TOC_WORD.test(flat(title))) continue;
       entries.push({ title, printed: num });
     }
   }
   const top = entries.filter((e) => TOP.test(flat(e.title)));
   const chosen = top.length >= 2 ? top : entries;
+  // أكثر من 30 بنداً بلا مستوى «فصل/وحدة» ⇒ فهرس دروس تفصيلي لا فصول: لا نقترح (يُدخل يدوياً)
+  if (top.length < 2 && chosen.length > 30) return [];
   // أرقام صفحات متصاعدة فقط (يُسقط أسطراً عرضية تكسر الترتيب)، دون تكرار
   const out: TocEntry[] = [];
   for (const e of chosen) if (out.length === 0 || e.printed > out[out.length - 1].printed) out.push(e);
