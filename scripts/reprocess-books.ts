@@ -2,6 +2,7 @@
  * إعادة معالجة الكتب من سطر الأوامر، مستقلة عن خادم الويب (لا تموت إن أُعيد تشغيل الخادم):
  *   npm run books:reprocess                    (المتعثرة: عالقة بلا نبض، موقوفة، NEEDS_OCR، فاشلة الاستخراج)
  *   npm run books:reprocess -- --damaged        (كتب طبقة نصها معطوبة/رموز تالفة/لغة لا تطابق المادة، أياً كانت حالتها)
+ *   npm run books:reprocess -- --detect         (يعيد التعرّف من الغلاف لكل الكتب دون إعادة قراءتها، ويضع غير المربوطة الواثقة)
  *   npm run books:reprocess -- --match lruqhtn  (أي كتاب يحوي اسمه/معرّفه هذا النص، أياً كانت حالته؛ يتكرر)
  *   npm run books:reprocess -- --no-ocr         (بلا OCR)
  * بعد كل كتاب تُطبع نتيجته. اترك النافذة مفتوحة؛ إن أُغلقت أعد الأمر وسيكمل من المتبقي.
@@ -21,6 +22,17 @@ async function main() {
   loadEnv();
   const { db } = await import("../src/server/db");
   const { processBook, STALE_MS } = await import("../src/server/books/service");
+  if (process.argv.includes("--detect")) {
+    const { detectBook } = await import("../src/server/books/service");
+    const all = await db.uploadedBook.findMany({ where: { ownerId: null, status: "READY" }, select: { id: true, originalName: true }, orderBy: { createdAt: "asc" } });
+    const adm = await db.adminUser.findFirst({ where: { isActive: true }, orderBy: { createdAt: "asc" } });
+    for (const [i, b] of all.entries()) {
+      const d = await detectBook(b.id, adm ? { adminId: adm.id } : undefined).catch(() => null);
+      console.log(`[${i + 1}/${all.length}] ${b.originalName} — ${d ? `${d.gradeCode ?? "؟"} ${d.subjectCode ?? "؟"} (${d.confidence})` : "فشل"}`);
+    }
+    await db.$disconnect();
+    return;
+  }
   const matches = process.argv.flatMap((a, i, all) => (a === "--match" && all[i + 1] ? [all[i + 1]] : []));
   const ocr = !process.argv.includes("--no-ocr");
 

@@ -92,3 +92,4 @@ npm run typecheck && npm run lint && npm run build
 - `npm run books:reprocess` (`scripts/reprocess-books.ts`) يعيد معالجة الكتب المتعثرة من سطر الأوامر دون خادم الويب؛ زر «إعادة معالجة كل المتعثرة» يعمل داخل `after()` فيموت إن أُعيد تشغيل الخادم (سبب كتب «عالق بلا نبض»). `-- --match نص` لكتب بعينها، `-- --no-ocr` بلا OCR.
 - `books:reprocess -- --damaged` يعيد معالجة كل كتاب فحصه الصحي يحوي UNRELIABLE_TEXT_LAYER أو GARBAGE_CHARS أو LANGUAGE_MISMATCH.
 - التعرّف الإنكليزي من الغلاف يقبل صيغ الصف الصريحة فقط (Primary N / Nth Primary)، وأكثر من رقم مختلف ⇒ low. `placeBook("auto")` يرفض منهجاً فيه كتاب آخر (`OCCUPIED`) فيبقى للمراجعة لتحديد الجزء.
+- `books:reprocess -- --detect` يعيد التعرّف من الغلاف لكل الكتب الجاهزة (دون إعادة القراءة) ويضع غير المربوطة الواثقة.
