@@ -5,6 +5,8 @@ import { db } from "../db";
 import { AiError, currentModel, geminiJson } from "../ai/gemini";
 import { renderPagesJpeg } from "../books/page-image";
 import { fileOf } from "../books/service";
+import { normalizeHonorifics, polishQuestion } from "@/lib/exam-text";
+import { distributeMarks, type MarkSection } from "./marks";
 import {
   buildPrompt, expandRanges, instructionFor, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
   type CleanQuestion, type CreateExamInput, type GenType, type RawQuestion, type Section, type SourcePage,
@@ -71,7 +73,7 @@ function toRanges(pages: number[]): { from: number; to: number }[] {
   return out;
 }
 
-type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols: boolean };
+type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols: boolean; family: string };
 
 async function askModel(ctx: Ctx, difficulty: CreateExamInput["difficulty"], sections: Section[], src: Awaited<ReturnType<typeof loadSource>>, avoid?: string[]) {
   const prompt = buildPrompt({ ...ctx, difficulty, sections, pages: src.pages, avoid });
@@ -110,7 +112,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
   if (pageNumbers.length === 0) return fail("EMPTY_SOURCE");
 
   const lang = cur.language === "EN" ? "EN" : "AR";
-  const ctx: Ctx = { subject: lang === "EN" ? cur.subject.nameEn : cur.subject.nameAr, grade: lang === "EN" ? cur.grade.nameEn : cur.grade.nameAr, lang, useLatinSymbols: cur.subject.useLatinSymbols };
+  const ctx: Ctx = { subject: lang === "EN" ? cur.subject.nameEn : cur.subject.nameAr, grade: lang === "EN" ? cur.grade.nameEn : cur.grade.nameAr, lang, useLatinSymbols: cur.subject.useLatinSymbols, family: cur.subject.family };
   const totalMarks = input.sections.reduce((n, s) => n + s.count * s.marksEach, 0);
 
   const exam = await db.exam.create({
@@ -145,6 +147,8 @@ export async function createExam(userId: string, input: CreateExamInput) {
       await tx.exam.update({ where: { id: exam.id }, data: { status: "READY", totalMarks: realMarks, settings: { sections: input.sections, pages: pageNumbers, truncated, bookId: book.id, imagePages: src.pages.filter((p) => p.asImage).map((p) => p.pageNumber), ocrPages: src.pages.filter((p) => p.isOcr).map((p) => p.pageNumber), dropped, made } as Prisma.InputJsonValue } });
       await tx.examGenerationJob.update({ where: { id: job.id }, data: { status: "SUCCEEDED", finishedAt: new Date(), aiModel: currentModel() } });
     });
+    // درجة كلية مطلوبة: توزيعها تلقائياً على ما كُتب فعلاً
+    if (input.totalMarks) await distributeExamMarks(userId, exam.id, input.totalMarks, input.distribution ?? "smart");
     return { ok: true as const, examId: exam.id, made, requested: input.sections.reduce((n, s) => n + s.count, 0) };
   } catch (e) {
     const code = e instanceof AiError ? (e.code === "QUOTA" ? "AI_QUOTA" : e.code === "NO_KEY" ? "AI_UNAVAILABLE" : "AI_FAILED") : "AI_FAILED";
@@ -184,7 +188,12 @@ export async function getExam(userId: string, id: string) {
     },
   });
   if (!exam) return null;
-  const all = exam.models[0]?.questions ?? [];
+  // امتحانات سابقة قد تحوي (ص)/(ع): تُعرض وتُطبع بالصيغ الكاملة
+  const h = exam.language === "AR" ? normalizeHonorifics : (x: string) => x;
+  const all = (exam.models[0]?.questions ?? []).map((q) => ({
+    ...q, prompt: h(q.prompt), instruction: q.instruction ? h(q.instruction) : q.instruction, answer: q.answer ? h(q.answer) : q.answer,
+    options: Array.isArray(q.options) ? (q.options as string[]).map(h) : q.options,
+  }));
   const sections = all.filter((q) => !q.parentId).map((p) => ({ ...p, marks: Number(p.marks), branches: all.filter((c) => c.parentId === p.id).sort((a, b) => a.sortOrder - b.sortOrder).map((c) => ({ ...c, marks: Number(c.marks) })) }));
   return { ...exam, sections };
 }
@@ -251,7 +260,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
   if (!book || !settings.pages?.length) return fail("SOURCE_MISSING");
   const siblings = await db.examQuestion.findMany({ where: { parentId: q.parentId, deletedAt: null }, select: { prompt: true } });
   const lang = exam.language === "EN" ? "EN" : "AR";
-  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols };
+  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family };
   const section: Section = { type: q.type as GenType, count: 1, marksEach: Number(q.marks) };
   try {
     const src = await loadSource(book.id, book.storageKey, settings.pages);
@@ -290,3 +299,194 @@ export async function deleteExam(userId: string, id: string) {
   const r = await db.exam.updateMany({ where: { id, ownerId: userId, deletedAt: null }, data: { deletedAt: new Date() } });
   return r.count === 1 ? { ok: true as const } : fail("NOT_FOUND");
 }
+
+// ───────────────────────── تحرير الامتحان كاملاً ─────────────────────────
+
+const roundMarks = (n: number) => Math.round(n * 2) / 2;
+
+async function ownedExam(userId: string, examId: string) {
+  return db.exam.findFirst({ where: { id: examId, ownerId: userId, deletedAt: null }, include: { subject: true, grade: true, models: { take: 1 } } });
+}
+
+async function ownedSection(userId: string, sectionId: string) {
+  return db.examQuestion.findFirst({
+    where: { id: sectionId, parentId: null, deletedAt: null, examModel: { exam: { ownerId: userId, deletedAt: null } } },
+    include: { examModel: { include: { exam: { include: { subject: true, grade: true } } } } },
+  });
+}
+
+/** يعيد حساب درجة كل قسم (مجموع فروعه) والدرجة الكلية */
+async function recomputeExam(tx: Prisma.TransactionClient, examId: string) {
+  const parents = await tx.examQuestion.findMany({ where: { examModel: { examId }, parentId: null, deletedAt: null }, select: { id: true } });
+  let total = 0;
+  for (const p of parents) {
+    const kids = await tx.examQuestion.findMany({ where: { parentId: p.id, deletedAt: null }, select: { marks: true } });
+    const m = kids.reduce((n, k) => n + Number(k.marks), 0);
+    total += m;
+    await tx.examQuestion.update({ where: { id: p.id }, data: { marks: m } });
+  }
+  await tx.exam.update({ where: { id: examId }, data: { totalMarks: Math.round(total) } });
+}
+
+export async function updateExamMeta(userId: string, examId: string, patch: { title?: string; durationMinutes?: number | null }) {
+  const e = await ownedExam(userId, examId);
+  if (!e) return fail("NOT_FOUND");
+  await db.exam.update({ where: { id: e.id }, data: { ...(patch.title !== undefined ? { title: patch.title } : {}), ...(patch.durationMinutes !== undefined ? { durationMinutes: patch.durationMinutes } : {}) } });
+  return { ok: true as const };
+}
+
+/** توزيع الدرجة الكلية على الأقسام والفروع (ذكي أو متساوٍ) */
+export async function distributeExamMarks(userId: string, examId: string, total: number, mode: "smart" | "equal") {
+  const e = await ownedExam(userId, examId);
+  if (!e?.models[0]) return fail("NOT_FOUND");
+  const rows = await db.examQuestion.findMany({ where: { examModelId: e.models[0].id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, parentId: true, type: true, difficulty: true } });
+  const sections: MarkSection[] = rows.filter((r) => !r.parentId).map((p) => ({
+    id: p.id, type: (p.type ?? "ESSAY") as MarkSection["type"],
+    items: rows.filter((c) => c.parentId === p.id).map((c) => ({ id: c.id, difficulty: c.difficulty === "MIXED" ? null : (c.difficulty as "EASY" | "MEDIUM" | "HARD" | null) })),
+  }));
+  const plan = distributeMarks(sections, total, mode);
+  if ("error" in plan) return { ok: false as const, code: plan.error, detail: String(plan.min) };
+  await db.$transaction(async (tx) => {
+    for (const s of plan.sections) {
+      await tx.examQuestion.update({ where: { id: s.id }, data: { marks: s.marks } });
+      for (const it of s.items) await tx.examQuestion.update({ where: { id: it.id }, data: { marks: it.marks } });
+    }
+    await tx.exam.update({ where: { id: e.id }, data: { totalMarks: plan.total } });
+  });
+  return { ok: true as const, total: plan.total };
+}
+
+/** ترتيب الأقسام: ids كل الأقسام الحالية بالترتيب الجديد */
+export async function reorderSections(userId: string, examId: string, ids: string[]) {
+  const e = await ownedExam(userId, examId);
+  if (!e?.models[0]) return fail("NOT_FOUND");
+  const cur = await db.examQuestion.findMany({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, select: { id: true } });
+  if (cur.length !== ids.length || cur.some((c) => !ids.includes(c.id))) return fail("BAD_ORDER");
+  await db.$transaction(ids.map((id, i) => db.examQuestion.update({ where: { id }, data: { sortOrder: i + 1 } })));
+  return { ok: true as const };
+}
+
+/** ترتيب فروع قسم: ids كل فروعه بالترتيب الجديد */
+export async function reorderQuestions(userId: string, sectionId: string, ids: string[]) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s) return fail("NOT_FOUND");
+  const cur = await db.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, select: { id: true } });
+  if (cur.length !== ids.length || cur.some((c) => !ids.includes(c.id))) return fail("BAD_ORDER");
+  await db.$transaction(ids.map((id, i) => db.examQuestion.update({ where: { id }, data: { sortOrder: i + 1 } })));
+  return { ok: true as const };
+}
+
+/** تعديل القسم: نص التعليمة، و/أو درجته (تُقسم على فروعه بالتساوي، بأنصاف عند الحاجة) */
+export async function updateSection(userId: string, sectionId: string, patch: { instruction?: string; marks?: number }) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s) return fail("NOT_FOUND");
+  const lang = s.examModel.exam.language === "EN" ? "EN" : "AR";
+  await db.$transaction(async (tx) => {
+    if (patch.instruction !== undefined) {
+      const txt = lang === "AR" ? normalizeHonorifics(patch.instruction) : patch.instruction;
+      await tx.examQuestion.update({ where: { id: s.id }, data: { instruction: txt, prompt: txt } });
+    }
+    if (patch.marks !== undefined) {
+      const kids = await tx.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true } });
+      if (kids.length) {
+        const each = roundMarks(patch.marks / kids.length);
+        // آخر فرع يأخذ الفرق حتى يطابق المجموع ما كتبه المدرس
+        for (const [i, k] of kids.entries()) await tx.examQuestion.update({ where: { id: k.id }, data: { marks: i === kids.length - 1 ? roundMarks(patch.marks - each * (kids.length - 1)) : each } });
+      }
+    }
+    await recomputeExam(tx, s.examModel.examId);
+  });
+  return { ok: true as const };
+}
+
+export async function deleteSection(userId: string, sectionId: string) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s) return fail("NOT_FOUND");
+  const now = new Date();
+  await db.$transaction(async (tx) => {
+    await tx.examQuestion.updateMany({ where: { OR: [{ id: s.id }, { parentId: s.id }] }, data: { deletedAt: now } });
+    await recomputeExam(tx, s.examModel.examId);
+  });
+  return { ok: true as const };
+}
+
+/** سؤال يكتبه المدرس بنفسه داخل قسم */
+export async function addManualQuestion(userId: string, sectionId: string, q: { prompt: string; answer: string; options?: string[] | null; marks?: number }) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s || !s.type) return fail("NOT_FOUND");
+  if (s.type === "MCQ" && (!q.options || q.options.length < 2 || !q.options.includes(q.answer))) return fail("ANSWER_NOT_IN_OPTIONS");
+  const lang = s.examModel.exam.language === "EN" ? "EN" : "AR";
+  const p = polishQuestion(s.type as GenType, lang, { prompt: q.prompt, answer: q.answer, options: s.type === "MCQ" ? q.options ?? null : null });
+  const last = await db.examQuestion.findFirst({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true, marks: true } });
+  await db.$transaction(async (tx) => {
+    const c = await tx.examQuestion.create({
+      data: { examModelId: s.examModelId, parentId: s.id, sortOrder: (last?.sortOrder ?? 0) + 1, type: s.type, prompt: p.prompt, options: p.options ?? Prisma.DbNull, answer: p.answer, marks: q.marks ?? Number(last?.marks ?? 1), sourcePages: [] },
+    });
+    await tx.examQuestionRevision.create({ data: { questionId: c.id, version: 1, reason: "CREATE", snapshot: snapshot(c), editedById: userId } });
+    await recomputeExam(tx, s.examModel.examId);
+  });
+  return { ok: true as const };
+}
+
+/** مصدر الامتحان وسياقه لتوليد إضافي */
+async function genContext(exam: { language: string; settings: unknown; difficulty: CreateExamInput["difficulty"]; subject: { nameAr: string; nameEn: string; useLatinSymbols: boolean; family: string }; grade: { nameAr: string; nameEn: string } }) {
+  const settings = exam.settings as { pages?: number[]; bookId?: string };
+  const book = settings.bookId ? await db.uploadedBook.findUnique({ where: { id: settings.bookId } }) : null;
+  if (!book || !settings.pages?.length) return null;
+  const lang: "AR" | "EN" = exam.language === "EN" ? "EN" : "AR";
+  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family };
+  return { book, pages: settings.pages, ctx, lang };
+}
+
+const aiFail = (e: unknown) => fail(e instanceof AiError && e.code === "QUOTA" ? "AI_QUOTA" : e instanceof AiError && e.code === "NO_KEY" ? "AI_UNAVAILABLE" : "AI_FAILED");
+
+/** يولّد فروعاً إضافية في قسم قائم (لا تكرر الموجود) */
+export async function generateMore(userId: string, sectionId: string, count: number) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s || !s.type || s.type === "DIAGRAM") return fail("NOT_FOUND");
+  const g = await genContext(s.examModel.exam);
+  if (!g) return fail("SOURCE_MISSING");
+  const siblings = await db.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { prompt: true, sortOrder: true, marks: true } });
+  const each = Number(siblings.at(-1)?.marks ?? 1);
+  try {
+    const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
+    const sec: Section = { type: s.type as GenType, count, marksEach: each };
+    const { bySection } = await askModel(g.ctx, s.examModel.exam.difficulty, [sec], src, siblings.map((x) => x.prompt));
+    if (bySection[0].length === 0) return fail("AI_FAILED");
+    await db.$transaction(async (tx) => {
+      let order = siblings.at(-1)?.sortOrder ?? 0;
+      for (const q of bySection[0]) await createChild(tx, s.examModelId, s.id, ++order, sec, q, s.chapterId, userId);
+      await recomputeExam(tx, s.examModel.examId);
+    });
+    return { ok: true as const, made: bySection[0].length };
+  } catch (e) {
+    return aiFail(e);
+  }
+}
+
+/** قسم جديد بنوع آخر يُولَّد من مصدر الامتحان نفسه */
+export async function addSection(userId: string, examId: string, input: Section) {
+  const e = await ownedExam(userId, examId);
+  if (!e?.models[0]) return fail("NOT_FOUND");
+  if (e.subject.questionTypes.length && !e.subject.questionTypes.includes(input.type)) return fail("TYPE_NOT_ALLOWED");
+  const existing = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null, type: input.type } });
+  if (existing) return fail("DUPLICATE_SECTION");
+  const g = await genContext(e);
+  if (!g) return fail("SOURCE_MISSING");
+  try {
+    const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
+    const { bySection } = await askModel(g.ctx, e.difficulty, [input], src);
+    if (bySection[0].length === 0) return fail("AI_FAILED");
+    const last = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+    await db.$transaction(async (tx) => {
+      const inst = instructionFor(input.type, g.lang);
+      const parent = await tx.examQuestion.create({ data: { examModelId: e.models[0].id, sortOrder: (last?.sortOrder ?? 0) + 1, type: input.type, instruction: inst, prompt: inst, marks: 0, sourcePages: [] } });
+      for (const [j, q] of bySection[0].entries()) await createChild(tx, e.models[0].id, parent.id, j + 1, input, q, null, userId);
+      await recomputeExam(tx, e.id);
+    });
+    return { ok: true as const, made: bySection[0].length };
+  } catch (err) {
+    return aiFail(err);
+  }
+}
+

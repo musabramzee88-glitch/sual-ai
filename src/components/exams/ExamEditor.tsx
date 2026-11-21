@@ -10,34 +10,45 @@ export type EditorSection = { id: string; type: string; instruction: string; mar
 
 const LETTERS_AR = ["أ", "ب", "ج", "د", "هـ", "و"];
 const LETTERS_EN = ["a", "b", "c", "d", "e", "f"];
-const toAr = (n: number) => n.toLocaleString("ar-EG");
+const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
+const inp = "rounded-lg border border-line bg-surface px-2 py-1.5 text-sm";
+const btn = "rounded-lg border border-line px-2.5 py-1 text-xs disabled:opacity-40";
 
 async function call(url: string, method: string, body?: unknown) {
   const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
   const j = await res.json().catch(() => ({}));
-  return { ok: res.ok, code: j.error?.code as string | undefined };
+  return { ok: res.ok, code: j.error?.code as string | undefined, detail: j.error?.detail as string | undefined };
 }
 
-function Question({ q, n, type, lang, t, showAnswer }: { q: EditorQuestion; n: number; type: string; lang: "AR" | "EN"; t: ExamDict; showAnswer: boolean }) {
+/** حالة مشتركة لكل زر: انشغال ورسالة خطأ، ثم تحديث الصفحة عند النجاح */
+function useAction(t: ExamDict) {
   const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (p: Promise<{ ok: boolean; code?: string; detail?: string }>) => {
+    setBusy(true);
+    setErr(null);
+    const r = await p;
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.code === "TOTAL_TOO_SMALL" && r.detail ? fill(t.editor.tooSmall, { n: r.detail }) : t.errors[r.code ?? "GENERIC"] ?? t.errors.GENERIC);
+      return false;
+    }
+    router.refresh();
+    return true;
+  };
+  return { busy, err, run };
+}
+
+function Question({ q, n, type, lang, t, showAnswer, first, last, onMove }: { q: EditorQuestion; n: number; type: string; lang: "AR" | "EN"; t: ExamDict; showAnswer: boolean; first: boolean; last: boolean; onMove: (dir: -1 | 1) => void }) {
+  const { busy, err, run } = useAction(t);
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState(q.prompt);
   const [options, setOptions] = useState((q.options ?? []).join("\n"));
   const [answer, setAnswer] = useState(q.answer);
   const [marks, setMarks] = useState(q.marks);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const letters = lang === "EN" ? LETTERS_EN : LETTERS_AR;
-
-  async function run(p: Promise<{ ok: boolean; code?: string }>) {
-    setBusy(true);
-    setErr(null);
-    const r = await p;
-    setBusy(false);
-    if (!r.ok) { setErr(t.errors[r.code ?? "GENERIC"] ?? t.errors.GENERIC); return false; }
-    router.refresh();
-    return true;
-  }
+  const num = (x: number) => (lang === "EN" ? String(x) : x.toLocaleString("ar-EG"));
   const save = async () => {
     const opts = type === "MCQ" ? options.split("\n").map((s) => s.trim()).filter(Boolean) : undefined;
     if (await run(call(`/api/v1/exams/questions/${q.id}`, "PATCH", { prompt, answer, marks, ...(opts ? { options: opts } : {}) }))) setEditing(false);
@@ -48,13 +59,13 @@ function Question({ q, n, type, lang, t, showAnswer }: { q: EditorQuestion; n: n
       {!editing ? (
         <>
           <div className="flex items-start gap-2">
-            <span className="shrink-0 font-semibold">{lang === "EN" ? `${n}.` : `${toAr(n)}-`}</span>
+            <span className="shrink-0 font-semibold">{lang === "EN" ? `${n}.` : `${num(n)}-`}</span>
             <MathText text={q.prompt} className="flex-1" />
-            <span className="shrink-0 text-xs text-muted">({lang === "EN" ? q.marks : toAr(q.marks)} {t.marksShort})</span>
+            <span className="shrink-0 text-xs text-muted">({num(q.marks)} {t.marksShort})</span>
           </div>
           {q.options && (
             <ol className="flex flex-wrap gap-x-6 gap-y-1 ps-6 text-sm">
-              {q.options.map((o, i) => <li key={i}><span className="font-semibold">{letters[i]})</span> <MathText text={o} /></li>)}
+              {q.options.map((o, i) => <li key={i}><span className="font-semibold">{letters[i]}-</span> <MathText text={o} /></li>)}
             </ol>
           )}
           {VERBATIM_TYPES.includes(type as QType) && <p className="rounded bg-accent-soft px-2 py-0.5 text-xs">⚠ {t.editor.verbatim}</p>}
@@ -62,21 +73,23 @@ function Question({ q, n, type, lang, t, showAnswer }: { q: EditorQuestion; n: n
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             {q.sourcePages.map((p) => <span key={p} className="rounded-full border border-line px-2 py-0.5 text-muted">{t.editor.page} {p}</span>)}
             <span className="flex-1" />
-            <button className="rounded border border-line px-2 py-1" disabled={busy} onClick={() => setEditing(true)}>{t.editor.edit}</button>
-            <button className="rounded border border-line px-2 py-1" disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "regenerate" }))}>{busy ? t.editor.busy : t.editor.regenerate}</button>
-            {q.version > 1 && <button className="rounded border border-line px-2 py-1" disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "undo" }))}>{t.editor.undo}</button>}
-            <button className="rounded border border-line px-2 py-1 text-danger" disabled={busy} onClick={() => { if (window.confirm(t.editor.confirmDel)) run(call(`/api/v1/exams/questions/${q.id}`, "DELETE")); }}>{t.editor.del}</button>
+            <button className={btn} disabled={first} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
+            <button className={btn} disabled={last} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>
+            <button className={btn} disabled={busy} onClick={() => setEditing(true)}>{t.editor.edit}</button>
+            <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "regenerate" }))}>{busy ? t.editor.busy : t.editor.regenerate}</button>
+            {q.version > 1 && <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "undo" }))}>{t.editor.undo}</button>}
+            <button className={`${btn} text-danger`} disabled={busy} onClick={() => { if (window.confirm(t.editor.confirmDel)) run(call(`/api/v1/exams/questions/${q.id}`, "DELETE")); }}>{t.editor.del}</button>
           </div>
         </>
       ) : (
         <div className="space-y-2 text-sm">
-          <label className="block space-y-1"><span className="text-muted">{t.editor.prompt}</span><textarea className="w-full rounded border border-line bg-surface p-2" rows={3} dir="auto" value={prompt} onChange={(e) => setPrompt(e.target.value)} /></label>
-          {type === "MCQ" && <label className="block space-y-1"><span className="text-muted">{t.editor.options}</span><textarea className="w-full rounded border border-line bg-surface p-2" rows={4} dir="auto" value={options} onChange={(e) => setOptions(e.target.value)} /></label>}
-          <label className="block space-y-1"><span className="text-muted">{t.editor.answer}</span><textarea className="w-full rounded border border-line bg-surface p-2" rows={2} dir="auto" value={answer} onChange={(e) => setAnswer(e.target.value)} /></label>
-          <label className="block w-32 space-y-1"><span className="text-muted">{t.marks}</span><input type="number" min={0} max={100} className="w-full rounded border border-line bg-surface p-2" value={marks} onChange={(e) => setMarks(Number(e.target.value))} /></label>
+          <label className="block space-y-1"><span className="text-muted">{t.editor.prompt}</span><textarea className={`${inp} w-full`} rows={3} dir="auto" value={prompt} onChange={(e) => setPrompt(e.target.value)} /></label>
+          {type === "MCQ" && <label className="block space-y-1"><span className="text-muted">{t.editor.options}</span><textarea className={`${inp} w-full`} rows={4} dir="auto" value={options} onChange={(e) => setOptions(e.target.value)} /></label>}
+          <label className="block space-y-1"><span className="text-muted">{t.editor.answer}</span><textarea className={`${inp} w-full`} rows={2} dir="auto" value={answer} onChange={(e) => setAnswer(e.target.value)} /></label>
+          <label className="block w-32 space-y-1"><span className="text-muted">{t.marks}</span><input type="number" min={0} max={100} step={0.5} className={`${inp} w-full`} value={marks} onChange={(e) => setMarks(Number(e.target.value))} /></label>
           <div className="flex gap-2">
-            <button className="rounded bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || !prompt.trim() || !answer.trim()} onClick={save}>{t.editor.save}</button>
-            <button className="rounded border border-line px-3 py-1.5" onClick={() => { setEditing(false); setPrompt(q.prompt); setOptions((q.options ?? []).join("\n")); setAnswer(q.answer); setMarks(q.marks); }}>{t.editor.cancel}</button>
+            <button className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || !prompt.trim() || !answer.trim()} onClick={save}>{t.editor.save}</button>
+            <button className="rounded-lg border border-line px-3 py-1.5" onClick={() => { setEditing(false); setPrompt(q.prompt); setOptions((q.options ?? []).join("\n")); setAnswer(q.answer); setMarks(q.marks); }}>{t.editor.cancel}</button>
           </div>
         </div>
       )}
@@ -85,9 +98,102 @@ function Question({ q, n, type, lang, t, showAnswer }: { q: EditorQuestion; n: n
   );
 }
 
-export function ExamEditor({ examId, sections, lang, t }: { examId: string; sections: EditorSection[]; lang: "AR" | "EN"; t: ExamDict }) {
+function ManualForm({ sectionId, type, t, onDone }: { sectionId: string; type: string; t: ExamDict; onDone: () => void }) {
+  const { busy, err, run } = useAction(t);
+  const [prompt, setPrompt] = useState("");
+  const [options, setOptions] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [marks, setMarks] = useState<number | "">("");
+  const add = async () => {
+    const opts = type === "MCQ" ? options.split("\n").map((s) => s.trim()).filter(Boolean) : undefined;
+    if (await run(call(`/api/v1/exams/sections/${sectionId}`, "POST", { action: "addManual", prompt, answer, ...(opts ? { options: opts } : {}), ...(marks !== "" ? { marks } : {}) }))) onDone();
+  };
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-line p-3 text-sm">
+      <textarea className={`${inp} w-full`} rows={2} dir="auto" placeholder={t.editor.prompt} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+      {type === "MCQ" && <textarea className={`${inp} w-full`} rows={4} dir="auto" placeholder={t.editor.options} value={options} onChange={(e) => setOptions(e.target.value)} />}
+      <textarea className={`${inp} w-full`} rows={2} dir="auto" placeholder={t.editor.answer} value={answer} onChange={(e) => setAnswer(e.target.value)} />
+      <div className="flex items-center gap-2">
+        <input type="number" min={0.5} step={0.5} className={`${inp} w-24`} placeholder={t.marks} value={marks} onChange={(e) => setMarks(e.target.value === "" ? "" : Number(e.target.value))} />
+        <button className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy || !prompt.trim() || !answer.trim()} onClick={add}>{t.editor.add}</button>
+        <button className="rounded-lg border border-line px-3 py-1.5" onClick={onDone}>{t.editor.cancel}</button>
+      </div>
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
+    </div>
+  );
+}
+
+function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSection; i: number; count: number; lang: "AR" | "EN"; t: ExamDict; showAnswers: boolean; onMove: (dir: -1 | 1) => void }) {
+  const { busy, err, run } = useAction(t);
+  const [editInst, setEditInst] = useState(false);
+  const [inst, setInst] = useState(s.instruction);
+  const [marks, setMarks] = useState(s.marks);
+  const [manual, setManual] = useState(false);
+  const num = (x: number) => (lang === "EN" ? String(x) : x.toLocaleString("ar-EG"));
+  const moveItem = (j: number, dir: -1 | 1) => {
+    const ids = s.branches.map((b) => b.id);
+    [ids[j], ids[j + dir]] = [ids[j + dir], ids[j]];
+    run(call(`/api/v1/exams/sections/${s.id}`, "POST", { action: "reorder", ids }));
+  };
+  return (
+    <section className="space-y-2 rounded-xl border border-line p-3">
+      <div className="flex flex-wrap items-start gap-2">
+        <span className="pt-1 font-bold">{lang === "EN" ? `Q${i + 1}/` : `س${num(i + 1)}/`}</span>
+        {editInst ? (
+          <div className="flex flex-1 gap-2">
+            <input className={`${inp} flex-1`} dir="auto" value={inst} onChange={(e) => setInst(e.target.value)} />
+            <button className="rounded-lg bg-brand px-3 text-sm font-semibold text-white dark:text-paper" disabled={busy || !inst.trim()} onClick={async () => { if (await run(call(`/api/v1/exams/sections/${s.id}`, "PATCH", { instruction: inst }))) setEditInst(false); }}>{t.editor.save}</button>
+            <button className="rounded-lg border border-line px-3 text-sm" onClick={() => { setEditInst(false); setInst(s.instruction); }}>{t.editor.cancel}</button>
+          </div>
+        ) : (
+          <button className="flex-1 text-start font-bold hover:underline" title={t.editor.editInstruction} onClick={() => setEditInst(true)}><MathText text={s.instruction} /></button>
+        )}
+        <span className="rounded-full bg-paper px-2 py-0.5 text-xs text-muted">{t.qt[s.type] ?? s.type}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <label className="flex items-center gap-1">{t.editor.sectionMarks}
+          <input type="number" min={0.5} step={0.5} className={`${inp} w-20`} value={marks} onChange={(e) => setMarks(Number(e.target.value))} />
+        </label>
+        <button className={btn} disabled={busy || marks === s.marks || marks <= 0} onClick={() => run(call(`/api/v1/exams/sections/${s.id}`, "PATCH", { marks }))}>{t.editor.apply}</button>
+        <span className="flex-1" />
+        <button className={btn} disabled={i === 0 || busy} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
+        <button className={btn} disabled={i === count - 1 || busy} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>
+        <button className={`${btn} text-danger`} disabled={busy} onClick={() => { if (window.confirm(t.editor.confirmDeleteSection)) run(call(`/api/v1/exams/sections/${s.id}`, "DELETE")); }}>{t.editor.deleteSection}</button>
+      </div>
+      <ol className="space-y-2">
+        {s.branches.map((q, j) => <Question key={`${q.id}:${q.version}:${q.marks}`} q={q} n={j + 1} type={s.type} lang={lang} t={t} showAnswer={showAnswers} first={j === 0} last={j === s.branches.length - 1} onMove={(d) => moveItem(j, d)} />)}
+      </ol>
+      {manual ? <ManualForm sectionId={s.id} type={s.type} t={t} onDone={() => setManual(false)} /> : (
+        <div className="flex flex-wrap gap-2">
+          <button className={btn} onClick={() => setManual(true)}>{t.editor.addManual}</button>
+          {s.type !== "DIAGRAM" && <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/sections/${s.id}`, "POST", { action: "generateMore", count: 1 }))}>{busy ? t.editor.busy : t.editor.addAi}</button>}
+        </div>
+      )}
+      {err && <p role="alert" className="text-xs text-danger">{err}</p>}
+    </section>
+  );
+}
+
+export function ExamEditor({ examId, title, duration, totalMarks, sections, lang, types, t }: {
+  examId: string; title: string; duration: number | null; totalMarks: number; sections: EditorSection[]; lang: "AR" | "EN"; types: string[]; t: ExamDict;
+}) {
   const router = useRouter();
+  const meta = useAction(t), marks = useAction(t), add = useAction(t), order = useAction(t);
   const [showAnswers, setShowAnswers] = useState(true);
+  const [name, setName] = useState(title);
+  const [dur, setDur] = useState(duration ? String(duration) : "");
+  const [total, setTotal] = useState(totalMarks);
+  const [mode, setMode] = useState<"smart" | "equal">("smart");
+  const free = types.filter((x) => !sections.some((s) => s.type === x));
+  const [newType, setNewType] = useState(free[0] ?? "");
+  const [newCount, setNewCount] = useState(3);
+  const [newMarks, setNewMarks] = useState(2);
+  const moveSection = (i: number, dir: -1 | 1) => {
+    const ids = sections.map((s) => s.id);
+    [ids[i], ids[i + dir]] = [ids[i + dir], ids[i]];
+    order.run(call(`/api/v1/exams/${examId}`, "POST", { action: "reorderSections", ids }));
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -97,15 +203,46 @@ export function ExamEditor({ examId, sections, lang, t }: { examId: string; sect
         <span className="flex-1" />
         <button className="rounded-lg border border-line px-3 py-2 text-danger" onClick={async () => { if (window.confirm(t.editor.confirmDeleteExam) && (await call(`/api/v1/exams/${examId}`, "DELETE")).ok) router.push("/exams"); }}>{t.editor.deleteExam}</button>
       </div>
-      {sections.map((s, i) => (
-        <section key={s.id} className="space-y-2">
-          <h2 className="flex items-baseline justify-between gap-2 font-semibold">
-            <span>{lang === "EN" ? `Q${i + 1}: ` : `س${toAr(i + 1)}: `}{s.instruction}</span>
-            <span className="shrink-0 text-sm font-normal text-muted">({lang === "EN" ? s.marks : toAr(s.marks)} {t.marksShort})</span>
-          </h2>
-          <ol className="space-y-2">{s.branches.map((q, j) => <Question key={`${q.id}:${q.version}`} q={q} n={j + 1} type={s.type} lang={lang} t={t} showAnswer={showAnswers} />)}</ol>
-        </section>
-      ))}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2 rounded-xl border border-line p-3 text-sm">
+          <h2 className="font-semibold">{t.editor.settings}</h2>
+          <div className="flex flex-wrap gap-2">
+            <input className={`${inp} min-w-0 flex-1`} dir="auto" value={name} placeholder={t.editor.examTitle} onChange={(e) => setName(e.target.value)} />
+            <input type="number" min={5} max={300} className={`${inp} w-24`} value={dur} placeholder={t.editor.duration} onChange={(e) => setDur(e.target.value)} />
+            <button className="rounded-lg bg-brand px-3 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={meta.busy || !name.trim()} onClick={() => meta.run(call(`/api/v1/exams/${examId}`, "POST", { action: "meta", title: name.trim(), durationMinutes: Number(dur) >= 5 ? Number(dur) : null }))}>{t.editor.saveMeta}</button>
+          </div>
+          {meta.err && <p role="alert" className="text-xs text-danger">{meta.err}</p>}
+        </div>
+        <div className="space-y-2 rounded-xl border border-line p-3 text-sm">
+          <h2 className="font-semibold">{t.editor.marksTitle} <span className="font-normal text-muted">({t.total}: {totalMarks})</span></h2>
+          <div className="flex flex-wrap gap-2">
+            <input type="number" min={1} max={1000} className={`${inp} w-24`} value={total} onChange={(e) => setTotal(Number(e.target.value))} aria-label={t.editor.total} />
+            <select className={`${inp} min-w-0 flex-1`} value={mode} onChange={(e) => setMode(e.target.value as "smart" | "equal")}>
+              <option value="smart">{t.editor.smart}</option>
+              <option value="equal">{t.editor.equal}</option>
+            </select>
+            <button className="rounded-lg bg-brand px-3 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={marks.busy || total < 1} onClick={() => marks.run(call(`/api/v1/exams/${examId}`, "POST", { action: "distribute", total, mode }))}>{t.editor.distribute}</button>
+          </div>
+          {marks.err && <p role="alert" className="text-xs text-danger">{marks.err}</p>}
+        </div>
+      </div>
+
+      {order.err && <p role="alert" className="text-xs text-danger">{order.err}</p>}
+      {sections.map((s, i) => <Section key={`${s.id}:${s.marks}:${s.instruction}`} s={s} i={i} count={sections.length} lang={lang} t={t} showAnswers={showAnswers} onMove={(d) => moveSection(i, d)} />)}
+
+      {free.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-dashed border-line p-3 text-sm">
+          <h2 className="font-semibold">{t.editor.addSection} <span className="text-xs font-normal text-muted">— {t.editor.addSectionHint}</span></h2>
+          <div className="flex flex-wrap items-end gap-2">
+            <select className={`${inp} min-w-0 flex-1`} value={newType} onChange={(e) => setNewType(e.target.value)}>{free.map((x) => <option key={x} value={x}>{t.qt[x] ?? x}</option>)}</select>
+            <label className="space-y-1"><span className="block text-xs text-muted">{t.wizard.count}</span><input type="number" min={1} max={20} className={`${inp} w-20`} value={newCount} onChange={(e) => setNewCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></label>
+            <label className="space-y-1"><span className="block text-xs text-muted">{t.wizard.marksEach}</span><input type="number" min={1} max={50} className={`${inp} w-20`} value={newMarks} onChange={(e) => setNewMarks(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} /></label>
+            <button className="rounded-lg bg-brand px-4 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={add.busy || !newType} onClick={() => add.run(call(`/api/v1/exams/${examId}`, "POST", { action: "addSection", type: newType, count: newCount, marksEach: newMarks }))}>{add.busy ? t.editor.busy : t.editor.generate}</button>
+          </div>
+          {add.err && <p role="alert" className="text-xs text-danger">{add.err}</p>}
+        </div>
+      )}
     </div>
   );
 }

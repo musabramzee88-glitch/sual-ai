@@ -149,6 +149,7 @@ enum QuestionType {
   WRITING // التعبير
   REORDER // رتّب الكلمات
   VERB_FORMS // صيغة الفعل
+  WHO_SAID // من القائل؟ ولمن؟
 }
 
 enum Difficulty {

@@ -14,6 +14,8 @@ export const QUESTION_TYPES = [
   "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "WRITING",
   // اللغات الأجنبية
   "REORDER", "VERB_FORMS",
+  // القراءة والتاريخ والإسلامية
+  "WHO_SAID",
 ] as const;
 export type QType = (typeof QUESTION_TYPES)[number];
 
@@ -46,7 +48,7 @@ export const QT: Record<QType, Def> = {
   DIAGRAM: { ar: "رسومات وأشكال", en: "Diagrams", instAr: "أجب مستعيناً بالأشكال:", instEn: "Answer using the diagrams:", hint: "" },
   ALGORITHM: { ar: "خوارزمية / برنامج", en: "Algorithm / program", instAr: "اكتب خوارزمية (أو برنامجاً) لما يأتي:", instEn: "Write an algorithm / program:", hint: "a small task solvable with what the book teaches; answer is numbered steps or code in the book's language" },
   COMPLETE_VERSE: { ar: "أكمل الآيات الكريمة", en: "Complete the verses", instAr: "أكمل الآيات الكريمة الآتية:", instEn: "Complete the verses:", hint: "copy the START of a Quranic verse from the source EXACTLY (same words and diacritics) then ......; answer is the EXACT continuation copied from the source. Never write any Quran text that is not printed in the source pages" },
-  WRITE_VERSE: { ar: "اكتب الآية الدالة", en: "Write the verse", instAr: "اكتب الآية الكريمة التي تدل على كل مما يأتي:", instEn: "Write the verse indicating:", hint: "state a meaning from the lesson; answer is the EXACT verse copied from the source pages" },
+  WRITE_VERSE: { ar: "اكتب الآيات الكريمة", en: "Write the verses", instAr: "اكتب الآيات الكريمة الآتية:", instEn: "Write the verses:", hint: "Iraqi style: the item is «من قوله تعالى ﴿first words﴾ إلى قوله تعالى ﴿last words﴾» (2-4 consecutive verses from a memorisation passage in the source), or «الآية التي تدل على <meaning>»; answer is the EXACT verses copied from the source" },
   EXPLAIN_VERSE: { ar: "فسّر / وضّح المعنى", en: "Explain", instAr: "وضّح ما يُفهم من كل مما يأتي:", instEn: "Explain:", hint: "quote (exactly) a short part of a verse or hadith from the source and ask for its meaning/what is understood; answer per the book's explanation" },
   WRITE_HADITH: { ar: "اذكر الحديث الشريف", en: "Write the hadith", instAr: "اكتب الحديث الشريف الذي يدل على كل مما يأتي:", instEn: "Write the hadith indicating:", hint: "state the topic of a hadith in the lesson; answer is the EXACT hadith text copied from the source, with its narrator if printed" },
   TAJWEED: { ar: "أحكام التلاوة", en: "Tajweed rules", instAr: "بيّن حكم التلاوة فيما يأتي:", instEn: "State the tajweed rule:", hint: "quote a word/phrase from the source verses with the relevant letters in [brackets]; answer is the rule as taught in the book, with its reason" },
@@ -61,6 +63,7 @@ export const QT: Record<QType, Def> = {
   CORRECT_ERROR: { ar: "صحّح الخطأ", en: "Correct the mistake", instAr: "صحّح الخطأ في الجمل الآتية:", instEn: "Correct the mistakes:", hint: "a sentence with exactly one deliberate mistake related to the lesson; answer is the corrected sentence" },
   WRITING: { ar: "التعبير / الإنشاء", en: "Writing", instAr: "اكتب موضوعاً تعبيرياً في واحد مما يأتي:", instEn: "Write about:", hint: "a writing task on a lesson topic with 2-3 guiding points; answer lists the expected elements" },
   REORDER: { ar: "رتّب الكلمات", en: "Put in order", instAr: "رتّب الكلمات الآتية لتكوّن جملاً مفيدة:", instEn: "Put the words in order to make sentences:", hint: "the words of a sentence from the lesson, shuffled and separated by ' / '; answer is the correct sentence" },
+  WHO_SAID: { ar: "من القائل؟ ولمن؟", en: "Who said it?", instAr: "من القائل؟ ولمن قال؟ وفي أي مناسبة؟", instEn: "Who said it, to whom and when?", hint: "quote a sentence said by a character in a lesson story/text of the source (in quotes); answer: who said it, to whom, and the occasion, per the book" },
   VERB_FORMS: { ar: "صيغة الفعل الصحيحة", en: "Verb forms", instAr: "اكتب الفعل بالصيغة الصحيحة:", instEn: "Correct the verbs between brackets:", hint: "a sentence with the base verb in (brackets) to put in the correct tense/form taught in the book; answer is the full correct sentence" },
 };
 
@@ -70,11 +73,11 @@ const SOCIAL_CORE: QType[] = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "DE
 const LANG_CORE: QType[] = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "REORDER", "VERB_FORMS", "CORRECT_ERROR", "CONVERT", "WORD_MEANINGS", "WORD_FORMS", "COMPREHENSION", "WRITING", "ESSAY"];
 
 export const SUBJECT_TYPES: Record<string, QType[]> = {
-  ISLAMIC: ["COMPLETE_VERSE", "WRITE_VERSE", "EXPLAIN_VERSE", "WORD_MEANINGS", "WRITE_HADITH", "LESSONS", "TAJWEED", "DEFINE", "JUSTIFY", "LIST", "COMPARE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "ESSAY"],
+  ISLAMIC: ["COMPLETE_VERSE", "WRITE_VERSE", "EXPLAIN_VERSE", "WORD_MEANINGS", "WRITE_HADITH", "LESSONS", "TAJWEED", "WHO_SAID", "DEFINE", "JUSTIFY", "LIST", "COMPARE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "ESSAY"],
   ETHICS: ["SITUATION", "LESSONS", "LIST", "JUSTIFY", "DEFINE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ESSAY"],
-  READING: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "LESSONS", "JUSTIFY", "EXTRACT", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
+  READING: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "WHO_SAID", "LESSONS", "JUSTIFY", "EXTRACT", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
   GRAMMAR: ["GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "MCQ", "TRUE_FALSE", "FILL_BLANK"],
-  ARABIC: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "LESSONS", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
+  ARABIC: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "WHO_SAID", "GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "LESSONS", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
   ENGLISH: LANG_CORE,
   FRENCH: LANG_CORE,
   KURDISH: LANG_CORE,
@@ -84,7 +87,7 @@ export const SUBJECT_TYPES: Record<string, QType[]> = {
   BIOLOGY: [...SCIENCE_CORE, "ESSAY", "COMPREHENSION", "DIAGRAM"],
   SCIENCE: [...SCIENCE_CORE, "PROBLEM", "APPLIED", "ESSAY", "DIAGRAM"],
   SOCIAL: [...SOCIAL_CORE, "DIAGRAM"],
-  HISTORY: SOCIAL_CORE,
+  HISTORY: [...SOCIAL_CORE, "WHO_SAID"],
   GEOGRAPHY: [...SOCIAL_CORE, "DIAGRAM"],
   ECONOMICS: [...SOCIAL_CORE, "PROBLEM"],
   COMPUTER: ["DEFINE", "LIST", "COMPARE", "JUSTIFY", "MCQ", "TRUE_FALSE", "FILL_BLANK", "ALGORITHM", "APPLIED", "PROBLEM"],
@@ -94,3 +97,34 @@ export const SUBJECT_TYPES: Record<string, QType[]> = {
 };
 
 export const qtLabels = (lang: "ar" | "en") => Object.fromEntries(QUESTION_TYPES.map((t) => [t, lang === "en" ? QT[t].en : QT[t].ar])) as Record<string, string>;
+
+/**
+ * وزن السؤال في التوزيع الذكي للدرجات (جهد الإجابة المتوقع): الأسئلة المغلقة 1، القصيرة 2، المتوسطة 3، الطويلة 4–5.
+ * الصعوبة تضرب الوزن: سهل ×0.8، صعب ×1.3.
+ */
+export const TYPE_WEIGHT: Record<QType, number> = {
+  MCQ: 1, TRUE_FALSE: 1, FILL_BLANK: 1, MATCHING: 1, WORD_MEANINGS: 1, WORD_FORMS: 1, REORDER: 1, VERB_FORMS: 1,
+  DEFINE: 2, JUSTIFY: 2, LIST: 2, WHAT_IF: 2, EXTRACT: 2, CONVERT: 2, CORRECT_ERROR: 2, TAJWEED: 2, LESSONS: 2, SITUATION: 2, COMPUTE: 2, WHO_SAID: 2,
+  EXPLAIN_VERSE: 3, COMPARE: 3, GRAMMAR_PARSING: 3, COMPLETE_VERSE: 3, COMPLETE_POEM: 3, WRITE_HADITH: 3, COMPREHENSION: 3, EQUATION_BALANCING: 3, APPLIED: 3, DIAGRAM: 3,
+  WRITE_VERSE: 4, PROBLEM: 4, PROOF: 4, ALGORITHM: 4, ESSAY: 4, WRITING: 5,
+};
+
+/**
+ * أسلوب الامتحانات العراقية حسب عائلة المادة (يُضاف إلى تعليمات النموذج). مستخلص من أعراف ورقة الأسئلة
+ * في مدارس وزارة التربية العراقية: سؤال رئيس بتعليمة واحدة ثم فروع قصيرة مرقّمة، بلغة الكتاب ومصطلحاته.
+ */
+export const STYLE_BY_FAMILY: Record<string, string> = {
+  ISLAMIC: "Islamic education (التربية الإسلامية) in Iraqi schools: memorisation of verses is tested by «اكتب الآيات الكريمة من قوله تعالى ﴿…﴾ إلى قوله تعالى ﴿…﴾» and «أكمل»; then «ما معنى الكلمات الآتية» from the lesson's معاني المفردات, «ما الذي ترشد إليه الآيات الكريمة؟», «اكتب الحديث الشريف الذي يدل على…», «علّل», «عدّد», and questions on السيرة and الآداب. Use the book's wording for meanings and lessons. Quote Quran in ﴿ ﴾ exactly as printed.",
+  ARABIC: "Arabic (القراءة/القواعد) in Iraqi schools: reading tests use «هات معاني الكلمات», «هات مفرد/جمع/ضد», «من القائل؟ ولمن؟», «ما الفكرة العامة للنص», «أكمل الأبيات» for المحفوظات; grammar tests use «أعرب ما بين القوسين», «استخرج من النص…», «حوّل… إلى…», «صحّح الخطأ», with example sentences in the book's style. Write full إعراب in the answers (e.g. فاعل مرفوع وعلامة رفعه الضمة الظاهرة على آخره).",
+  ENGLISH: "English for Iraq exams: Q1 reading comprehension, then vocabulary (choose/match), grammar (correct the verbs between brackets, rewrite, rearrange words), a short dialogue to complete, and guided writing. Use only the vocabulary and structures of the source units. Simple, clear sentences for the grade.",
+  OTHER_LANGUAGE: "Language exam in the Iraqi style: comprehension, vocabulary, grammar transformations, rearranging words, and short guided writing, using only the source unit's vocabulary.",
+  MATHEMATICS: "Iraqi math exams: «جد ناتج», «حلّ المعادلة», word problems with full working, «اختر الإجابة الصحيحة», «ضع علامة صح أو خطأ». Use NEW numbers of the same difficulty as the book examples; numbers and expressions written exactly as in the book (Arabic-Indic digits if the book uses them).",
+  GENERAL_SCIENCE: "Iraqi science exams: «عرّف», «علّل», «ماذا يحدث لو», «قارن», «عدّد», «اختر», «املأ الفراغ», «ضع صح أو خطأ وصحّح الخطأ (دون تغيير ما تحته خط)». Scientific terms exactly as in the book.",
+  PHYSICS: "Iraqi physics exams: definitions, «علّل», «ماذا يحدث», «ما العوامل التي يعتمد عليها», derivations, and numeric problems with given/required/law/substitution/units.",
+  CHEMISTRY: "Iraqi chemistry exams: definitions, «علّل», «ماذا يحدث», balanced equations with states, and calculation problems with units, using the book's notation.",
+  BIOLOGY: "Iraqi biology exams: definitions, «علّل», «ماذا يحدث», «قارن», «عدّد», «ما وظيفة», with the book's terms.",
+  SOCIAL_STUDIES: "Iraqi social studies exams: «عرّف», «علّل», «عدّد», «ماذا يترتب على», «قارن», «املأ الفراغ», dates and names exactly as in the book.",
+  COMPUTER: "Iraqi computer exams: definitions, lists, compare, true/false, and writing an algorithm or a short program in the book's language and syntax.",
+  OTHER: "Short, clear questions in the Iraqi school style, using the book's wording.",
+};
+

@@ -34,11 +34,14 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
   const [kind, setKind] = useState("MONTHLY");
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("");
+  const [marking, setMarking] = useState<"smart" | "equal" | "manual">("smart");
+  const [total, setTotal] = useState(100);
+  const manual = marking === "manual";
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const totalQ = rows.reduce((n, r) => n + r.count, 0);
-  const totalM = rows.reduce((n, r) => n + r.count * r.marksEach, 0);
+  const totalM = manual ? rows.reduce((n, r) => n + r.count * r.marksEach, 0) : total;
   const pickBook = (id: string) => {
     setCurId(id);
     const c = options.find((o) => o.id === id);
@@ -50,7 +53,7 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
   };
   const setRow = (i: number, p: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const sourceOk = effMode === "chapters" ? chapterIds.length > 0 : pageFrom >= 1 && pageTo >= pageFrom && pageTo <= (cur?.pageCount ?? 0);
-  const canGo = !!cur && sourceOk && rows.length > 0 && totalQ <= 40 && new Set(rows.map((r) => r.type)).size === rows.length && !busy;
+  const canGo = !!cur && sourceOk && rows.length > 0 && totalQ <= 40 && new Set(rows.map((r) => r.type)).size === rows.length && (manual || total >= Math.ceil(totalQ / 2)) && !busy;
 
   async function generate() {
     if (!cur) return;
@@ -61,7 +64,8 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          curriculumId: cur.id, kind, difficulty, sections: rows,
+          curriculumId: cur.id, kind, difficulty, sections: manual ? rows : rows.map((r) => ({ ...r, marksEach: 1 })),
+          ...(manual ? {} : { totalMarks: total, distribution: marking }),
           ...(effMode === "chapters" ? { chapterIds } : { pageFrom, pageTo }),
           ...(title.trim() ? { title: title.trim() } : {}),
           ...(Number(duration) >= 5 ? { durationMinutes: Number(duration) } : {}),
@@ -126,16 +130,25 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
         <section className="space-y-3">
           <h2 className="font-semibold">{t.wizard.sections}</h2>
           {rows.map((r, i) => (
-            <div key={i} className="grid grid-cols-[1fr_5rem_5rem_auto] items-end gap-2 text-sm">
+            <div key={i} className={`grid ${manual ? "grid-cols-[1fr_5rem_5rem_auto]" : "grid-cols-[1fr_5rem_auto]"} items-end gap-2 text-sm`}>
               <label className="space-y-1"><span className="text-muted">{t.wizard.type}</span>
                 <select className={sc} value={r.type} onChange={(e) => setRow(i, { type: e.target.value })}>{types.map((x) => <option key={x} value={x}>{t.qt[x] ?? x}</option>)}</select>
               </label>
               <label className="space-y-1"><span className="text-muted">{t.wizard.count}</span><input type="number" min={1} max={20} className={sc} value={r.count} onChange={(e) => setRow(i, { count: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })} /></label>
-              <label className="space-y-1"><span className="text-muted">{t.wizard.marksEach}</span><input type="number" min={1} max={50} className={sc} value={r.marksEach} onChange={(e) => setRow(i, { marksEach: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} /></label>
+              {manual && <label className="space-y-1"><span className="text-muted">{t.wizard.marksEach}</span><input type="number" min={1} max={50} className={sc} value={r.marksEach} onChange={(e) => setRow(i, { marksEach: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })} /></label>}
               <button type="button" className="rounded-lg border border-line px-3 py-2 text-danger disabled:opacity-40" disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>{t.wizard.remove}</button>
             </div>
           ))}
           <button type="button" className="rounded-lg border border-line px-3 py-1.5 text-sm disabled:opacity-40" disabled={rows.length >= Math.min(8, types.length)} onClick={() => setRows((rs) => [...rs, { type: types.find((x) => !rs.some((r) => r.type === x)) ?? types[0], count: 3, marksEach: 2 }])}>{t.wizard.addSection}</button>
+          <div className="grid gap-2 rounded-lg border border-line p-3 text-sm sm:grid-cols-[1fr_8rem]">
+            <fieldset className="space-y-1">
+              <legend className="mb-1 font-semibold">{t.wizard.marking}</legend>
+              {(["smart", "equal", "manual"] as const).map((m) => (
+                <label key={m} className="flex items-center gap-2"><input type="radio" name="marking" checked={marking === m} onChange={() => setMarking(m)} />{m === "smart" ? t.wizard.markSmart : m === "equal" ? t.wizard.markEqual : t.wizard.markManual}</label>
+              ))}
+            </fieldset>
+            {!manual && <label className="space-y-1"><span className="text-muted">{t.wizard.totalMarks}</span><input type="number" min={5} max={1000} className={sc} value={total} onChange={(e) => setTotal(Math.max(5, Math.min(1000, Number(e.target.value) || 5)))} /></label>}
+          </div>
           <p className={`text-sm ${totalQ > 40 ? "text-danger" : "text-muted"}`}>{fill(t.wizard.summary, { q: totalQ, m: totalM })}</p>
         </section>
       )}

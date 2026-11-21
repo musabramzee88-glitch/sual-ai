@@ -17,7 +17,7 @@ vi.mock("../ai/gemini", async (orig) => {
 });
 
 const { db } = await import("../db");
-const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions } = await import("./service");
+const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions, updateSection, addManualQuestion, reorderQuestions, reorderSections, deleteSection, addSection, generateMore, updateExamMeta, distributeExamMarks } = await import("./service");
 const { AiError } = await import("../ai/gemini");
 
 const TAG = `ex${Date.now()}`;
@@ -123,13 +123,13 @@ describe("exam generation", () => {
     reply = { questions: [q(0, "عرّف الكلوروفيل", { answer: "صبغة خضراء" })] };
     expect((await regenerateQuestion(userId, b.id)).ok).toBe(true);
     expect(calls.at(-1)!.prompt).toContain("Do NOT repeat these existing questions");
-    expect(calls.at(-1)!.prompt).toContain("عرّف الماء");
+    expect(calls.at(-1)!.prompt).toContain("  - الماء"); // فعل التعليمة لا يُخزَّن في الفرع
     e = (await getExam(userId, r.examId))!;
-    expect(e.sections[0].branches[1].prompt).toBe("عرّف الكلوروفيل");
+    expect(e.sections[0].branches[1].prompt).toBe("الكلوروفيل");
 
     expect((await undoQuestion(userId, b.id)).ok).toBe(true);
     e = (await getExam(userId, r.examId))!;
-    expect(e.sections[0].branches[1].prompt).toBe("عرّف الماء");
+    expect(e.sections[0].branches[1].prompt).toBe("الماء");
     expect(await db.examQuestionRevision.count({ where: { questionId: b.id } })).toBe(3); // CREATE, REGENERATE, RESTORE
 
     expect((await deleteQuestion(userId, b.id)).ok).toBe(true);
@@ -137,4 +137,58 @@ describe("exam generation", () => {
     expect(e.sections[0].branches).toHaveLength(1);
     expect(e.totalMarks).toBe(5);
   });
+
+  it("whole-exam editing: honorifics, total marks distribution, sections and items edited, added, reordered, deleted", async () => {
+    reply = { questions: [
+      q(0, "عرّف الضوء", { answer: "طاقة يحتاجها النبات كما قال النبي (ص)" }),
+      q(0, "عرّف الماء", { answer: "سائل", sourcePages: [11] }),
+      q(1, "علّل: يحتاج النبات للضوء", { answer: "للبناء الضوئي", difficulty: "HARD" }),
+    ] };
+    const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "MONTHLY", difficulty: "MIXED", totalMarks: 20, distribution: "smart", sections: [{ type: "DEFINE", count: 2, marksEach: 1 }, { type: "JUSTIFY", count: 1, marksEach: 1 }] });
+    if (!r.ok) throw new Error(r.code);
+    let e = (await getExam(userId, r.examId))!;
+    expect(e.totalMarks).toBe(20);
+    expect(e.sections.reduce((n, s) => n + s.marks, 0)).toBe(20);
+    expect(e.sections[0].branches[0].prompt).toBe("الضوء"); // بلا «عرّف» في كل فرع
+    expect(e.sections[0].branches[0].answer).toContain("(صلى\u00A0الله\u00A0عليه\u00A0وآله\u00A0وسلم)");
+
+    const [def, just] = e.sections;
+    expect((await updateSection(userId, def.id, { instruction: "عرّف المصطلحات الآتية:", marks: 9 })).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections[0].instruction).toBe("عرّف المصطلحات الآتية:");
+    expect(e.sections[0].branches.map((b) => b.marks)).toEqual([4.5, 4.5]);
+    expect(e.totalMarks).toBe(9 + just.marks);
+
+    expect(await addManualQuestion(userId, def.id, { prompt: "عرّف التربة", answer: "الطبقة السطحية", marks: 3 })).toMatchObject({ ok: true });
+    e = (await getExam(userId, r.examId))!;
+    const items = e.sections[0].branches;
+    expect(items.map((b) => b.prompt)).toEqual(["الضوء", "الماء", "التربة"]);
+    expect((await reorderQuestions(userId, def.id, [items[2].id, items[0].id, items[1].id])).ok).toBe(true);
+    expect(await reorderQuestions(userId, def.id, [items[0].id])).toMatchObject({ ok: false, code: "BAD_ORDER" });
+    expect((await reorderSections(userId, r.examId, [just.id, def.id])).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections[0].type).toBe("JUSTIFY");
+    expect(e.sections[1].branches[0].prompt).toBe("التربة");
+
+    // قسم جديد يُولَّد من المصدر نفسه، ثم فرع إضافي فيه
+    reply = { questions: [q(0, "عدّد ثلاثاً من حاجات النبات", { answer: "الضوء والماء والهواء" })] };
+    expect(await addSection(userId, r.examId, { type: "LIST", count: 1, marksEach: 2 })).toMatchObject({ ok: true, made: 1 });
+    expect(await addSection(userId, r.examId, { type: "LIST", count: 1, marksEach: 2 })).toMatchObject({ ok: false, code: "DUPLICATE_SECTION" });
+    reply = { questions: [q(0, "عدّد مصدرين للماء", { answer: "المطر والأنهار" })] };
+    const list = (await getExam(userId, r.examId))!.sections.find((s) => s.type === "LIST")!;
+    expect(await generateMore(userId, list.id, 1)).toMatchObject({ ok: true, made: 1 });
+    expect(calls.at(-1)!.prompt).toContain("ثلاثاً من حاجات النبات"); // لا يكرر الموجود
+
+    expect((await deleteSection(userId, just.id)).ok).toBe(true);
+    expect((await updateExamMeta(userId, r.examId, { title: "امتحان العلوم الشهري", durationMinutes: 45 })).ok).toBe(true);
+    expect((await distributeExamMarks(userId, r.examId, 30, "equal")).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.title).toBe("امتحان العلوم الشهري");
+    expect(e.durationMinutes).toBe(45);
+    expect(e.sections.map((s) => s.type)).toEqual(["DEFINE", "LIST"]);
+    expect(e.sections.map((s) => s.marks)).toEqual([15, 15]);
+    expect(e.totalMarks).toBe(30);
+    expect(await updateSection(otherId, def.id, { marks: 1 })).toMatchObject({ ok: false, code: "NOT_FOUND" }); // ليس صاحبه
+  });
 });
+

@@ -6,6 +6,7 @@ import { getExam } from "@/server/exams/service";
 import { getLocale } from "@/lib/i18n/server";
 import { examDicts } from "@/lib/i18n/exams";
 import { ExamEditor, type EditorSection } from "@/components/exams/ExamEditor";
+import { GENERATABLE } from "@/server/exams/core";
 
 export const metadata = { title: "مراجعة الامتحان" };
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
@@ -36,7 +37,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       {s.made != null && s.made < requested && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">{fill(t.editor.shortfall, { r: requested, m: s.made })}</p>}
       {(s.imagePages?.length ?? 0) > 0 && <p className="rounded-lg bg-brand-soft px-3 py-2 text-sm">{fill(t.editor.ocrWarn, { n: s.imagePages!.length })}</p>}
       {s.truncated && <p className="text-xs text-muted">{t.editor.truncated}</p>}
-      {exam.status === "READY" && <div className="rounded-2xl border border-line bg-surface p-5"><ExamEditor examId={exam.id} sections={sections} lang={exam.language} t={t} /></div>}
+      {exam.status === "READY" && (
+        <div className="rounded-2xl border border-line bg-surface p-5">
+          <ExamEditor examId={exam.id} title={exam.title} duration={exam.durationMinutes} totalMarks={exam.totalMarks} sections={sections} lang={exam.language} t={t}
+            types={(exam.subject.questionTypes.length ? exam.subject.questionTypes : [...GENERATABLE]).filter((x) => (GENERATABLE as readonly string[]).includes(x))} />
+        </div>
+      )}
     </div>
   );
 }

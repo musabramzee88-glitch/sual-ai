@@ -3,7 +3,8 @@
  * والتحقق من الرد قبل حفظه. كل سؤال يجب أن يستند إلى صفحة من نطاق المصدر (لا أسئلة من خارج الكتاب).
  */
 import { z } from "zod";
-import { GENERATABLE_TYPES, QT, VERBATIM_TYPES, type QType } from "@/lib/question-types";
+import { GENERATABLE_TYPES, QT, STYLE_BY_FAMILY, VERBATIM_TYPES, type QType } from "@/lib/question-types";
+import { polishQuestion } from "@/lib/exam-text";
 
 export const GENERATABLE = GENERATABLE_TYPES as unknown as [Exclude<QType, "DIAGRAM">, ...Exclude<QType, "DIAGRAM">[]];
 export type GenType = Exclude<QType, "DIAGRAM">;
@@ -31,6 +32,9 @@ export const createExamSchema = z
     difficulty: z.enum(DIFFICULTIES).default("MIXED"),
     durationMinutes: z.number().int().min(5).max(300).optional(),
     sections: z.array(section).min(1).max(8),
+    // الدرجة الكلية والتوزيع: smart (حسب نوع السؤال وصعوبته) أو equal (أقسام متساوية)؛ بلا totalMarks = درجة كل سؤال من القسم
+    totalMarks: z.number().int().min(5).max(1000).optional(),
+    distribution: z.enum(["smart", "equal"]).optional(),
   })
   .refine((v) => (v.chapterIds?.length ?? 0) > 0 || (v.pageFrom != null && v.pageTo != null && v.pageTo >= v.pageFrom), { message: "SOURCE_REQUIRED" })
   .refine((v) => v.sections.reduce((n, s) => n + s.count, 0) <= MAX_QUESTIONS, { message: "TOO_MANY_QUESTIONS" })
@@ -45,7 +49,7 @@ export type SourcePage = { pageNumber: number; text: string; isOcr: boolean; asI
 /** نص الطلب للنموذج: المنهج، المصدر بأرقام صفحاته، وأقسام الامتحان المطلوبة */
 export function buildPrompt(opts: {
   subject: string; grade: string; lang: "AR" | "EN"; difficulty: (typeof DIFFICULTIES)[number]; useLatinSymbols: boolean;
-  sections: Section[]; pages: SourcePage[]; avoid?: string[];
+  sections: Section[]; pages: SourcePage[]; avoid?: string[]; family?: string;
 }): string {
   const ocrImg = opts.pages.filter((p) => p.asImage).map((p) => p.pageNumber);
   const ocrText = opts.pages.filter((p) => p.isOcr && !p.asImage).map((p) => p.pageNumber);
@@ -57,6 +61,10 @@ export function buildPrompt(opts: {
     "- Every question MUST list in sourcePages the page number(s) (from the === صفحة N === markers / image labels) where its content appears.",
     "- Questions must be clear, unambiguous, age-appropriate, and each must have exactly one correct answer (for closed types).",
     "- Do not repeat or trivially rephrase the same idea in two questions. Spread questions across the source pages.",
+    "- The paper prints each section's instruction ONCE above its items (e.g. «عرّف ما يأتي:»). Each item must NOT repeat that verb: write «البناء الضوئي» not «عرّف البناء الضوئي».",
+    opts.lang === "AR" ? "- Honorifics in full, never abbreviated: after the Prophet Muhammad write (صلى الله عليه وآله وسلم), after any other prophet (عليه السلام), after a companion (رضي الله عنه/عنها/عنهم). Never write (ص) or (ع) or (رض)." : "",
+    `- Iraqi exam style for this subject: ${STYLE_BY_FAMILY[opts.family ?? "OTHER"] ?? STYLE_BY_FAMILY.OTHER}`,
+    "- Model answers: complete and precise as a teacher's answer key, in the book's own wording, short where the question is short.",
     opts.sections.some((x) => VERBATIM_TYPES.includes(x.type)) ? "- Quran verses, hadiths and memorised poems must be copied CHARACTER-FOR-CHARACTER from the source pages. If a section cannot be filled from text that is actually printed in the source, write fewer questions for it — never quote from memory." : "",
     `- Difficulty: ${opts.difficulty === "MIXED" ? "a balanced mix of EASY, MEDIUM and HARD" : opts.difficulty}.`,
     opts.useLatinSymbols ? "- Write mathematical expressions with Latin symbols (x, y, a, b) and normal digits, as in Iraqi math books." : "",
@@ -157,9 +165,11 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
     const correction = answer.replace(/^[^-–—:]*[-–—:]\s*/, "").trim();
     answer = (lang === "EN" ? (isTrue ? "True" : "False") : isTrue ? "صح" : "خطأ") + (isFalse && correction && correction !== answer ? ` — ${correction}` : "");
   }
+  // الصيغ الكاملة للصلاة والترضّي، وحذف فعل التعليمة المكرر (بعد التحقق الحرفي)
+  const polished = polishQuestion(type, lang, { prompt, answer, options });
   const difficulty = q.difficulty === "EASY" || q.difficulty === "MEDIUM" || q.difficulty === "HARD" ? q.difficulty : null;
   const cognitiveLevel = (COGNITIVE as readonly string[]).includes(q.cognitiveLevel ?? "") ? (q.cognitiveLevel as CleanQuestion["cognitiveLevel"]) : null;
-  return { prompt, options, answer, sourcePages, difficulty, cognitiveLevel };
+  return { prompt: polished.prompt, options: polished.options, answer: polished.answer, sourcePages, difficulty, cognitiveLevel };
 }
 
 /** يوزّع رد النموذج على الأقسام: تنظيف، إزالة المكرر، والاقتصار على العدد المطلوب */
