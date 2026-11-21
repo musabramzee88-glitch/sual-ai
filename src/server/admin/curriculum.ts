@@ -31,8 +31,8 @@ export const schemas = {
     update: z.object({ ...patchBase, gradeCodes: codes.optional() }),
   },
   subjects: {
-    create: z.object({ code: codeSchema, ...base, family: z.nativeEnum(SubjectFamily), questionTypes: z.array(z.nativeEnum(QuestionType)).min(1).max(20), useLatinSymbols: z.boolean().default(false) }),
-    update: z.object({ ...patchBase, family: z.nativeEnum(SubjectFamily).optional(), questionTypes: z.array(z.nativeEnum(QuestionType)).min(1).max(20).optional(), useLatinSymbols: z.boolean().optional() }),
+    create: z.object({ code: codeSchema, ...base, family: z.nativeEnum(SubjectFamily), questionTypes: z.array(z.nativeEnum(QuestionType)).min(1).max(40), useLatinSymbols: z.boolean().default(false) }),
+    update: z.object({ ...patchBase, family: z.nativeEnum(SubjectFamily).optional(), questionTypes: z.array(z.nativeEnum(QuestionType)).min(1).max(40).optional(), useLatinSymbols: z.boolean().optional() }),
   },
   years: {
     create: z.object({ label: z.string().regex(/^\d{4}-\d{4}$/), startsOn: z.coerce.date(), endsOn: z.coerce.date() }).refine((v) => v.endsOn > v.startsOn, { message: "INVALID_DATE" }),

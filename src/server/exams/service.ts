@@ -76,7 +76,8 @@ type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols:
 async function askModel(ctx: Ctx, difficulty: CreateExamInput["difficulty"], sections: Section[], src: Awaited<ReturnType<typeof loadSource>>, avoid?: string[]) {
   const prompt = buildPrompt({ ...ctx, difficulty, sections, pages: src.pages, avoid });
   const r = await geminiJson<{ questions?: RawQuestion[] }>({ prompt, images: src.images, schema: RESPONSE_SCHEMA, maxOutputTokens: 16_384 });
-  const allowed = new Set(src.pages.map((p) => p.pageNumber));
+  // نص الصفحة الموثوق (طبقة نص أصلية، لا OCR ولا صورة) للتحقق من النصوص المنقولة حرفياً
+  const allowed = new Map(src.pages.map((p) => [p.pageNumber, { text: p.text, trusted: !p.isOcr && !p.asImage }]));
   return sortIntoSections(r.questions ?? [], sections, allowed, ctx.lang);
 }
 
@@ -207,7 +208,12 @@ async function recomputeMarks(tx: Prisma.TransactionClient, examId: string, pare
 export async function editQuestion(userId: string, questionId: string, patch: { prompt?: string; options?: string[] | null; answer?: string; marks?: number }) {
   const q = await ownedQuestion(userId, questionId);
   if (!q) return fail("NOT_FOUND");
-  if (q.type === "MCQ" && patch.options !== undefined && patch.options !== null && patch.answer !== undefined && !patch.options.includes(patch.answer)) return fail("ANSWER_NOT_IN_OPTIONS");
+  // اختيار من متعدد: الجواب النهائي يجب أن يكون أحد الخيارات النهائية (سواء عُدّل أحدهما أو كلاهما)
+  if (q.type === "MCQ" && (patch.options !== undefined || patch.answer !== undefined)) {
+    const opts = patch.options !== undefined ? patch.options : ((q.options as string[] | null) ?? null);
+    const ans = patch.answer ?? q.answer ?? "";
+    if (!opts || opts.length < 2 || !opts.includes(ans)) return fail("ANSWER_NOT_IN_OPTIONS");
+  }
   await db.$transaction(async (tx) => {
     await tx.examQuestionRevision.create({ data: { questionId: q.id, version: q.version + 1, reason: "EDIT", snapshot: snapshot(q), editedById: userId } });
     await tx.examQuestion.update({

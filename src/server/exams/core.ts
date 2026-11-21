@@ -3,9 +3,10 @@
  * والتحقق من الرد قبل حفظه. كل سؤال يجب أن يستند إلى صفحة من نطاق المصدر (لا أسئلة من خارج الكتاب).
  */
 import { z } from "zod";
+import { GENERATABLE_TYPES, QT, VERBATIM_TYPES, type QType } from "@/lib/question-types";
 
-export const GENERATABLE = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "JUSTIFY", "DEFINE", "COMPARE", "PROBLEM", "PROOF", "ESSAY", "APPLIED", "COMPREHENSION", "GRAMMAR_PARSING", "EQUATION_BALANCING"] as const;
-export type GenType = (typeof GENERATABLE)[number];
+export const GENERATABLE = GENERATABLE_TYPES as unknown as [Exclude<QType, "DIAGRAM">, ...Exclude<QType, "DIAGRAM">[]];
+export type GenType = Exclude<QType, "DIAGRAM">;
 export const DIFFICULTIES = ["EASY", "MEDIUM", "HARD", "MIXED"] as const;
 export const COGNITIVE = ["REMEMBER", "UNDERSTAND", "APPLY", "ANALYZE", "EVALUATE", "CREATE"] as const;
 export const EXAM_KINDS = ["QUIZ", "MONTHLY", "MIDTERM", "FINAL", "MINISTERIAL_STYLE"] as const;
@@ -37,24 +38,7 @@ export const createExamSchema = z
 export type CreateExamInput = z.infer<typeof createExamSchema>;
 export type Section = z.infer<typeof section>;
 
-/** تعليمات كل نوع بأسلوب الامتحانات العراقية (عربي/إنكليزي) */
-export const INSTRUCTIONS: Record<GenType, { ar: string; en: string; hint: string }> = {
-  MCQ: { ar: "اختر الإجابة الصحيحة لكل مما يأتي:", en: "Choose the correct answer:", hint: "four options exactly; answer must equal one option verbatim" },
-  TRUE_FALSE: { ar: "ضع كلمة (صح) أمام العبارة الصحيحة وكلمة (خطأ) أمام العبارة الخاطئة:", en: "Write True or False:", hint: "a statement; answer is صح/خطأ (or True/False for English); for خطأ add the correction after a dash" },
-  FILL_BLANK: { ar: "املأ الفراغات الآتية بما يناسبها:", en: "Fill in the blanks:", hint: "use ...... for each blank; answer lists the missing words in order" },
-  JUSTIFY: { ar: "علّل ما يأتي:", en: "Give reasons:", hint: "a fact from the book whose reason is stated in the book" },
-  DEFINE: { ar: "عرّف ما يأتي:", en: "Define:", hint: "a term defined in the book; answer is the book's definition" },
-  COMPARE: { ar: "قارن بين ما يأتي:", en: "Compare:", hint: "two related concepts from the book; answer gives the differences" },
-  PROBLEM: { ar: "حلّ المسائل الآتية:", en: "Solve:", hint: "a numeric problem like the book's examples, with NEW numbers; answer shows full working and final result" },
-  PROOF: { ar: "أثبت ما يأتي:", en: "Prove:", hint: "a statement provable with the book's theorems; answer is the proof" },
-  ESSAY: { ar: "أجب عن الأسئلة الآتية:", en: "Answer the following:", hint: "an open question; answer lists the expected points" },
-  APPLIED: { ar: "أجب عن الأسئلة التطبيقية الآتية:", en: "Applied questions:", hint: "apply a concept from the book to a real situation" },
-  COMPREHENSION: { ar: "اقرأ ثم أجب:", en: "Read and answer:", hint: "a question about a passage or lesson text in the book" },
-  GRAMMAR_PARSING: { ar: "أعرب ما تحته خط:", en: "Parse:", hint: "a sentence (from the book or similar) with the word to parse in [square brackets]; answer is full إعراب" },
-  EQUATION_BALANCING: { ar: "اكتب المعادلات الكيميائية الآتية ووازنها:", en: "Write and balance:", hint: "a reaction described in words; answer is the balanced equation" },
-};
-
-export const instructionFor = (type: GenType, lang: "AR" | "EN") => (lang === "EN" ? INSTRUCTIONS[type].en : INSTRUCTIONS[type].ar);
+export const instructionFor = (type: GenType, lang: "AR" | "EN") => (lang === "EN" ? QT[type].instEn : QT[type].instAr);
 
 export type SourcePage = { pageNumber: number; text: string; isOcr: boolean; asImage: boolean };
 
@@ -73,13 +57,14 @@ export function buildPrompt(opts: {
     "- Every question MUST list in sourcePages the page number(s) (from the === صفحة N === markers / image labels) where its content appears.",
     "- Questions must be clear, unambiguous, age-appropriate, and each must have exactly one correct answer (for closed types).",
     "- Do not repeat or trivially rephrase the same idea in two questions. Spread questions across the source pages.",
+    opts.sections.some((x) => VERBATIM_TYPES.includes(x.type)) ? "- Quran verses, hadiths and memorised poems must be copied CHARACTER-FOR-CHARACTER from the source pages. If a section cannot be filled from text that is actually printed in the source, write fewer questions for it — never quote from memory." : "",
     `- Difficulty: ${opts.difficulty === "MIXED" ? "a balanced mix of EASY, MEDIUM and HARD" : opts.difficulty}.`,
     opts.useLatinSymbols ? "- Write mathematical expressions with Latin symbols (x, y, a, b) and normal digits, as in Iraqi math books." : "",
     ocrImg.length ? `- Pages ${ocrImg.join(", ")} are attached as IMAGES (their extracted text is unreliable): read their content from the images.` : "",
     ocrText.length ? `- The text of pages ${ocrText.join(", ")} was read by OCR and may contain errors, especially in numbers. Do not copy numbers from these pages unless they are unambiguous.` : "",
     "",
     "SECTIONS TO WRITE (section index, type, number of questions):",
-    ...opts.sections.map((s, i) => `  section ${i}: ${s.type} × ${s.count} — ${INSTRUCTIONS[s.type].hint}`),
+    ...opts.sections.map((s, i) => `  section ${i}: ${s.type} × ${s.count} — ${QT[s.type].hint}`),
     opts.avoid?.length ? `\nDo NOT repeat these existing questions:\n${opts.avoid.map((a) => `  - ${a.slice(0, 200)}`).join("\n")}` : "",
     "",
     "SOURCE PAGES:",
@@ -119,13 +104,38 @@ export type CleanQuestion = { prompt: string; options: string[] | null; answer: 
 const norm = (s: string) => s.normalize("NFKC").replace(/[ً-ٰٟـ]/g, "").replace(/[أإآ]/g, "ا").replace(/\s+/g, " ").trim().toLowerCase();
 
 /** ينظّف سؤالاً واحداً لنوعه؛ null إن لم يصلح (يُسقط ولا يُحفظ) */
-export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<number>, lang: "AR" | "EN"): CleanQuestion | null {
+/** صفحات المصدر للتحقق: النص الموثوق (طبقة نص، لا OCR ولا صورة) يُستعمل لمطابقة النصوص المنقولة حرفياً */
+export type PageRef = { text: string; trusted: boolean };
+
+const tokens = (s: string) => norm(s).replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length >= 2);
+
+/**
+ * نص منقول حرفياً (آية، حديث، بيت شعر): 85% على الأقل من كلماته موجودة في نص إحدى الصفحات الموثوقة المذكورة.
+ * إن كانت كل الصفحات المذكورة صوراً/OCR لا يمكن التحقق آلياً فيُقبل (والواجهة تطلب من المدرس مطابقته).
+ */
+export function verbatimOk(text: string, cited: number[], pages: Map<number, PageRef>): boolean {
+  const trusted = cited.map((n) => pages.get(n)).filter((p): p is PageRef => !!p && p.trusted);
+  if (trusted.length === 0) return true;
+  const want = tokens(text);
+  if (want.length === 0) return false;
+  return trusted.some((p) => {
+    const have = new Set(tokens(p.text));
+    return want.filter((w) => have.has(w)).length / want.length >= 0.85;
+  });
+}
+
+export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<number> | Map<number, PageRef>, lang: "AR" | "EN"): CleanQuestion | null {
   const prompt = String(q.prompt ?? "").trim();
   let answer = String(q.answer ?? "").trim();
   if (prompt.length < 3 || prompt.length > 1500 || answer.length < 1 || answer.length > 3000) return null;
   // لا سؤال بلا صفحة مصدر داخل النطاق
   const sourcePages = [...new Set((q.sourcePages ?? []).filter((n) => Number.isInteger(n) && allowedPages.has(n)))].sort((a, b) => a - b);
   if (sourcePages.length === 0) return null;
+  // القرآن والحديث والشعر: النص المنقول (الجواب، ومعه بداية الآية في السؤال) يجب أن يطابق الكتاب
+  if (VERBATIM_TYPES.includes(type) && allowedPages instanceof Map) {
+    const quoted = type === "COMPLETE_VERSE" || type === "COMPLETE_POEM" ? `${prompt.replace(/[.…]{2,}/g, " ")} ${answer}` : answer;
+    if (!verbatimOk(quoted, sourcePages, allowedPages)) return null;
+  }
   let options: string[] | null = null;
   if (type === "MCQ") {
     const opts = [...new Set((q.options ?? []).map((o) => String(o).trim()).filter(Boolean))];
@@ -153,7 +163,7 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
 }
 
 /** يوزّع رد النموذج على الأقسام: تنظيف، إزالة المكرر، والاقتصار على العدد المطلوب */
-export function sortIntoSections(raw: RawQuestion[], sections: Section[], allowedPages: Set<number>, lang: "AR" | "EN"): { bySection: CleanQuestion[][]; dropped: number } {
+export function sortIntoSections(raw: RawQuestion[], sections: Section[], allowedPages: Set<number> | Map<number, PageRef>, lang: "AR" | "EN"): { bySection: CleanQuestion[][]; dropped: number } {
   const bySection: CleanQuestion[][] = sections.map(() => []);
   const seen = new Set<string>();
   let dropped = 0;

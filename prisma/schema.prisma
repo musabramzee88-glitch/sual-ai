@@ -128,6 +128,27 @@ enum QuestionType {
   COMPREHENSION // فهم وتحليل
   GRAMMAR_PARSING // إعراب
   EQUATION_BALANCING // كتابة المعادلة الكيميائية وموازنتها
+  MATCHING // صِل بين العمودين
+  LIST // عدّد / اذكر
+  WHAT_IF // ماذا يحدث لو
+  COMPUTE // جد الناتج
+  ALGORITHM // خوارزمية / برنامج
+  COMPLETE_VERSE // أكمل الآيات الكريمة
+  WRITE_VERSE // اكتب الآية الدالة
+  EXPLAIN_VERSE // وضّح المعنى
+  WRITE_HADITH // اذكر الحديث الشريف
+  TAJWEED // أحكام التلاوة
+  LESSONS // ما يُستفاد
+  SITUATION // ماذا تفعل في الموقف
+  WORD_MEANINGS // معاني الكلمات
+  WORD_FORMS // المفرد/الجمع/الضد
+  COMPLETE_POEM // أكمل الأبيات
+  EXTRACT // استخرج
+  CONVERT // حوّل
+  CORRECT_ERROR // صحّح الخطأ
+  WRITING // التعبير
+  REORDER // رتّب الكلمات
+  VERB_FORMS // صيغة الفعل
 }
 
 enum Difficulty {

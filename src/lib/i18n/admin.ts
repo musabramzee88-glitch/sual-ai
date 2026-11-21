@@ -1,4 +1,5 @@
 import type { Locale } from "./dictionaries";
+import { qtLabels } from "@/lib/question-types";
 
 const ar = {
   panel: "لوحة الإدارة", back: "لوحة المدرس",
@@ -25,7 +26,7 @@ const ar = {
     part: "الجزء", parts: ["بلا جزء", "الجزء الأول", "الجزء الثاني", "الجزء الثالث", "الجزء الرابع", "الجزء الخامس"],
     kind: "نوع الكتاب", kinds: { TEXTBOOK: "كتاب الطالب", EXERCISES: "كتاب التمارين", ACTIVITY: "كتاب النشاط" } as Record<string, string>,
     families: { MATHEMATICS: "رياضيات", PHYSICS: "فيزياء", CHEMISTRY: "كيمياء", BIOLOGY: "أحياء", GENERAL_SCIENCE: "علوم", ARABIC: "عربية", ENGLISH: "إنكليزية", ISLAMIC: "إسلامية", SOCIAL_STUDIES: "اجتماعيات", COMPUTER: "حاسوب", OTHER_LANGUAGE: "لغة أخرى", OTHER: "أخرى" } as Record<string, string>,
-    qt: { MCQ: "اختيار من متعدد", TRUE_FALSE: "صح/خطأ مع التصحيح", FILL_BLANK: "أكمل", JUSTIFY: "علّل", DEFINE: "عرّف", COMPARE: "قارن", PROBLEM: "مسائل", PROOF: "إثبات", ESSAY: "مقالي", APPLIED: "تطبيقي", DIAGRAM: "رسومات", COMPREHENSION: "فهم وتحليل", GRAMMAR_PARSING: "إعراب", EQUATION_BALANCING: "موازنة المعادلات" } as Record<string, string>,
+    qt: qtLabels("ar"),
   },
   books: {
     title: "مكتبة الكتب (PDF)", hint: "ارفع ملفات الكتب (PDF، حتى 100MB لكل ملف). يستخرج النظام نص كل صفحة في الخلفية. الصفحات المصوَّرة (صور ضوئية) تُقرأ تلقائياً بـ OCR محلي وتُعلَّم بأنها OCR لتراجعها، وقد تحوي أخطاء.",
@@ -79,7 +80,7 @@ const en: AdminDict = {
     part: "Part", parts: ["No part", "Part 1", "Part 2", "Part 3", "Part 4", "Part 5"],
     kind: "Book type", kinds: { TEXTBOOK: "Student book", EXERCISES: "Exercises book", ACTIVITY: "Activity book" },
     families: { MATHEMATICS: "Mathematics", PHYSICS: "Physics", CHEMISTRY: "Chemistry", BIOLOGY: "Biology", GENERAL_SCIENCE: "Science", ARABIC: "Arabic", ENGLISH: "English", ISLAMIC: "Islamic", SOCIAL_STUDIES: "Social studies", COMPUTER: "Computer", OTHER_LANGUAGE: "Other language", OTHER: "Other" },
-    qt: { MCQ: "Multiple choice", TRUE_FALSE: "True/false with correction", FILL_BLANK: "Fill in the blank", JUSTIFY: "Justify", DEFINE: "Define", COMPARE: "Compare", PROBLEM: "Problems", PROOF: "Proof", ESSAY: "Essay", APPLIED: "Applied", DIAGRAM: "Diagrams", COMPREHENSION: "Comprehension", GRAMMAR_PARSING: "Grammatical parsing", EQUATION_BALANCING: "Equation balancing" },
+    qt: qtLabels("en"),
   },
   books: {
     title: "Book library (PDF)", hint: "Upload textbook files (PDF, up to 100MB each). Text is extracted per page in the background. Scanned (image-only) pages are read automatically with local OCR and flagged so you can review them; errors are possible.",

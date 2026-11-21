@@ -73,3 +73,38 @@ describe("source pages", () => {
     expect(p).toContain("Pages 11 are attached as IMAGES");
   });
 });
+
+describe("subject question types and verbatim texts", async () => {
+  const { SUBJECT_TYPES, QUESTION_TYPES, QT, GENERATABLE_TYPES } = await import("@/lib/question-types");
+  const { verbatimOk } = await import("./core");
+
+  it("every subject's types exist in the catalog, have Arabic and English instructions, and Islamic education has its Iraqi styles", () => {
+    for (const [code, types] of Object.entries(SUBJECT_TYPES)) {
+      expect(types.length, code).toBeGreaterThan(3);
+      for (const t of types) expect(QUESTION_TYPES, `${code}:${t}`).toContain(t);
+      expect(new Set(types).size, code).toBe(types.length);
+    }
+    for (const t of GENERATABLE_TYPES) expect(QT[t].instAr && QT[t].instEn && QT[t].hint, t).toBeTruthy();
+    expect(SUBJECT_TYPES.ISLAMIC).toEqual(expect.arrayContaining(["COMPLETE_VERSE", "WRITE_VERSE", "EXPLAIN_VERSE", "WRITE_HADITH", "WORD_MEANINGS", "LESSONS", "TAJWEED"]));
+    expect(SUBJECT_TYPES.GRAMMAR).toEqual(expect.arrayContaining(["GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR"]));
+    expect(SUBJECT_TYPES.READING).toEqual(expect.arrayContaining(["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM"]));
+    expect(SUBJECT_TYPES.ENGLISH).toEqual(expect.arrayContaining(["REORDER", "VERB_FORMS", "MATCHING", "COMPREHENSION", "WRITING"]));
+    expect(SUBJECT_TYPES.MATH).toEqual(expect.arrayContaining(["COMPUTE", "PROBLEM"]));
+    expect(SUBJECT_TYPES.CHEMISTRY).toContain("EQUATION_BALANCING");
+    expect(SUBJECT_TYPES.COMPUTER).toContain("ALGORITHM");
+    expect(SUBJECT_TYPES.ETHICS).toContain("SITUATION");
+  });
+
+  const page = { text: "قال تعالى: ﴿ وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا ﴾ صدق الله العظيم", trusted: true };
+  const pages = new Map([[5, page], [6, { text: "", trusted: false }]]);
+
+  it("a completed verse must match the book text (diacritics ignored); a misquote is dropped", () => {
+    expect(verbatimOk("واعتصموا بحبل الله جميعا ولا تفرقوا", [5], pages)).toBe(true);
+    expect(verbatimOk("واعتصموا بحبل الله جميعا ولا تنازعوا فتفشلوا", [5], pages)).toBe(false);
+    expect(cleanQuestion({ prompt: "وَاعْتَصِمُوا بِحَبْلِ اللَّهِ ......", answer: "جَمِيعًا وَلَا تَفَرَّقُوا", sourcePages: [5] }, "COMPLETE_VERSE", pages, "AR")).not.toBeNull();
+    expect(cleanQuestion({ prompt: "وَاعْتَصِمُوا بِحَبْلِ اللَّهِ ......", answer: "جميعا ولا تنازعوا فتفشلوا وتذهب ريحكم", sourcePages: [5] }, "COMPLETE_VERSE", pages, "AR")).toBeNull();
+  });
+  it("pages read from images cannot be checked automatically: kept (the teacher is told to verify)", () => {
+    expect(cleanQuestion({ prompt: "أكمل: ......", answer: "أي نص", sourcePages: [6] }, "WRITE_HADITH", pages, "AR")).not.toBeNull();
+  });
+});

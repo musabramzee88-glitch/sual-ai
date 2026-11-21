@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExamDict } from "@/lib/i18n/exams";
 import { MathText } from "./MathText";
+import { VERBATIM_TYPES, type QType } from "@/lib/question-types";
 
 export type EditorQuestion = { id: string; prompt: string; options: string[] | null; answer: string; marks: number; sourcePages: number[]; version: number };
 export type EditorSection = { id: string; type: string; instruction: string; marks: number; branches: EditorQuestion[] };
@@ -56,6 +57,7 @@ function Question({ q, n, type, lang, t, showAnswer }: { q: EditorQuestion; n: n
               {q.options.map((o, i) => <li key={i}><span className="font-semibold">{letters[i]})</span> <MathText text={o} /></li>)}
             </ol>
           )}
+          {VERBATIM_TYPES.includes(type as QType) && <p className="rounded bg-accent-soft px-2 py-0.5 text-xs">⚠ {t.editor.verbatim}</p>}
           {showAnswer && <p className="rounded bg-brand-soft px-2 py-1 text-sm"><span className="font-semibold">{t.editor.answer}: </span><MathText text={q.answer} /></p>}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             {q.sourcePages.map((p) => <span key={p} className="rounded-full border border-line px-2 py-0.5 text-muted">{t.editor.page} {p}</span>)}

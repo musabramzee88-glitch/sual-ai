@@ -85,6 +85,16 @@ describe("exam generation", () => {
     expect(await getExam(otherId, r.examId)).toBeNull(); // لا يرى امتحان غيره
   });
 
+  it("MCQ edits keep the answer among the options", async () => {
+    reply = { questions: [q(0, "ما العملية؟", { options: ["البناء الضوئي", "التنفس", "الهضم", "النتح"] })] };
+    const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "QUIZ", difficulty: "EASY", sections: [{ type: "MCQ", count: 1, marksEach: 1 }] });
+    if (!r.ok) throw new Error(r.code);
+    const id = (await getExam(userId, r.examId))!.sections[0].branches[0].id;
+    expect(await editQuestion(userId, id, { answer: "الذبول" })).toMatchObject({ ok: false, code: "ANSWER_NOT_IN_OPTIONS" });
+    expect(await editQuestion(userId, id, { options: ["أ", "ب", "ج"] })).toMatchObject({ ok: false, code: "ANSWER_NOT_IN_OPTIONS" });
+    expect((await editQuestion(userId, id, { answer: "التنفس" })).ok).toBe(true);
+  });
+
   it("a quota error fails the exam honestly (no fake questions)", async () => {
     reply = new AiError("QUOTA", "limit: 20 per day");
     const r = await createExam(userId, { curriculumId: curId, pageFrom: 1, pageTo: 5, kind: "QUIZ", difficulty: "EASY", sections: [{ type: "DEFINE", count: 1, marksEach: 1 }] });

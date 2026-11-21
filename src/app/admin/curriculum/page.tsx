@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { QUESTION_TYPES } from "@/lib/question-types";
 import { Act, JsonForm } from "@/components/AdminActions";
 import { AdminShell, Pill, TableWrap, Td, Th } from "@/components/AdminShell";
 import { MultiCheckPatch } from "@/components/CurriculumEditors";
@@ -6,7 +7,7 @@ import { fmtDate } from "@/lib/i18n/admin";
 import { adminCurriculumData, KINDS, type Kind } from "@/server/admin/curriculum";
 import { adminCtx } from "@/server/admin/page";
 
-const QTYPES = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "JUSTIFY", "DEFINE", "COMPARE", "PROBLEM", "PROOF", "ESSAY", "APPLIED", "DIAGRAM", "COMPREHENSION", "GRAMMAR_PARSING", "EQUATION_BALANCING"];
+const QTYPES: string[] = [...QUESTION_TYPES];
 const FAMILIES = ["MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", "GENERAL_SCIENCE", "ARABIC", "ENGLISH", "ISLAMIC", "SOCIAL_STUDIES", "COMPUTER", "OTHER_LANGUAGE", "OTHER"];
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {

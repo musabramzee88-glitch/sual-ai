@@ -53,7 +53,7 @@ describe("book library", () => {
 
     const dup = await uploadBook(actor, { name: "نسخة.pdf", bytes: fx("math-ar.pdf") });
     expect(dup).toEqual({ ok: false, code: "DUPLICATE", existingId: r.id });
-  });
+  }, 60_000); // استخراج PDF حقيقي: أبطأ من 5 ث حين يعمل الجهاز بحمل
 
   it("image-only books: NEEDS_OCR when OCR is off; with OCR they become READY (OCR_USED) and pages are flagged isOcr", async () => {
     const r = await uploadBook(actor, { name: "مصور.pdf", bytes: fx("scanned-ar.pdf") });

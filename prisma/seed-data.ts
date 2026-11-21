@@ -89,10 +89,9 @@ export const BRANCHES = [
   { code: "LITERARY", nameAr: "الأدبي", nameEn: "Literary", grades: ["PREP_4", "PREP_5", "PREP_6"] },
 ] as const;
 
-const Q = {
-  core: ["MCQ", "TRUE_FALSE", "FILL_BLANK"] as QuestionType[],
-};
+import { SUBJECT_TYPES } from "../src/lib/question-types";
 
+// أنواع الأسئلة لكل مادة: src/lib/question-types.ts (SUBJECT_TYPES)
 export const SUBJECTS: {
   code: string;
   nameAr: string;
@@ -102,48 +101,48 @@ export const SUBJECTS: {
   questionTypes: QuestionType[];
 }[] = [
   { code: "MATH", nameAr: "الرياضيات", nameEn: "Mathematics", family: "MATHEMATICS", useLatinSymbols: true,
-    questionTypes: [...Q.core, "DEFINE", "PROBLEM", "PROOF", "APPLIED", "DIAGRAM"] },
+    questionTypes: SUBJECT_TYPES.MATH as QuestionType[] },
   { code: "PHYSICS", nameAr: "الفيزياء", nameEn: "Physics", family: "PHYSICS", useLatinSymbols: true,
-    questionTypes: [...Q.core, "JUSTIFY", "DEFINE", "COMPARE", "PROBLEM", "APPLIED", "DIAGRAM", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.PHYSICS as QuestionType[] },
   { code: "CHEMISTRY", nameAr: "الكيمياء", nameEn: "Chemistry", family: "CHEMISTRY", useLatinSymbols: true,
-    questionTypes: [...Q.core, "JUSTIFY", "DEFINE", "COMPARE", "PROBLEM", "EQUATION_BALANCING", "APPLIED", "DIAGRAM"] },
+    questionTypes: SUBJECT_TYPES.CHEMISTRY as QuestionType[] },
   { code: "BIOLOGY", nameAr: "الأحياء", nameEn: "Biology", family: "BIOLOGY", useLatinSymbols: false,
-    questionTypes: [...Q.core, "JUSTIFY", "DEFINE", "COMPARE", "DIAGRAM", "ESSAY", "COMPREHENSION"] },
+    questionTypes: SUBJECT_TYPES.BIOLOGY as QuestionType[] },
   { code: "SCIENCE", nameAr: "العلوم", nameEn: "Science", family: "GENERAL_SCIENCE", useLatinSymbols: true,
-    questionTypes: [...Q.core, "JUSTIFY", "DEFINE", "COMPARE", "PROBLEM", "DIAGRAM", "APPLIED"] },
+    questionTypes: SUBJECT_TYPES.SCIENCE as QuestionType[] },
   { code: "ARABIC", nameAr: "اللغة العربية", nameEn: "Arabic Language", family: "ARABIC", useLatinSymbols: false,
-    questionTypes: [...Q.core, "GRAMMAR_PARSING", "JUSTIFY", "DEFINE", "COMPREHENSION", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.ARABIC as QuestionType[] },
   { code: "ENGLISH", nameAr: "اللغة الإنكليزية", nameEn: "English Language", family: "ENGLISH", useLatinSymbols: false,
-    questionTypes: [...Q.core, "COMPREHENSION", "ESSAY", "DEFINE"] },
+    questionTypes: SUBJECT_TYPES.ENGLISH as QuestionType[] },
   { code: "ISLAMIC", nameAr: "التربية الإسلامية", nameEn: "Islamic Education", family: "ISLAMIC", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "COMPARE", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.ISLAMIC as QuestionType[] },
   { code: "SOCIAL", nameAr: "الاجتماعيات", nameEn: "Social Studies", family: "SOCIAL_STUDIES", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "COMPARE", "ESSAY", "DIAGRAM"] },
+    questionTypes: SUBJECT_TYPES.SOCIAL as QuestionType[] },
   { code: "HISTORY", nameAr: "التاريخ", nameEn: "History", family: "SOCIAL_STUDIES", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "COMPARE", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.HISTORY as QuestionType[] },
   { code: "GEOGRAPHY", nameAr: "الجغرافية", nameEn: "Geography", family: "SOCIAL_STUDIES", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "COMPARE", "ESSAY", "DIAGRAM"] },
+    questionTypes: SUBJECT_TYPES.GEOGRAPHY as QuestionType[] },
   { code: "ECONOMICS", nameAr: "الاقتصاد", nameEn: "Economics", family: "SOCIAL_STUDIES", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "COMPARE", "ESSAY", "PROBLEM"] },
+    questionTypes: SUBJECT_TYPES.ECONOMICS as QuestionType[] },
   { code: "COMPUTER", nameAr: "الحاسوب", nameEn: "Computer Science", family: "COMPUTER", useLatinSymbols: true,
-    questionTypes: [...Q.core, "DEFINE", "COMPARE", "APPLIED", "PROBLEM"] },
+    questionTypes: SUBJECT_TYPES.COMPUTER as QuestionType[] },
   // مواد المرحلة الابتدائية التي تُدرَّس بكتب مستقلة أو لا تتبع عائلة أخرى
   { code: "READING", nameAr: "القراءة", nameEn: "Reading (Arabic)", family: "ARABIC", useLatinSymbols: false,
-    questionTypes: [...Q.core, "COMPREHENSION", "DEFINE", "JUSTIFY", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.READING as QuestionType[] },
   { code: "GRAMMAR", nameAr: "القواعد", nameEn: "Grammar (Arabic)", family: "ARABIC", useLatinSymbols: false,
-    questionTypes: [...Q.core, "GRAMMAR_PARSING", "DEFINE", "JUSTIFY"] },
+    questionTypes: SUBJECT_TYPES.GRAMMAR as QuestionType[] },
   { code: "ETHICS", nameAr: "التربية الأخلاقية", nameEn: "Moral Education", family: "ISLAMIC", useLatinSymbols: false,
-    questionTypes: [...Q.core, "DEFINE", "JUSTIFY", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.ETHICS as QuestionType[] },
   { code: "ART", nameAr: "التربية الفنية", nameEn: "Art Education", family: "OTHER", useLatinSymbols: false,
-    questionTypes: ["MCQ", "TRUE_FALSE", "FILL_BLANK", "DEFINE", "APPLIED"] },
+    questionTypes: SUBJECT_TYPES.ART as QuestionType[] },
   { code: "PE", nameAr: "التربية الرياضية", nameEn: "Physical Education", family: "OTHER", useLatinSymbols: false,
-    questionTypes: ["MCQ", "TRUE_FALSE", "FILL_BLANK", "DEFINE"] },
+    questionTypes: SUBJECT_TYPES.PE as QuestionType[] },
   { code: "MUSIC", nameAr: "التربية الموسيقية", nameEn: "Music Education", family: "OTHER", useLatinSymbols: false,
-    questionTypes: ["MCQ", "TRUE_FALSE", "FILL_BLANK", "DEFINE"] },
+    questionTypes: SUBJECT_TYPES.MUSIC as QuestionType[] },
   { code: "FRENCH", nameAr: "اللغة الفرنسية", nameEn: "French Language", family: "OTHER_LANGUAGE", useLatinSymbols: false,
-    questionTypes: [...Q.core, "COMPREHENSION", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.FRENCH as QuestionType[] },
   { code: "KURDISH", nameAr: "اللغة الكردية", nameEn: "Kurdish Language", family: "OTHER_LANGUAGE", useLatinSymbols: false,
-    questionTypes: [...Q.core, "COMPREHENSION", "ESSAY"] },
+    questionTypes: SUBJECT_TYPES.KURDISH as QuestionType[] },
 ];
 
 /** المحافظات العراقية والمديريات العامة للتربية فيها. */

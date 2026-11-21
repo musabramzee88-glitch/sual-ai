@@ -1,4 +1,5 @@
 import type { Locale } from "./dictionaries";
+import { qtLabels } from "@/lib/question-types";
 
 /** نصوص الامتحانات (قيم نصية فقط — تُمرَّر إلى مكوّنات العميل) */
 const ar = {
@@ -20,10 +21,7 @@ const ar = {
   difficulties: { MIXED: "متنوعة", EASY: "سهلة", MEDIUM: "متوسطة", HARD: "صعبة" } as Record<string, string>,
   kinds: { QUIZ: "اختبار قصير", MONTHLY: "امتحان شهري", MIDTERM: "نصف السنة", FINAL: "نهاية السنة", MINISTERIAL_STYLE: "بأسلوب الوزاري" } as Record<string, string>,
   bookKinds: { TEXTBOOK: "كتاب الطالب", EXERCISES: "كتاب التمارين", ACTIVITY: "كتاب النشاط" } as Record<string, string>,
-  qt: {
-    MCQ: "اختيار من متعدد", TRUE_FALSE: "صح وخطأ", FILL_BLANK: "املأ الفراغ", JUSTIFY: "علّل", DEFINE: "عرّف", COMPARE: "قارن",
-    PROBLEM: "مسائل", PROOF: "إثبات", ESSAY: "أسئلة مقالية", APPLIED: "تطبيقية", COMPREHENSION: "فهم واستيعاب", GRAMMAR_PARSING: "إعراب", EQUATION_BALANCING: "معادلات كيميائية",
-  } as Record<string, string>,
+  qt: qtLabels("ar"),
   editor: {
     review: "راجع الأسئلة", page: "ص", answer: "الإجابة", showAnswers: "إظهار الإجابات", edit: "تعديل", save: "حفظ", cancel: "إلغاء",
     regenerate: "سؤال بديل", undo: "تراجع", del: "حذف", confirmDel: "حذف هذا السؤال؟", prompt: "نص السؤال", options: "الخيارات (خيار في كل سطر)",
@@ -31,7 +29,7 @@ const ar = {
     shortfall: "طُلب {r} سؤالاً وكُتب {m} فقط: أسئلة لم تستند إلى صفحات المصدر أُسقطت تلقائياً. أضف أسئلة بديلة أو أعد التوليد.",
     ocrWarn: "بعض صفحات المصدر مصوّرة ({n} صفحة) وقُرئت بالصور: راجع الأرقام والأسماء بعناية.",
     truncated: "النطاق كبير، فأُخذت عيّنة موزّعة من صفحاته.",
-    failed: "تعذّر توليد هذا الامتحان.", busy: "جارٍ…",
+    failed: "تعذّر توليد هذا الامتحان.", busy: "جارٍ…", verbatim: "نص منقول حرفياً (آية/حديث/شعر): طابقه مع الكتاب قبل الطباعة.",
   },
   print: { republic: "جمهورية العراق", ministry: "وزارة التربية", subject: "المادة", grade: "الصف", time: "الزمن", minutes: "دقيقة", total: "الدرجة الكلية", model: "النموذج", keyTitle: "الإجابات النموذجية", doPrint: "طباعة", q: "س", note: "ملاحظة: الإجابة على ورقة الأسئلة نفسها" },
   errors: {
@@ -68,10 +66,7 @@ const en: ExamDict = {
   difficulties: { MIXED: "Mixed", EASY: "Easy", MEDIUM: "Medium", HARD: "Hard" },
   kinds: { QUIZ: "Quiz", MONTHLY: "Monthly", MIDTERM: "Mid-year", FINAL: "Final", MINISTERIAL_STYLE: "Ministerial style" },
   bookKinds: { TEXTBOOK: "Textbook", EXERCISES: "Exercises book", ACTIVITY: "Activity book" },
-  qt: {
-    MCQ: "Multiple choice", TRUE_FALSE: "True / False", FILL_BLANK: "Fill in the blank", JUSTIFY: "Give reasons", DEFINE: "Define", COMPARE: "Compare",
-    PROBLEM: "Problems", PROOF: "Proof", ESSAY: "Essay", APPLIED: "Applied", COMPREHENSION: "Comprehension", GRAMMAR_PARSING: "Parsing (إعراب)", EQUATION_BALANCING: "Chemical equations",
-  },
+  qt: qtLabels("en"),
   editor: {
     review: "Review the questions", page: "p.", answer: "Answer", showAnswers: "Show answers", edit: "Edit", save: "Save", cancel: "Cancel",
     regenerate: "Replace", undo: "Undo", del: "Delete", confirmDel: "Delete this question?", prompt: "Question", options: "Options (one per line)",
@@ -79,7 +74,7 @@ const en: ExamDict = {
     shortfall: "{r} questions were requested and {m} written: questions not grounded in the source pages were dropped. Replace or regenerate.",
     ocrWarn: "Some source pages are scanned ({n} pages) and were read from images: check numbers and names carefully.",
     truncated: "The range is large, so an even sample of its pages was used.",
-    failed: "This exam could not be generated.", busy: "Working…",
+    failed: "This exam could not be generated.", busy: "Working…", verbatim: "Quoted text (verse/hadith/poem): check it against the book before printing.",
   },
   print: { republic: "Republic of Iraq", ministry: "Ministry of Education", subject: "Subject", grade: "Grade", time: "Time", minutes: "minutes", total: "Total marks", model: "Model", keyTitle: "Answer key", doPrint: "Print", q: "Q", note: "Note: answer on the question sheet" },
   errors: {
