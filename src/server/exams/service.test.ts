@@ -190,5 +190,21 @@ describe("exam generation", () => {
     expect(e.totalMarks).toBe(30);
     expect(await updateSection(otherId, def.id, { marks: 1 })).toMatchObject({ ok: false, code: "NOT_FOUND" }); // ليس صاحبه
   });
+
+  it("with a teacher's reference paper, the section instruction takes the teacher's wording and the paper is sent as style only", async () => {
+    const sci = await db.subject.findUniqueOrThrow({ where: { code: "SCIENCE" } });
+    const g = await db.grade.findUniqueOrThrow({ where: { code: "PRI_5" } });
+    const sample = await db.examSample.create({ data: { subjectId: sci.id, gradeId: g.id, title: "ورقة مدرس", text: "س١/ عرّف المصطلحات العلمية الآتية: (١٠ درجات)\n١- الخلية ٢- النسيج" } });
+    try {
+      reply = { questions: [q(0, "البناء الضوئي", { answer: "عملية…" })], sectionInstructions: [{ section: 0, instruction: "س١/ عرّف المصطلحات العلمية الآتية:" }] };
+      const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "QUIZ", difficulty: "EASY", sections: [{ type: "DEFINE", count: 1, marksEach: 2 }] });
+      if (!r.ok) throw new Error(r.code);
+      expect(calls.at(-1)!.prompt).toContain("reference paper 1");
+      expect(calls.at(-1)!.prompt).toContain("عرّف المصطلحات العلمية الآتية");
+      expect((await getExam(userId, r.examId))!.sections[0].instruction).toBe("عرّف المصطلحات العلمية الآتية:");
+    } finally {
+      await db.examSample.delete({ where: { id: sample.id } });
+    }
+  });
 });
 

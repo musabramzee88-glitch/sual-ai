@@ -3,7 +3,7 @@ import { qtLabels } from "@/lib/question-types";
 
 const ar = {
   panel: "لوحة الإدارة", back: "لوحة المدرس",
-  nav: { home: "الإحصائيات", curriculum: "المناهج", books: "مكتبة الكتب", users: "المستخدمون", requests: "طلبات الدفع", subscriptions: "الاشتراكات", payments: "المدفوعات", plans: "الباقات", staff: "الموظفون", messages: "رسائل النظام", audit: "سجل التدقيق" },
+  nav: { home: "الإحصائيات", curriculum: "المناهج", books: "مكتبة الكتب", samples: "نماذج أسئلة المدرسين", users: "المستخدمون", requests: "طلبات الدفع", subscriptions: "الاشتراكات", payments: "المدفوعات", plans: "الباقات", staff: "الموظفون", messages: "رسائل النظام", audit: "سجل التدقيق" },
   stats: { teachers: "المدرسون", activeAccounts: "الحسابات النشطة", activeSubs: "اشتراكات فعالة", expiredSubs: "اشتراكات منتهية", pending: "طلبات معلّقة", revenue: "إجمالي المدفوعات", exams: "الامتحانات", distribution: "التوزيع حسب الباقة", none: "لا بيانات بعد" },
   common: { name: "الاسم", email: "البريد", phone: "الهاتف", status: "الحالة", date: "التاريخ", actions: "إجراءات", plan: "الباقة", amount: "المبلغ", ref: "الرقم المرجعي", method: "الطريقة", admin: "المسؤول", note: "ملاحظة", search: "بحث…", all: "الكل", empty: "لا توجد بيانات", prev: "السابق", next: "التالي", save: "حفظ", create: "إنشاء", ends: "ينتهي", starts: "يبدأ", days: "يوم", iqd: "د.ع", yes: "نعم", no: "لا", open: "فتح", user: "المدرس" },
   act: { approve: "موافقة", reject: "رفض", rejectReason: "سبب الرفض", suspend: "إيقاف", ban: "حظر", activate: "إعادة تفعيل", verifyPhone: "تأكيد الهاتف يدوياً", verifyReason: "سبب التأكيد اليدوي (يُسجَّل في التدقيق)", extend: "تمديد", extendDays: "عدد أيام التمديد", cancel: "إلغاء", resume: "استئناف", confirm: "تأكيد التنفيذ؟", done: "تم" },
@@ -27,6 +27,14 @@ const ar = {
     kind: "نوع الكتاب", kinds: { TEXTBOOK: "كتاب الطالب", EXERCISES: "كتاب التمارين", ACTIVITY: "كتاب النشاط" } as Record<string, string>,
     families: { MATHEMATICS: "رياضيات", PHYSICS: "فيزياء", CHEMISTRY: "كيمياء", BIOLOGY: "أحياء", GENERAL_SCIENCE: "علوم", ARABIC: "عربية", ENGLISH: "إنكليزية", ISLAMIC: "إسلامية", SOCIAL_STUDIES: "اجتماعيات", COMPUTER: "حاسوب", OTHER_LANGUAGE: "لغة أخرى", OTHER: "أخرى" } as Record<string, string>,
     qt: qtLabels("ar"),
+  },
+  samples: {
+    title: "نماذج أسئلة المدرسين العراقيين",
+    hint: "ارفع أوراق امتحانات حقيقية كتبها مدرسون عراقيون (PDF أو صورة واضحة) لكل مادة وصف. يُنسخ نصها حرفياً، فراجعه وصحّحه، ثم يكتب النظام امتحاناته على أسلوبها تماماً: صياغة التعليمات، ترقيم الفروع وطولها، الفراغات والخيارات. لا يُنسخ محتواها: الأسئلة تبقى من صفحات الكتاب. كلما رفعت أوراقاً أكثر لكل مادة وصف صار الأسلوب أدق.",
+    upload: "رفع ورقة", file: "الملف (PDF أو صورة)", subject: "المادة", grade: "الصف", allGrades: "— كل صفوف المادة —", name: "عنوان الورقة (مثلاً: شهري تشرين — مدرسة …)",
+    uploading: "جارٍ نسخ نص الورقة… (المصوّرة تُقرأ بالذكاء الاصطناعي)", empty: "لا توجد نماذج بعد.", chars: "حرفاً", active: "مفعّلة", inactive: "معطّلة",
+    edit: "مراجعة النص وتصحيحه", save: "حفظ النص", saved: "تم الحفظ", enable: "تفعيل", disable: "تعطيل", del: "حذف", confirmDel: "حذف هذه الورقة؟",
+    errors: { FILE_TOO_LARGE: "الملف أكبر من 20MB.", UNSUPPORTED_FILE: "ارفع PDF أو صورة (JPG/PNG/WebP).", REFERENCE_NOT_FOUND: "المادة أو الصف غير موجود.", TRANSCRIBE_FAILED: "تعذّر نسخ النص (تحقق من مفتاح الذكاء الاصطناعي أو حصته).", EMPTY_TEXT: "لم يُقرأ نص كافٍ من الملف." } as Record<string, string>,
   },
   books: {
     title: "مكتبة الكتب (PDF)", hint: "ارفع ملفات الكتب (PDF، حتى 100MB لكل ملف). يستخرج النظام نص كل صفحة في الخلفية. الصفحات المصوَّرة (صور ضوئية) تُقرأ تلقائياً بـ OCR محلي وتُعلَّم بأنها OCR لتراجعها، وقد تحوي أخطاء.",
@@ -57,7 +65,7 @@ export type AdminDict = typeof ar;
 
 const en: AdminDict = {
   panel: "Admin panel", back: "Teacher dashboard",
-  nav: { home: "Statistics", curriculum: "Curriculum", books: "Book library", users: "Users", requests: "Payment requests", subscriptions: "Subscriptions", payments: "Payments", plans: "Plans", staff: "Staff", messages: "System messages", audit: "Audit log" },
+  nav: { home: "Statistics", curriculum: "Curriculum", books: "Book library", samples: "Teacher exam samples", users: "Users", requests: "Payment requests", subscriptions: "Subscriptions", payments: "Payments", plans: "Plans", staff: "Staff", messages: "System messages", audit: "Audit log" },
   stats: { teachers: "Teachers", activeAccounts: "Active accounts", activeSubs: "Active subscriptions", expiredSubs: "Expired subscriptions", pending: "Pending requests", revenue: "Total payments", exams: "Exams", distribution: "Distribution by plan", none: "No data yet" },
   common: { name: "Name", email: "Email", phone: "Phone", status: "Status", date: "Date", actions: "Actions", plan: "Plan", amount: "Amount", ref: "Reference", method: "Method", admin: "Admin", note: "Note", search: "Search…", all: "All", empty: "No data", prev: "Previous", next: "Next", save: "Save", create: "Create", ends: "Ends", starts: "Starts", days: "days", iqd: "IQD", yes: "Yes", no: "No", open: "Open", user: "Teacher" },
   act: { approve: "Approve", reject: "Reject", rejectReason: "Rejection reason", suspend: "Suspend", ban: "Ban", activate: "Reactivate", verifyPhone: "Verify phone manually", verifyReason: "Reason for manual verification (audited)", extend: "Extend", extendDays: "Days to extend", cancel: "Cancel", resume: "Resume", confirm: "Confirm this action?", done: "Done" },
@@ -81,6 +89,14 @@ const en: AdminDict = {
     kind: "Book type", kinds: { TEXTBOOK: "Student book", EXERCISES: "Exercises book", ACTIVITY: "Activity book" },
     families: { MATHEMATICS: "Mathematics", PHYSICS: "Physics", CHEMISTRY: "Chemistry", BIOLOGY: "Biology", GENERAL_SCIENCE: "Science", ARABIC: "Arabic", ENGLISH: "English", ISLAMIC: "Islamic", SOCIAL_STUDIES: "Social studies", COMPUTER: "Computer", OTHER_LANGUAGE: "Other language", OTHER: "Other" },
     qt: qtLabels("en"),
+  },
+  samples: {
+    title: "Iraqi teachers' exam samples",
+    hint: "Upload real exam papers written by Iraqi teachers (PDF or a clear photo) per subject and grade. Their text is transcribed verbatim — review and correct it — and exams are then written in exactly that style: instruction wording, item numbering and length, blanks and options. Their content is never copied: questions still come from the book pages. More papers per subject and grade give a more faithful style.",
+    upload: "Upload paper", file: "File (PDF or image)", subject: "Subject", grade: "Grade", allGrades: "— all grades of the subject —", name: "Paper title (e.g. October monthly — school …)",
+    uploading: "Transcribing the paper… (scanned papers are read by AI)", empty: "No samples yet.", chars: "characters", active: "Active", inactive: "Inactive",
+    edit: "Review and correct the text", save: "Save text", saved: "Saved", enable: "Enable", disable: "Disable", del: "Delete", confirmDel: "Delete this paper?",
+    errors: { FILE_TOO_LARGE: "File is over 20MB.", UNSUPPORTED_FILE: "Upload a PDF or an image (JPG/PNG/WebP).", REFERENCE_NOT_FOUND: "Subject or grade not found.", TRANSCRIBE_FAILED: "Could not transcribe (check the AI key or quota).", EMPTY_TEXT: "Not enough text was read from the file." },
   },
   books: {
     title: "Book library (PDF)", hint: "Upload textbook files (PDF, up to 100MB each). Text is extracted per page in the background. Scanned (image-only) pages are read automatically with local OCR and flagged so you can review them; errors are possible.",

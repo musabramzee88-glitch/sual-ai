@@ -7,8 +7,9 @@ import { renderPagesJpeg } from "../books/page-image";
 import { fileOf } from "../books/service";
 import { normalizeHonorifics, polishQuestion } from "@/lib/exam-text";
 import { distributeMarks, type MarkSection } from "./marks";
+import { pickSamples } from "./samples";
 import {
-  buildPrompt, expandRanges, instructionFor, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
+  buildPrompt, chooseInstruction, expandRanges, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
   type CleanQuestion, type CreateExamInput, type GenType, type RawQuestion, type Section, type SourcePage,
 } from "./core";
 
@@ -73,14 +74,18 @@ function toRanges(pages: number[]): { from: number; to: number }[] {
   return out;
 }
 
-type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols: boolean; family: string };
+type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols: boolean; family: string; samples: string[] };
 
 async function askModel(ctx: Ctx, difficulty: CreateExamInput["difficulty"], sections: Section[], src: Awaited<ReturnType<typeof loadSource>>, avoid?: string[]) {
   const prompt = buildPrompt({ ...ctx, difficulty, sections, pages: src.pages, avoid });
-  const r = await geminiJson<{ questions?: RawQuestion[] }>({ prompt, images: src.images, schema: RESPONSE_SCHEMA, maxOutputTokens: 16_384 });
+  const r = await geminiJson<{ questions?: RawQuestion[]; sectionInstructions?: { section: number; instruction: string }[] }>({ prompt, images: src.images, schema: RESPONSE_SCHEMA, maxOutputTokens: 16_384 });
   // نص الصفحة الموثوق (طبقة نص أصلية، لا OCR ولا صورة) للتحقق من النصوص المنقولة حرفياً
   const allowed = new Map(src.pages.map((p) => [p.pageNumber, { text: p.text, trusted: !p.isOcr && !p.asImage }]));
-  return sortIntoSections(r.questions ?? [], sections, allowed, ctx.lang);
+  const sorted = sortIntoSections(r.questions ?? [], sections, allowed, ctx.lang);
+  // تعليمة كل قسم: بصياغة أوراق المرجع إن وُجدت، وإلا الافتراضية
+  const h = ctx.lang === "AR" ? normalizeHonorifics : (x: string) => x;
+  const instructions = sections.map((sec, i) => h(chooseInstruction(sec.type, ctx.lang, r.sectionInstructions?.find((x) => x.section === i)?.instruction, ctx.samples.length > 0)));
+  return { ...sorted, instructions };
 }
 
 const snapshot = (q: { prompt: string; options: unknown; answer: string | null; marks: unknown; sourcePages: number[] }) =>
@@ -112,7 +117,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
   if (pageNumbers.length === 0) return fail("EMPTY_SOURCE");
 
   const lang = cur.language === "EN" ? "EN" : "AR";
-  const ctx: Ctx = { subject: lang === "EN" ? cur.subject.nameEn : cur.subject.nameAr, grade: lang === "EN" ? cur.grade.nameEn : cur.grade.nameAr, lang, useLatinSymbols: cur.subject.useLatinSymbols, family: cur.subject.family };
+  const ctx: Ctx = { subject: lang === "EN" ? cur.subject.nameEn : cur.subject.nameAr, grade: lang === "EN" ? cur.grade.nameEn : cur.grade.nameAr, lang, useLatinSymbols: cur.subject.useLatinSymbols, family: cur.subject.family, samples: await pickSamples(cur.subjectId, cur.gradeId) };
   const totalMarks = input.sections.reduce((n, s) => n + s.count * s.marksEach, 0);
 
   const exam = await db.exam.create({
@@ -129,7 +134,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
   try {
     const src = await loadSource(book.id, book.storageKey, pageNumbers);
     if (src.pages.length === 0) throw new AiError("BAD_RESPONSE", "EMPTY_SOURCE_TEXT");
-    const { bySection, dropped } = await askModel(ctx, input.difficulty, input.sections, src);
+    const { bySection, dropped, instructions } = await askModel(ctx, input.difficulty, input.sections, src);
     const made = bySection.reduce((n, s) => n + s.length, 0);
     if (made === 0) throw new AiError("BAD_RESPONSE", "NO_VALID_QUESTIONS");
 
@@ -139,7 +144,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
         const qs = bySection[i];
         if (qs.length === 0) continue;
         const parent = await tx.examQuestion.create({
-          data: { examModelId: model.id, sortOrder: i + 1, type: s.type, instruction: instructionFor(s.type, lang), prompt: instructionFor(s.type, lang), marks: s.marksEach * qs.length, sourcePages: [], chapterId },
+          data: { examModelId: model.id, sortOrder: i + 1, type: s.type, instruction: instructions[i], prompt: instructions[i], marks: s.marksEach * qs.length, sourcePages: [], chapterId },
         });
         for (const [j, q] of qs.entries()) await createChild(tx, model.id, parent.id, j + 1, s, q, chapterId, userId);
       }
@@ -260,7 +265,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
   if (!book || !settings.pages?.length) return fail("SOURCE_MISSING");
   const siblings = await db.examQuestion.findMany({ where: { parentId: q.parentId, deletedAt: null }, select: { prompt: true } });
   const lang = exam.language === "EN" ? "EN" : "AR";
-  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family };
+  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family, samples: await pickSamples(exam.subjectId, exam.gradeId) };
   const section: Section = { type: q.type as GenType, count: 1, marksEach: Number(q.marks) };
   try {
     const src = await loadSource(book.id, book.storageKey, settings.pages);
@@ -429,12 +434,12 @@ export async function addManualQuestion(userId: string, sectionId: string, q: { 
 }
 
 /** مصدر الامتحان وسياقه لتوليد إضافي */
-async function genContext(exam: { language: string; settings: unknown; difficulty: CreateExamInput["difficulty"]; subject: { nameAr: string; nameEn: string; useLatinSymbols: boolean; family: string }; grade: { nameAr: string; nameEn: string } }) {
+async function genContext(exam: { language: string; settings: unknown; difficulty: CreateExamInput["difficulty"]; subjectId: string; gradeId: string; subject: { nameAr: string; nameEn: string; useLatinSymbols: boolean; family: string }; grade: { nameAr: string; nameEn: string } }) {
   const settings = exam.settings as { pages?: number[]; bookId?: string };
   const book = settings.bookId ? await db.uploadedBook.findUnique({ where: { id: settings.bookId } }) : null;
   if (!book || !settings.pages?.length) return null;
   const lang: "AR" | "EN" = exam.language === "EN" ? "EN" : "AR";
-  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family };
+  const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family, samples: await pickSamples(exam.subjectId, exam.gradeId) };
   return { book, pages: settings.pages, ctx, lang };
 }
 
@@ -475,11 +480,11 @@ export async function addSection(userId: string, examId: string, input: Section)
   if (!g) return fail("SOURCE_MISSING");
   try {
     const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
-    const { bySection } = await askModel(g.ctx, e.difficulty, [input], src);
+    const { bySection, instructions } = await askModel(g.ctx, e.difficulty, [input], src);
     if (bySection[0].length === 0) return fail("AI_FAILED");
     const last = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
     await db.$transaction(async (tx) => {
-      const inst = instructionFor(input.type, g.lang);
+      const inst = instructions[0];
       const parent = await tx.examQuestion.create({ data: { examModelId: e.models[0].id, sortOrder: (last?.sortOrder ?? 0) + 1, type: input.type, instruction: inst, prompt: inst, marks: 0, sourcePages: [] } });
       for (const [j, q] of bySection[0].entries()) await createChild(tx, e.models[0].id, parent.id, j + 1, input, q, null, userId);
       await recomputeExam(tx, e.id);

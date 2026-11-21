@@ -314,6 +314,7 @@ model Grade {
   curricula Curriculum[]
   exams     Exam[]
   teachings TeacherTeaching[]
+  samples   ExamSample[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
@@ -389,6 +390,7 @@ model Subject {
   curricula       Curriculum[]
   exams           Exam[]
   teachings       TeacherTeaching[]
+  samples         ExamSample[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 }
@@ -1061,3 +1063,23 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
 }
+
+/// ورقة امتحان حقيقية كتبها مدرس عراقي (نص منسوخ حرفياً): مرجع أسلوب للتوليد (لا يُنسخ محتواها)
+model ExamSample {
+  id          String   @id @default(cuid())
+  subjectId   String
+  /// null = لكل صفوف المادة
+  gradeId     String?
+  title       String
+  fileName    String?
+  text        String
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  grade       Grade?   @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+
+  @@index([subjectId, gradeId])
+}
+

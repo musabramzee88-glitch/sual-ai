@@ -108,3 +108,19 @@ describe("subject question types and verbatim texts", async () => {
     expect(cleanQuestion({ prompt: "أكمل: ......", answer: "أي نص", sourcePages: [6] }, "WRITE_HADITH", pages, "AR")).not.toBeNull();
   });
 });
+
+describe("reference papers", async () => {
+  const { chooseInstruction, buildPrompt } = await import("./core");
+  it("uses the teachers' instruction wording when reference papers exist and the wording is sane", () => {
+    expect(chooseInstruction("DEFINE", "AR", "س٢/ عرّف المصطلحات العلمية الآتية:", true)).toBe("عرّف المصطلحات العلمية الآتية:");
+    expect(chooseInstruction("DEFINE", "AR", "عرّف المصطلحات العلمية الآتية:", false)).toBe("عرّف ما يأتي:"); // بلا أوراق مرجع: الافتراضية
+    expect(chooseInstruction("DEFINE", "AR", "Define:", true)).toBe("عرّف ما يأتي:"); // لغة خاطئة
+    expect(chooseInstruction("DEFINE", "AR", "", true)).toBe("عرّف ما يأتي:");
+  });
+  it("puts the reference papers in the prompt with a do-not-copy rule", () => {
+    const p = buildPrompt({ subject: "العلوم", grade: "الخامس", lang: "AR", difficulty: "MIXED", useLatinSymbols: false, sections: [{ type: "DEFINE", count: 2, marksEach: 2 }], pages: [{ pageNumber: 3, text: "نص", isOcr: false, asImage: false }], samples: ["س١/ عرّف المصطلحات العلمية الآتية: ١- الخلية"] });
+    expect(p).toContain("reference paper 1");
+    expect(p).toContain("س١/ عرّف المصطلحات العلمية الآتية");
+    expect(p).toContain("NEVER copy their questions");
+  });
+});

@@ -49,7 +49,7 @@ export type SourcePage = { pageNumber: number; text: string; isOcr: boolean; asI
 /** نص الطلب للنموذج: المنهج، المصدر بأرقام صفحاته، وأقسام الامتحان المطلوبة */
 export function buildPrompt(opts: {
   subject: string; grade: string; lang: "AR" | "EN"; difficulty: (typeof DIFFICULTIES)[number]; useLatinSymbols: boolean;
-  sections: Section[]; pages: SourcePage[]; avoid?: string[]; family?: string;
+  sections: Section[]; pages: SourcePage[]; avoid?: string[]; family?: string; samples?: string[];
 }): string {
   const ocrImg = opts.pages.filter((p) => p.asImage).map((p) => p.pageNumber);
   const ocrText = opts.pages.filter((p) => p.isOcr && !p.asImage).map((p) => p.pageNumber);
@@ -75,6 +75,15 @@ export function buildPrompt(opts: {
     ...opts.sections.map((s, i) => `  section ${i}: ${s.type} × ${s.count} — ${QT[s.type].hint}`),
     opts.avoid?.length ? `\nDo NOT repeat these existing questions:\n${opts.avoid.map((a) => `  - ${a.slice(0, 200)}`).join("\n")}` : "",
     "",
+    ...(opts.samples?.length ? [
+      "REFERENCE PAPERS — real exam papers written by Iraqi teachers of this subject. Your paper must read as if the SAME teacher wrote it:",
+      "  * word each section instruction exactly the way these papers word instructions for that question type (return them in sectionInstructions);",
+      "  * phrase, number, and size the items exactly like theirs (same sentence patterns, same blanks style ……, same option style, same level and length);",
+      "  * model answers in the form these teachers expect.",
+      "  * NEVER copy their questions, facts or examples: every question's content must come from the SOURCE PAGES.",
+      ...opts.samples.map((t, i) => `--- reference paper ${i + 1} ---\n${t}\n--- end of reference paper ${i + 1} ---`),
+      "",
+    ] : []),
     "SOURCE PAGES:",
     ...opts.pages.filter((p) => !p.asImage).map((p) => `=== صفحة ${p.pageNumber} ===\n${p.text}`),
     ...opts.pages.filter((p) => p.asImage).map((p) => `=== صفحة ${p.pageNumber} === (see attached image labelled page ${p.pageNumber})`),
@@ -102,6 +111,8 @@ export const RESPONSE_SCHEMA = {
         required: ["section", "prompt", "answer", "sourcePages"],
       },
     },
+    // تعليمة كل قسم بصياغة المدرسين (تُستعمل حين توجد أوراق مرجع)
+    sectionInstructions: { type: "ARRAY", items: { type: "OBJECT", properties: { section: { type: "INTEGER" }, instruction: { type: "STRING" } }, required: ["section", "instruction"] } },
   },
   required: ["questions"],
 };
@@ -207,3 +218,16 @@ export function expandRanges(ranges: { from: number; to: number }[], pageCount: 
   const step = all.length / max;
   return { pages: Array.from({ length: max }, (_, i) => all[Math.floor(i * step)]), truncated: true };
 }
+
+/**
+ * تعليمة القسم: صياغة النموذج المقتبسة من أوراق المرجع إن صلحت (سطر واحد قصير بلغة الامتحان)، وإلا التعليمة الافتراضية للنوع.
+ */
+export function chooseInstruction(type: GenType, lang: "AR" | "EN", fromModel: string | undefined, hasSamples: boolean): string {
+  const def = instructionFor(type, lang);
+  if (!hasSamples || !fromModel) return def;
+  const t = fromModel.replace(/\s+/g, " ").trim().replace(/^(?:س\s*[٠-٩0-9]+\s*[/:：\-–]\s*|Q\s*\d+\s*[/:.\-–]\s*)/i, "");
+  if (t.length < 4 || t.length > 160) return def;
+  if (lang === "AR" ? !/[\u0600-\u06FF]{3,}/.test(t) : !/[A-Za-z]{3,}/.test(t)) return def;
+  return t;
+}
+
