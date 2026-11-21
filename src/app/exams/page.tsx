@@ -26,7 +26,10 @@ export default async function Page() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t.title}</h1>
-        <Link href="/exams/new" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white dark:text-paper">{t.newExam}</Link>
+        <div className="flex gap-2">
+          <Link href="/exams/templates" className="rounded-lg border border-line px-4 py-2 text-sm">{t.templates}</Link>
+          <Link href="/exams/new" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white dark:text-paper">{t.newExam}</Link>
+        </div>
       </div>
       {exams.length === 0 ? <p className="rounded-xl border border-line bg-surface p-6 text-center text-muted">{t.empty}</p> : (
         <ul className="divide-y divide-line rounded-xl border border-line bg-surface">

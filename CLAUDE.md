@@ -119,3 +119,11 @@ npm run typecheck && npm run lint && npm run build
 - **التحرير الكامل**: `/api/v1/exams/[id]` (meta، distribute، reorderSections، addSection يولّد قسماً)، `/api/v1/exams/sections/[id]` (PATCH تعليمة/درجة، DELETE، addManual، generateMore، reorder). كل دالة تتحقق من ملكية الامتحان. ورقة الطباعة `@page { margin: 0 }` (لا يطبع المتصفح الرابط/التاريخ) بتنسيق «س١/» و«١-» و«أ-».
 - **أوراق المدرسين المرجعية** (`ExamSample`، `src/server/exams/samples.ts`، `/admin/samples`): تُرفع ورقة امتحان حقيقية (PDF/صورة، النوع من المحتوى `sniff`)، يُنسخ نصها حرفياً (طبقة النص السليمة، وإلا رؤية Gemini حتى 8 صفحات)، ويصححه المسؤول (تدقيق في كل إجراء). `pickSamples` يختار للمادة الأقرب صفاً (الصف، ثم المرحلة، ثم العامة؛ حتى ورقتين/9000 حرف)، و`buildPrompt` يرسلها مرجعَ أسلوب **لا مصدر محتوى**. النموذج يعيد `sectionInstructions` بصياغة المدرسين، و`chooseInstruction` يقبلها فقط إن وُجدت أوراق مرجع وكانت سطراً قصيراً بلغة الامتحان (يحذف «س١/»).
 
+
+## الإخراج: القوالب وPDF (المرحلة 4)
+- **عارض واحد**: `src/lib/exam-render.ts` (`renderExamHtml(exam, template, variant, {forPdf})`، نقي) يُنتج HTML كاملاً لصفحة الطباعة وPDF ومعاينة القوالب. كل نص يمر بـ `esc`/`richText` (لا HTML من النموذج أو المدرس)، والمقاطع الرياضية تُعزل بـ `.ltr`. لا تكتب ورقة ثانية في JSX.
+- الطباعة من المتصفح: `@page margin 0` والهوامش داخل `.sheet` (لا رابط/تاريخ)؛ PDF: الهوامش في `@page` (تتكرر في كل صفحة) وترقيم الصفحات من `footerTemplate`.
+- `src/server/exams/templates.ts`: القوالب الجاهزة في الكود بمعرّف `preset:NAME`، وقوالب المدرس في `ExamTemplate` (الشكل والحقول في `headerFields`). قيم الامتحان في `Exam.headerConfig = {preset, values}` وتتقدّم على القالب، وأي حقل كتب له المدرس قيمة يظهر (`forceShow`). `examRenderInput` هو المدخل الوحيد للعارض لامتحان مالك.
+- الشعار `TemplateAsset` (PNG/JPEG بالمحتوى `sniff`، ≤1MB، مسار داخل `STORAGE_DIR/assets`) ويُضمَّن data URI؛ لا يُستعمل شعار مستخدم آخر.
+- `src/server/exams/pdf.ts`: `htmlToPdf` بمتصفح واحد مشترك وتصدير واحد في كل مرة، JavaScript معطّل وكل طلب شبكة غير data: مرفوض. `CHROMIUM_PATH` وإلا Edge ثم Chrome. كل تصدير يُسجَّل في `ExamExport`. `playwright-core` ضمن `serverExternalPackages`.
+- المعاينة في الواجهة `SheetFrame` (إطار معزول بعرض الورقة الحقيقي مصغّراً، والطباعة منه).

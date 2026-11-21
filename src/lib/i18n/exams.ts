@@ -3,7 +3,7 @@ import { qtLabels } from "@/lib/question-types";
 
 /** نصوص الامتحانات (قيم نصية فقط — تُمرَّر إلى مكوّنات العميل) */
 const ar = {
-  title: "امتحاناتي", newExam: "امتحان جديد", empty: "لم تنشئ امتحاناً بعد.", back: "لوحة المدرس", open: "فتح",
+  title: "امتحاناتي", newExam: "امتحان جديد", templates: "قوالب الورقة", empty: "لم تنشئ امتحاناً بعد.", back: "لوحة المدرس", open: "فتح",
   noAccess: "إنشاء الامتحانات متاح للمشتركين فقط.", subscribe: "الاشتراك",
   status: { DRAFT: "مسودة", GENERATING: "جارٍ التوليد", READY: "جاهز", FAILED: "فشل التوليد", ARCHIVED: "مؤرشف" } as Record<string, string>,
   marks: "الدرجة", marksShort: "درجة", total: "المجموع", questions: "سؤالاً",
@@ -26,7 +26,7 @@ const ar = {
   editor: {
     review: "راجع الأسئلة", page: "ص", answer: "الإجابة", showAnswers: "إظهار الإجابات", edit: "تعديل", save: "حفظ", cancel: "إلغاء",
     regenerate: "سؤال بديل", undo: "تراجع", del: "حذف", confirmDel: "حذف هذا السؤال؟", prompt: "نص السؤال", options: "الخيارات (خيار في كل سطر)",
-    print: "طباعة الامتحان", printKey: "طباعة الإجابات النموذجية", deleteExam: "حذف الامتحان", confirmDeleteExam: "حذف الامتحان كله؟",
+    print: "الطباعة وتحميل PDF", printKey: "طباعة الإجابات النموذجية", deleteExam: "حذف الامتحان", confirmDeleteExam: "حذف الامتحان كله؟",
     shortfall: "طُلب {r} سؤالاً وكُتب {m} فقط: أسئلة لم تستند إلى صفحات المصدر أُسقطت تلقائياً. أضف أسئلة بديلة أو أعد التوليد.",
     ocrWarn: "بعض صفحات المصدر مصوّرة ({n} صفحة) وقُرئت بالصور: راجع الأرقام والأسماء بعناية.",
     truncated: "النطاق كبير، فأُخذت عيّنة موزّعة من صفحاته.",
@@ -58,7 +58,7 @@ const ar = {
 type ExamDict = typeof ar;
 
 const en: ExamDict = {
-  title: "My exams", newExam: "New exam", empty: "You have not created an exam yet.", back: "Dashboard", open: "Open",
+  title: "My exams", newExam: "New exam", templates: "Sheet templates", empty: "You have not created an exam yet.", back: "Dashboard", open: "Open",
   noAccess: "Creating exams is available to subscribers only.", subscribe: "Subscribe",
   status: { DRAFT: "Draft", GENERATING: "Generating", READY: "Ready", FAILED: "Generation failed", ARCHIVED: "Archived" },
   marks: "Marks", marksShort: "marks", total: "Total", questions: "questions",
@@ -81,7 +81,7 @@ const en: ExamDict = {
   editor: {
     review: "Review the questions", page: "p.", answer: "Answer", showAnswers: "Show answers", edit: "Edit", save: "Save", cancel: "Cancel",
     regenerate: "Replace", undo: "Undo", del: "Delete", confirmDel: "Delete this question?", prompt: "Question", options: "Options (one per line)",
-    print: "Print exam", printKey: "Print answer key", deleteExam: "Delete exam", confirmDeleteExam: "Delete the whole exam?",
+    print: "Print / PDF", printKey: "Print answer key", deleteExam: "Delete exam", confirmDeleteExam: "Delete the whole exam?",
     shortfall: "{r} questions were requested and {m} written: questions not grounded in the source pages were dropped. Replace or regenerate.",
     ocrWarn: "Some source pages are scanned ({n} pages) and were read from images: check numbers and names carefully.",
     truncated: "The range is large, so an even sample of its pages was used.",

@@ -43,6 +43,8 @@ const schema = z.object({
   OCR_ENABLED: z.enum(["true", "false"]).default("true"),
   // عدد خيوط OCR المتوازية (1–4): أعلى = أسرع وأسخن وأكثر ذاكرة
   OCR_WORKERS: z.coerce.number().int().min(1).max(4).default(2),
+  // تصدير PDF: مسار متصفح Chromium/Chrome/Edge. فارغ = Edge ثم Chrome المثبّتان على الجهاز
+  CHROMIUM_PATH: z.string().optional(),
 });
 
 // المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة

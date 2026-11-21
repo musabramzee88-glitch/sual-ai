@@ -29,6 +29,7 @@
     "next": "15.5.29",
     "nodemailer": "^10.6.0",
     "pdfjs-dist": "^4.10.38",
+    "playwright-core": "1.63.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "server-only": "^0.0.1",
