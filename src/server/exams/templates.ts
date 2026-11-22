@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { env } from "../env";
+import { modelDisplay, modelOf, type ModelLabel } from "@/lib/exam-models";
 import { DEFAULT_TEMPLATE, FONTS, HEADER_KEYS, type HeaderKey, type Layout, type RenderExam, type RenderTemplate } from "@/lib/exam-render";
 import { getExam } from "./service";
 import { sniff } from "./samples";
@@ -223,7 +224,7 @@ export function toRender(t: TemplateView, logo: string | null): RenderTemplate {
 }
 
 /** كل ما يحتاجه العارض لامتحان مالك: الأسئلة + القالب + قيم الترويسة (الامتحان يتقدّم على القالب) */
-export async function examRenderInput(userId: string, examId: string, opts: { templateId?: string | null } = {}) {
+export async function examRenderInput(userId: string, examId: string, opts: { templateId?: string | null; model?: ModelLabel | null } = {}) {
   const exam = await getExam(userId, examId);
   if (!exam || exam.status !== "READY") return null;
   const cfg = (exam.headerConfig ?? {}) as HeaderConfig;
@@ -240,18 +241,20 @@ export async function examRenderInput(userId: string, examId: string, opts: { te
     ...(exam.durationMinutes ? { time: `${num(exam.durationMinutes)} ${en ? "minutes" : "دقيقة"}` } : {}),
     ...(exam.round ? { round: en ? exam.round.toLowerCase() : ROUND_AR[exam.round] } : {}),
     ...(exam.academicYearLabel ? { yearTerm: exam.academicYearLabel } : {}),
-    model: en ? "A" : "أ",
+    model: modelDisplay(opts.model ?? "A", en ? "EN" : "AR"),
   };
-  const renderExam: RenderExam = {
+  const baseExam: RenderExam = {
     lang: exam.language === "EN" ? "EN" : "AR",
     values: { ...derived, ...(cfg.values ?? {}) },
     forceShow: Object.keys(cfg.values ?? {}) as HeaderKey[],
     sectionsToAnswer: exam.sectionsToAnswer, firstRequired: exam.firstRequired,
     sections: exam.sections.map((s) => ({
-      instruction: s.instruction ?? s.prompt, marks: s.marks, answerCount: s.answerCount,
+      instruction: s.instruction ?? s.prompt, marks: s.marks, answerCount: s.answerCount, type: s.type,
       branches: s.branches.map((b) => ({ prompt: b.prompt, options: Array.isArray(b.options) ? (b.options as string[]) : null, answer: b.answer ?? "", marks: b.marks })),
     })),
   };
+  // نموذج محدّد (A/B/C/D): خلط مشتق من الأصل، ويظهر اسمه في الترويسة ولو كان حقل النموذج مخفياً
+  const renderExam: RenderExam = opts.model ? { ...modelOf(baseExam, opts.model, exam.id), forceShow: [...(baseExam.forceShow ?? []), "model"] } : baseExam;
   const tplRender = toRender(tpl, await logoDataUri(userId, tpl.logoAssetId));
   if (en && tplRender.footerNote === DEFAULT_TEMPLATE.footerNote) tplRender.footerNote = "Good luck";
   return { exam, template: tpl, renderExam, renderTemplate: tplRender, headerValues: cfg.values ?? {}, selectedTemplateId: opts.templateId ?? exam.templateId ?? cfg.preset ?? null };

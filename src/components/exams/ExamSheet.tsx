@@ -6,13 +6,13 @@ import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
 
 type Props = {
-  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key"; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
+  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   templates: { id: string; name: string; preset: boolean; isDefault: boolean }[]; selectedTemplateId: string;
   fields: { key: string; label: string; placeholder: string }[]; values: Record<string, string>;
 };
 
 /** شريط ورقة الامتحان: النسخة، القالب، بيانات الترويسة، طباعة من الإطار، تنزيل PDF */
-export function ExamSheet({ examId, defaultName, html, variant, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
+export function ExamSheet({ examId, defaultName, html, variant, model, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
   const router = useRouter();
   const frame = useRef<SheetFrameHandle>(null);
   const [tplId, setTplId] = useState(selectedTemplateId);
@@ -49,7 +49,7 @@ export function ExamSheet({ examId, defaultName, html, variant, t, pageSize, ori
   async function pdf() {
     setNaming(false);
     setBusy("pdf"); setMsg(null);
-    const r = await fetch(`/api/v1/exams/${examId}/export?variant=${variant}&name=${encodeURIComponent(fileName.trim())}`).catch(() => null);
+    const r = await fetch(`/api/v1/exams/${examId}/export?variant=${variant}${model ? `&model=${model}` : ""}&name=${encodeURIComponent(fileName.trim())}`).catch(() => null);
     if (!r?.ok) {
       setBusy("");
       const code = r?.status === 429 ? "RATE_LIMITED" : (await r?.json().catch(() => null))?.error?.code;
@@ -68,7 +68,7 @@ export function ExamSheet({ examId, defaultName, html, variant, t, pageSize, ori
   }
 
   const tab = (v: Props["variant"], label: string) => (
-    <a href={`/exams/${examId}/print?v=${v}`} className={`rounded-lg px-3 py-1.5 text-sm ${variant === v ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{label}</a>
+    <a href={`/exams/${examId}/print?v=${v}${model ? `&m=${model}` : ""}`} className={`rounded-lg px-3 py-1.5 text-sm ${variant === v ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{label}</a>
   );
 
   return (
@@ -76,10 +76,18 @@ export function ExamSheet({ examId, defaultName, html, variant, t, pageSize, ori
       <div className="flex flex-wrap items-center gap-2">
         <Link href={`/exams/${examId}`} className="text-sm text-muted underline">{s.back}</Link>
         <span className="mx-2 h-5 w-px bg-line" />
-        {tab("questions", s.questions)}{tab("answers", s.answers)}{tab("key", s.key)}
+        {tab("questions", s.questions)}{tab("answers", s.answers)}{tab("key", s.key)}{tab("sheet", s.answerSheet)}
         <span className="flex-1" />
         <button onClick={() => frame.current?.print()} className="rounded-lg border border-line px-4 py-2 font-semibold">{s.print}</button>
         <button onClick={() => { setFileName(defaultName); setNaming(true); }} disabled={busy !== ""} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{busy === "pdf" ? s.pdfBusy : s.pdf}</button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">{s.models}:</span>
+        {([null, "A", "B", "C", "D"] as const).map((m) => (
+          <Link key={m ?? "none"} href={`/exams/${examId}/print?v=${variant}${m ? `&m=${m}` : ""}`} aria-current={model === m} className={`rounded-lg px-3 py-1 ${model === m ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{m ?? s.noModel}</Link>
+        ))}
+        <span className="text-xs text-muted">{s.modelsHint}</span>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line p-3">

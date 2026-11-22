@@ -245,6 +245,7 @@ enum ExportVariant {
   QUESTIONS_ONLY
   WITH_ANSWERS
   ANSWER_KEY
+  ANSWER_SHEET // ورقة إجابة الطالب (دوائر)
 }
 
 enum RevisionReason {

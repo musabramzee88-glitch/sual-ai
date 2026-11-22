@@ -91,6 +91,14 @@ describe("sheet templates", () => {
     expect(html).not.toContain("أ. علي حسن");
     expect(html).not.toContain("عملية يصنع"); // لا إجابات في ورقة الأسئلة
     expect(await T.examRenderInput(otherId, examId)).toBeNull();
+    // النموذج: الأصل A كما هو، وB مشتق، والاسم يظهر في الترويسة ولو كان حقل النموذج مخفياً
+    const a = (await T.examRenderInput(userId, examId, { model: "A" }))!;
+    const b = (await T.examRenderInput(userId, examId, { model: "B" }))!;
+    expect(a.renderExam.values.model).toBe("أ");
+    expect(b.renderExam.values.model).toBe("ب");
+    expect(renderExamHtml(b.renderExam, b.renderTemplate, "QUESTIONS_ONLY")).toContain("النموذج:</span> ب");
+    expect(b.renderExam.sections[0].branches).toHaveLength(a.renderExam.sections[0].branches.length);
+    expect((await T.examRenderInput(userId, examId))!.renderExam.sections).toEqual(a.renderExam.sections);
     // قالب جاهز يُحفظ مع الامتحان أيضاً
     expect(await T.setExamHeader(userId, examId, { templateId: "preset:MINIMAL", values: {} })).toEqual({ ok: true });
     expect((await T.examRenderInput(userId, examId))!.template.layout).toBe("MINIMAL");

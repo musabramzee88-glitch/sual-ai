@@ -125,3 +125,38 @@ describe("exam number and signature line", () => {
     expect(html).toMatch(/<div class="tail"><ol>.*<\/ol><div class="note foot">/);
   });
 });
+
+describe("answer sheet and model answer letters", () => {
+  const e3: RenderExam = {
+    lang: "AR", values: { title: "اختبار", subject: "العلوم" },
+    sections: [
+      { instruction: "اختر:", marks: 8, type: "MCQ", branches: [{ prompt: "أ؟", options: ["أول", "ثاني", "ثالث"], answer: "ثاني", marks: 4 }, { prompt: "ب؟", options: ["أول", "ثاني", "ثالث", "رابع"], answer: "رابع", marks: 4 }] },
+      { instruction: "صح أو خطأ:", marks: 4, type: "TRUE_FALSE", branches: [{ prompt: "عبارة", options: null, answer: "صح", marks: 4 }] },
+      { instruction: "عرّف:", marks: 5, type: "DEFINE", branches: [{ prompt: "الخلية", options: null, answer: "وحدة", marks: 5 }] },
+    ],
+  };
+  it("the answer sheet has circles only for objective items, numbered like the question paper, and no answers", () => {
+    const html = renderExamHtml(e3, DEFAULT_TEMPLATE, "ANSWER_SHEET");
+    expect(html).toContain("ورقة الإجابة");
+    expect(html).toContain("اسم الطالب");
+    expect((html.match(/class="cell"/g) ?? []).length).toBe(3); // اختياران + صح/خطأ (التعريف بلا دوائر)
+    expect(html).toContain("س١ / ١");
+    expect(html).toContain("س١ / ٢");
+    expect(html).toContain("س٢ / ١");
+    expect((html.match(/class="bub"/g) ?? []).length).toBe(3 + 4 + 2);
+    expect(html).toContain("صح</span>");
+    expect(html).not.toContain("وحدة");
+    expect(html).not.toContain("مع تمنياتنا");
+  });
+  it("an exam without objective questions says so", () => {
+    const none: RenderExam = { ...e3, sections: [e3.sections[2]] };
+    expect(renderExamHtml(none, DEFAULT_TEMPLATE, "ANSWER_SHEET")).toContain("لا توجد أسئلة موضوعية");
+  });
+  it("answers of choice questions start with the right choice letter", () => {
+    const key = renderExamHtml(e3, DEFAULT_TEMPLATE, "ANSWER_KEY");
+    expect(key).toContain("ب- ثاني");
+    expect(key).toContain("د- رابع");
+    expect(key).toContain("صح</div>"); // غير الاختيار بلا حرف
+    expect(renderExamHtml(e3, DEFAULT_TEMPLATE, "WITH_ANSWERS")).toContain("الإجابة:</span> ب- ثاني");
+  });
+});

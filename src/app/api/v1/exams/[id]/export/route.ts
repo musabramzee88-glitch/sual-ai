@@ -8,12 +8,13 @@ import { examRenderInput } from "@/server/exams/templates";
 import { htmlToPdf, PdfUnavailable } from "@/server/exams/pdf";
 import { renderExamHtml } from "@/lib/exam-render";
 import { contentDisposition, safeFileName } from "@/lib/file-name";
+import { modelDisplay } from "@/lib/exam-models";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const VARIANT = { questions: "QUESTIONS_ONLY", answers: "WITH_ANSWERS", key: "ANSWER_KEY" } as const;
-const q = z.object({ variant: z.enum(["questions", "answers", "key"]).default("questions"), template: z.string().min(5).max(40).optional(), name: z.string().max(200).optional() });
+const VARIANT = { questions: "QUESTIONS_ONLY", answers: "WITH_ANSWERS", key: "ANSWER_KEY", sheet: "ANSWER_SHEET" } as const;
+const q = z.object({ variant: z.enum(["questions", "answers", "key", "sheet"]).default("questions"), model: z.enum(["A", "B", "C", "D"]).optional(), template: z.string().min(5).max(40).optional(), name: z.string().max(200).optional() });
 
 /** تنزيل ورقة الامتحان PDF (الأسئلة، أو مع الإجابات، أو الإجابات النموذجية) بالقالب المحفوظ للامتحان */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,18 +25,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!p.success) return fail(400, "VALIDATION_ERROR", "Invalid parameters");
   const rl = await limit([[`pdf:m:${u}`, 10, 60], [`pdf:d:${u}`, 300, 86_400]]);
   if (rl) return rl;
-  const input = await examRenderInput(u, (await params).id, { templateId: p.data.template });
+  const input = await examRenderInput(u, (await params).id, { templateId: p.data.template, model: p.data.model });
   if (!input) return notFound();
   const variant = VARIANT[p.data.variant];
   const html = renderExamHtml(input.renderExam, input.renderTemplate, variant, { forPdf: true });
   const lang = input.exam.language === "EN" ? "en" : "ar";
-  const row = await db.examExport.create({ data: { examId: input.exam.id, requestedById: u, format: "PDF", variant, modelLabels: ["A"], status: "RUNNING" } });
+  const row = await db.examExport.create({ data: { examId: input.exam.id, requestedById: u, format: "PDF", variant, modelLabels: [p.data.model ?? "A"], status: "RUNNING" } });
   try {
     const pdf = await htmlToPdf(html, { pageNumbers: input.template.showPageNumbers, lang });
     await db.examExport.update({ where: { id: row.id }, data: { status: "SUCCEEDED", completedAt: new Date() } });
-    const ascii = `exam-${input.exam.id.slice(-6)}${p.data.variant === "questions" ? "" : `-${p.data.variant}`}.pdf`;
+    const ascii = `exam-${input.exam.id.slice(-6)}${p.data.model ? `-${p.data.model}` : ""}${p.data.variant === "questions" ? "" : `-${p.data.variant}`}.pdf`;
     // الاسم الذي كتبه المدرس، وإلا عنوان الامتحان (+ نوع النسخة)
-    const suffix = p.data.variant === "key" ? (lang === "ar" ? " - الإجابات" : " - key") : p.data.variant === "answers" ? (lang === "ar" ? " - مع الإجابات" : " - with answers") : "";
+    const sfx = { key: lang === "ar" ? " - الإجابات" : " - key", answers: lang === "ar" ? " - مع الإجابات" : " - with answers", sheet: lang === "ar" ? " - ورقة الإجابة" : " - answer sheet", questions: "" }[p.data.variant];
+    const suffix = `${p.data.model ? (lang === "ar" ? ` - نموذج ${modelDisplay(p.data.model, "AR")}` : ` - model ${p.data.model}`) : ""}${sfx}`;
     const pretty = safeFileName(p.data.name, `${input.exam.title}${suffix}`);
     return new Response(new Uint8Array(pdf), {
       headers: {

@@ -51,7 +51,7 @@ export type RenderTemplate = {
 
 export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number };
 /** answerCount: عدد الفروع التي يجيب عنها الطالب (null = كلها) */
-export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; branches: RenderQuestion[] };
+export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; /** نوع السؤال (TRUE_FALSE يظهر في ورقة الإجابة بدائرتي صح/خطأ) */ type?: string | null; branches: RenderQuestion[] };
 export type RenderExam = {
   lang: "AR" | "EN";
   values: Partial<Record<HeaderKey, string>>;
@@ -62,7 +62,7 @@ export type RenderExam = {
   firstRequired?: boolean;
   sections: RenderSection[];
 };
-export type Variant = "QUESTIONS_ONLY" | "WITH_ANSWERS" | "ANSWER_KEY";
+export type Variant = "QUESTIONS_ONLY" | "WITH_ANSWERS" | "ANSWER_KEY" | "ANSWER_SHEET";
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
@@ -109,7 +109,8 @@ function line(key: HeaderKey, exam: RenderExam, tpl: RenderTemplate, lang: "ar" 
 function header(exam: RenderExam, tpl: RenderTemplate, variant: Variant, lang: "ar" | "en") {
   const l = (k: HeaderKey, o?: { blank?: string }) => line(k, exam, tpl, lang, o);
   const logo = tpl.logoDataUri ? `<img class="logo" src="${esc(tpl.logoDataUri)}" alt="">` : "";
-  const keyTitle = variant === "ANSWER_KEY" ? `<div class="keytitle">${lang === "ar" ? "الإجابات النموذجية" : "Answer key"}</div>` : "";
+  const keyTitle = variant === "ANSWER_KEY" ? `<div class="keytitle">${lang === "ar" ? "الإجابات النموذجية" : "Answer key"}</div>`
+    : variant === "ANSWER_SHEET" ? `<div class="keytitle">${lang === "ar" ? "ورقة الإجابة" : "Answer sheet"}</div>` : "";
   const studentRow = variant === "ANSWER_KEY" || (!isOn("student", tpl, exam) && !isOn("section", tpl, exam)) ? "" :
     `<div class="student">${isOn("student", tpl, exam) ? `<span>${esc(LABELS[lang].student)}: ................................................</span>` : "<span></span>"}${isOn("section", tpl, exam) ? `<span>${esc(LABELS[lang].section)}: ........</span>` : ""}</div>`;
   const kindLine = [field("examKind", exam, tpl), isOn("round", tpl, exam) && field("round", exam, tpl) ? `${LABELS[lang].round} ${field("round", exam, tpl)}` : "", isOn("yearTerm", tpl, exam) ? field("yearTerm", exam, tpl) : ""].filter(Boolean).join("\n");
@@ -136,6 +137,27 @@ function arCount(n: number, one: string, two: string, few: string, many: string,
   if (n === 1) return `${one} واحد`;
   if (n === 2) return two;
   return `(${num(n)}) ${n <= 10 ? few : many}`;
+}
+
+/** إجابة الاختيار من متعدد تبدأ بحرف الخيار الصحيح («ب- خمسة»)، وغيرها كما هي */
+function answerText(b: RenderQuestion, lang: "ar" | "en") {
+  const i = b.options?.findIndex((o) => o === b.answer) ?? -1;
+  return i >= 0 ? `${LETTERS[lang][i]}- ${richText(b.answer)}` : richText(b.answer);
+}
+
+/** ورقة إجابة الطالب: دوائر للأسئلة الموضوعية (اختيار من متعدد، صح/خطأ) مرقّمة «س٢ / ٣» كما في ورقة الأسئلة */
+function sheetBody(exam: RenderExam, lang: "ar" | "en", n: (x: number) => string) {
+  const ar = lang === "ar";
+  const cells: string[] = [];
+  exam.sections.forEach((s, i) => {
+    s.branches.forEach((b, j) => {
+      const choices = b.options?.length ? b.options.map((_, k) => LETTERS[lang][k]) : s.type === "TRUE_FALSE" ? (ar ? ["صح", "خطأ"] : ["True", "False"]) : null;
+      if (!choices) return;
+      cells.push(`<div class="cell"><span class="no">${ar ? `س${n(i + 1)} / ${n(j + 1)}` : `Q${i + 1} / ${j + 1}`}</span>${choices.map((c) => `<span class="bub"><i></i>${esc(c)}</span>`).join("")}</div>`);
+    });
+  });
+  const lead = `<p class="exnote">${ar ? "ظلّل الدائرة التي تمثّل الإجابة الصحيحة لكل فرع، ودوّن إجابات الأسئلة الأخرى على ورقة الأسئلة." : "Fill in the circle of the correct answer for each item; answer other questions on the question paper."}</p>`;
+  return `${lead}${cells.length ? `<div class="cells2">${cells.join("")}</div>` : `<p class="note">${ar ? "لا توجد أسئلة موضوعية في هذا الامتحان." : "This exam has no objective questions."}</p>`}`;
 }
 
 /** عبارة ما يتركه الطالب، بأسلوب الأوراق العراقية */
@@ -165,14 +187,14 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
   const notes = pickNotes(exam, lang, n);
   const signLabel = lang === "ar" ? "معلم/ة المادة" : "Subject teacher";
   const sign = tpl.signLine ? `<span>${esc(signLabel)}: ${field("teacher", exam, tpl) ? richText(field("teacher", exam, tpl)) : "................"}</span>` : "";
-  const footer = variant === "ANSWER_KEY" || (!tpl.footerNote && !sign) ? ""
+  const footer = variant === "ANSWER_KEY" || variant === "ANSWER_SHEET" || (!tpl.footerNote && !sign) ? ""
     : sign ? `<div class="note foot"><span>${tpl.footerNote ? richText(tpl.footerNote) : ""}</span>${sign}</div>`
     : `<p class="note">${richText(tpl.footerNote ?? "")}</p>`;
   let footerPlaced = false;
-  const body = exam.sections.map((s, i) => {
+  const body = variant === "ANSWER_SHEET" ? sheetBody(exam, lang, n) : exam.sections.map((s, i) => {
     const rows = s.branches.map((b, j) => {
       const opts = variant !== "ANSWER_KEY" && b.options?.length ? `<div class="opts">${b.options.map((o, k) => `<span>${LETTERS[lang][k]}- ${richText(o)}</span>`).join("")}</div>` : "";
-      const ans = variant !== "QUESTIONS_ONLY" ? `<div class="ans">${variant === "WITH_ANSWERS" ? `<span class="lbl">${ar ? "الإجابة" : "Answer"}:</span> ` : ""}${richText(b.answer)}</div>` : "";
+      const ans = variant !== "QUESTIONS_ONLY" ? `<div class="ans">${variant === "WITH_ANSWERS" ? `<span class="lbl">${ar ? "الإجابة" : "Answer"}:</span> ` : ""}${answerText(b, lang)}</div>` : "";
       const space = variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length ? `<div class="space">${'<div class="rule"></div>'.repeat(tpl.answerLines)}</div>` : "";
       return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${opts}${ans}${space}</li>`;
     });
@@ -239,11 +261,16 @@ li:last-child { margin-bottom: 0; }
 .pick { font-weight: 700; margin: -0.2em 0 0.6em; font-size: 0.95em; }
 .note { text-align: center; font-weight: 700; margin: 2em 0 0; break-before: avoid; break-inside: avoid; }
 .tail { break-inside: avoid; }
+.cells2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.9em 2.5em; margin-top: 1.4em; }
+.cell { display: flex; align-items: center; gap: 0.9em; break-inside: avoid; border-bottom: 1px dotted #999; padding-bottom: 0.5em; }
+.cell .no { min-width: 4.6em; font-weight: 700; }
+.bub { display: inline-flex; align-items: center; gap: 0.3em; }
+.bub i { display: inline-block; width: 1.15em; height: 1.15em; border: 1.5px solid #000; border-radius: 50%; }
 .tail > .note { margin-top: 1.6em; }
 .foot { display: flex; justify-content: space-between; align-items: baseline; gap: 2em; text-align: start; }
 ol.inline { display: flex; flex-wrap: wrap; gap: 0.45em 2.6em; }
 ol.inline li { margin: 0; }
-</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main></div></body></html>`;
+</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote && variant !== "ANSWER_SHEET" ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main></div></body></html>`;
 }
 
 export const DEFAULT_TEMPLATE: RenderTemplate = {
