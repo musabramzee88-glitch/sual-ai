@@ -17,7 +17,7 @@ vi.mock("../ai/gemini", async (orig) => {
 });
 
 const { db } = await import("../db");
-const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions, updateSection, addManualQuestion, reorderQuestions, reorderSections, deleteSection, addSection, generateMore, updateExamMeta, distributeExamMarks } = await import("./service");
+const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions, updateSection, addManualQuestion, reorderQuestions, reorderSections, deleteSection, addSection, generateMore, updateExamMeta, distributeExamMarks, duplicateQuestion, duplicateSection } = await import("./service");
 const { AiError } = await import("../ai/gemini");
 
 const TAG = `ex${Date.now()}`;
@@ -239,6 +239,31 @@ describe("exam generation", () => {
     expect(e.sections).toHaveLength(4);
     expect(e.sectionsToAnswer).toBeNull();
     expect(e.totalMarks).toBe(e.sections.reduce((n, s) => n + s.marks, 0));
+  });
+
+  it("duplicating a question or a whole section inserts the copy right after it and keeps totals right", async () => {
+    reply = { questions: [q(0, "عرّف الضوء الأول", { answer: "أ" }), q(0, "عرّف الماء الثاني", { answer: "ب", sourcePages: [11] }), q(1, "علّل الظاهرة الأولى", { answer: "ج" })] };
+    const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "QUIZ", difficulty: "MIXED", sections: [{ type: "DEFINE", count: 2, marksEach: 3 }, { type: "JUSTIFY", count: 1, marksEach: 4 }] });
+    if (!r.ok) throw new Error(r.code);
+    let e = (await getExam(userId, r.examId))!;
+    expect(e.totalMarks).toBe(10);
+    const first = e.sections[0].branches[0];
+    const copy = await duplicateQuestion(userId, first.id);
+    expect(copy.ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections[0].branches.map((b) => b.prompt)).toEqual([first.prompt, first.prompt, "الماء الثاني"]); // النسخة بعد الأصل مباشرة
+    expect(e.sections[0].branches.map((b) => b.marks)).toEqual([3, 3, 3]);
+    expect(e.totalMarks).toBe(13);
+    expect(await duplicateQuestion(otherId, first.id)).toMatchObject({ ok: false, code: "NOT_FOUND" });
+
+    expect(await duplicateSection(otherId, e.sections[0].id)).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect((await duplicateSection(userId, e.sections[0].id)).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections.map((s) => s.type)).toEqual(["DEFINE", "DEFINE", "JUSTIFY"]);
+    expect(e.sections[1].branches).toHaveLength(3);
+    expect(e.sections[1].marks).toBe(9);
+    expect(e.totalMarks).toBe(22);
+    expect(e.sections.map((s) => s.sortOrder)).toEqual([1, 2, 3]);
   });
 
   it("with a teacher's reference paper, the section instruction takes the teacher's wording and the paper is sent as style only", async () => {

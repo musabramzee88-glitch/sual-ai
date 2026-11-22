@@ -2,7 +2,7 @@ import { z } from "zod";
 import { limit, parseBody } from "@/server/auth/route";
 import { requireExamAccess } from "@/server/exams/access";
 import { respondExam } from "@/server/exams/route";
-import { addManualQuestion, deleteSection, generateMore, reorderQuestions, updateSection } from "@/server/exams/service";
+import { addManualQuestion, deleteSection, duplicateSection, generateMore, reorderQuestions, updateSection } from "@/server/exams/service";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,6 +19,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("addManual"), prompt: z.string().trim().min(1).max(1500), answer: z.string().trim().min(1).max(3000), options: z.array(z.string().trim().min(1).max(300)).min(2).max(6).nullable().optional(), marks: z.number().min(0.5).max(100).optional() }),
+  z.object({ action: z.literal("duplicate") }),
   z.object({ action: z.literal("generateMore"), count: z.number().int().min(1).max(10) }),
   z.object({ action: z.literal("reorder"), ids: z.array(z.string().min(10).max(40)).min(1).max(40) }),
 ]);
@@ -31,6 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const sid = (await params).id, u = g.auth.user.id, d = b.data;
   if (d.action === "addManual") return respondExam(await addManualQuestion(u, sid, { prompt: d.prompt, answer: d.answer, options: d.options, marks: d.marks }));
   if (d.action === "reorder") return respondExam(await reorderQuestions(u, sid, d.ids));
+  if (d.action === "duplicate") return respondExam(await duplicateSection(u, sid));
   const rl = await limit([[`regen:m:${u}`, 6, 60], [`regen:d:${u}`, 100, 86_400]]);
   if (rl) return rl;
   return respondExam(await generateMore(u, sid, d.count));

@@ -247,6 +247,62 @@ export async function deleteQuestion(userId: string, questionId: string) {
   return { ok: true as const };
 }
 
+const MAX_SECTIONS = 20;
+const MAX_ITEMS = 80;
+
+/** نسخة من فرع تُوضع بعده مباشرة (الدرجة والخيارات والإجابة نفسها) ليعدّلها المدرس */
+export async function duplicateQuestion(userId: string, questionId: string) {
+  const q = await ownedQuestion(userId, questionId);
+  if (!q) return fail("NOT_FOUND");
+  const examId = q.examModel.examId;
+  const total = await db.examQuestion.count({ where: { examModel: { examId }, parentId: { not: null }, deletedAt: null } });
+  if (total >= MAX_ITEMS) return fail("TOO_MANY");
+  const id = await db.$transaction(async (tx) => {
+    await tx.examQuestion.updateMany({ where: { parentId: q.parentId, deletedAt: null, sortOrder: { gt: q.sortOrder } }, data: { sortOrder: { increment: 1 } } });
+    const c = await tx.examQuestion.create({
+      data: {
+        examModelId: q.examModelId, parentId: q.parentId, sortOrder: q.sortOrder + 1, type: q.type, prompt: q.prompt, options: q.options ?? Prisma.DbNull, answer: q.answer,
+        marks: q.marks, difficulty: q.difficulty, cognitiveLevel: q.cognitiveLevel, chapterId: q.chapterId, sourcePages: q.sourcePages,
+      },
+    });
+    await tx.examQuestionRevision.create({ data: { questionId: c.id, version: 1, reason: "CREATE", snapshot: snapshot(c), editedById: userId } });
+    await recomputeExam(tx, examId);
+    return c.id;
+  });
+  return { ok: true as const, id };
+}
+
+/** نسخة من سؤال رئيس بكل فروعه تُوضع بعده مباشرة */
+export async function duplicateSection(userId: string, sectionId: string) {
+  const s = await ownedSection(userId, sectionId);
+  if (!s) return fail("NOT_FOUND");
+  const examId = s.examModel.examId;
+  const kids = await db.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "asc" } });
+  const [sections, items] = await Promise.all([
+    db.examQuestion.count({ where: { examModel: { examId }, parentId: null, deletedAt: null } }),
+    db.examQuestion.count({ where: { examModel: { examId }, parentId: { not: null }, deletedAt: null } }),
+  ]);
+  if (sections >= MAX_SECTIONS || items + kids.length > MAX_ITEMS) return fail("TOO_MANY");
+  const id = await db.$transaction(async (tx) => {
+    await tx.examQuestion.updateMany({ where: { examModelId: s.examModelId, parentId: null, deletedAt: null, sortOrder: { gt: s.sortOrder } }, data: { sortOrder: { increment: 1 } } });
+    const p = await tx.examQuestion.create({
+      data: { examModelId: s.examModelId, sortOrder: s.sortOrder + 1, type: s.type, instruction: s.instruction, prompt: s.prompt, marks: s.marks, answerCount: s.answerCount, chapterId: s.chapterId, sourcePages: [] },
+    });
+    for (const k of kids) {
+      const c = await tx.examQuestion.create({
+        data: {
+          examModelId: s.examModelId, parentId: p.id, sortOrder: k.sortOrder, type: k.type, prompt: k.prompt, options: k.options ?? Prisma.DbNull, answer: k.answer,
+          marks: k.marks, difficulty: k.difficulty, cognitiveLevel: k.cognitiveLevel, chapterId: k.chapterId, sourcePages: k.sourcePages,
+        },
+      });
+      await tx.examQuestionRevision.create({ data: { questionId: c.id, version: 1, reason: "CREATE", snapshot: snapshot(c), editedById: userId } });
+    }
+    await recomputeExam(tx, examId);
+    return p.id;
+  });
+  return { ok: true as const, id };
+}
+
 /** يستبدل سؤالاً واحداً بسؤال جديد من النوع نفسه ومن المصدر نفسه، دون تكرار أسئلة القسم */
 export async function regenerateQuestion(userId: string, questionId: string) {
   const q = await ownedQuestion(userId, questionId);

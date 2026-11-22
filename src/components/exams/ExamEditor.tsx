@@ -76,6 +76,7 @@ function Question({ q, n, type, lang, t, showAnswer, first, last, onMove }: { q:
             <button className={btn} disabled={first} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
             <button className={btn} disabled={last} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>
             <button className={btn} disabled={busy} onClick={() => setEditing(true)}>{t.editor.edit}</button>
+            <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "duplicate" }))}>{t.editor.duplicate}</button>
             <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "regenerate" }))}>{busy ? t.editor.busy : t.editor.regenerate}</button>
             {q.version > 1 && <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/questions/${q.id}`, "POST", { action: "undo" }))}>{t.editor.undo}</button>}
             <button className={`${btn} text-danger`} disabled={busy} onClick={() => { if (window.confirm(t.editor.confirmDel)) run(call(`/api/v1/exams/questions/${q.id}`, "DELETE")); }}>{t.editor.del}</button>
@@ -166,6 +167,7 @@ function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSecti
         <span className="flex-1" />
         <button className={btn} disabled={i === 0 || busy} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
         <button className={btn} disabled={i === count - 1 || busy} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>
+        <button className={btn} disabled={busy} onClick={() => run(call(`/api/v1/exams/sections/${s.id}`, "POST", { action: "duplicate" }))}>{t.editor.duplicateSection}</button>
         <button className={`${btn} text-danger`} disabled={busy} onClick={() => { if (window.confirm(t.editor.confirmDeleteSection)) run(call(`/api/v1/exams/sections/${s.id}`, "DELETE")); }}>{t.editor.deleteSection}</button>
       </div>
       <ol className="space-y-2">
@@ -212,6 +214,16 @@ export function ExamEditor({ examId, title, duration, totalMarks, sectionsToAnsw
         <label className="flex items-center gap-1.5 px-2"><input type="checkbox" checked={showAnswers} onChange={(e) => setShowAnswers(e.target.checked)} />{t.editor.showAnswers}</label>
         <span className="flex-1" />
         <button className="rounded-lg border border-line px-3 py-2 text-danger" onClick={async () => { if (window.confirm(t.editor.confirmDeleteExam) && (await call(`/api/v1/exams/${examId}`, "DELETE")).ok) router.push("/exams"); }}>{t.editor.deleteExam}</button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
+        <span className="rounded-full border border-line px-3 py-1">{t.editor.status.questions}: {sections.reduce((n, x) => n + x.branches.length, 0)}</span>
+        <span className="rounded-full border border-line px-3 py-1">{t.total}: {totalMarks}</span>
+        {total > 0 && (
+          <span className={`rounded-full px-3 py-1 font-semibold ${totalMarks === total ? "bg-brand-soft text-brand" : totalMarks < total ? "bg-accent-soft text-ink" : "bg-accent-soft text-danger"}`}>
+            {totalMarks === total ? t.editor.status.reached : totalMarks < total ? fill(t.editor.status.remaining, { n: total - totalMarks, t: total }) : fill(t.editor.status.over, { n: totalMarks - total, t: total })}
+          </span>
+        )}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">

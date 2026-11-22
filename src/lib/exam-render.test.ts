@@ -102,3 +102,26 @@ describe("compact layout", () => {
     expect(renderExamHtml(e(), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('class="note"'); // بلا أقسام: تبقى بعد المحتوى
   });
 });
+
+describe("exam number and signature line", () => {
+  const ex2: RenderExam = { lang: "AR", values: { subject: "العلوم", teacher: "أ. علي" }, sections: [{ instruction: "عرّف:", marks: 5, branches: [{ prompt: "عرّف الخلية وبيّن أجزاءها الرئيسة ووظيفة كل جزء منها", options: null, answer: "", marks: 5 }] }] };
+  it("the exam number is hidden until enabled, then shows dots to fill (or its value)", () => {
+    expect(renderExamHtml(ex2, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain("الرقم الامتحاني");
+    const on = { ...DEFAULT_TEMPLATE, visible: { examNumber: true } };
+    expect(renderExamHtml(ex2, on, "QUESTIONS_ONLY")).toContain("الرقم الامتحاني:</span> ............");
+    expect(renderExamHtml({ ...ex2, values: { ...ex2.values, examNumber: "EX-12" } }, on, "QUESTIONS_ONLY")).toContain("EX-12");
+    // قيمة كتبها المدرس لهذا الامتحان تظهر ولو كان الحقل مخفياً
+    expect(renderExamHtml({ ...ex2, values: { ...ex2.values, examNumber: "7" }, forceShow: ["examNumber"] }, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain("الرقم الامتحاني");
+  });
+  it("the signature line sits beside the closing line, with the teacher name or dots", () => {
+    const t = { ...DEFAULT_TEMPLATE, signLine: true };
+    const html = renderExamHtml(ex2, t, "QUESTIONS_ONLY");
+    expect(html).toContain('class="note foot"');
+    expect(html).toContain("معلم/ة المادة: أ. علي");
+    expect(renderExamHtml({ ...ex2, values: { subject: "العلوم" } }, t, "QUESTIONS_ONLY")).toContain("معلم/ة المادة: ................");
+    expect(renderExamHtml(ex2, t, "ANSWER_KEY")).not.toContain("معلم/ة المادة");
+    expect(renderExamHtml(ex2, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain("معلم/ة المادة");
+    // الختام والتوقيع في كتلة .tail مع آخر فرع
+    expect(html).toMatch(/<div class="tail"><ol>.*<\/ol><div class="note foot">/);
+  });
+});

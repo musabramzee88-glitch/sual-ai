@@ -9,7 +9,7 @@ type Tpl = {
   id: string; preset: boolean; isDefault: boolean; name: string; layout: Layout; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   fontFamily: string; fontSizePt: number; lineSpacing: number; margins: { top: number; right: number; bottom: number; left: number };
   showPageNumbers: boolean; visible: Partial<Record<HeaderKey, boolean>>; values: Partial<Record<HeaderKey, string>>;
-  answerLines: number; footerNote: string | null; logoAssetId: string | null;
+  answerLines: number; footerNote: string | null; signLine: boolean; logoAssetId: string | null;
 };
 type Field = { key: HeaderKey; label: string; hidden: boolean; auto: boolean };
 
@@ -144,7 +144,7 @@ function Editor({ t, tpl, set, logos, fonts, fields, lang, busy, onSave, onUploa
   const html = useMemo(() => renderExamHtml(SAMPLE[lang], {
     layout: tpl.layout, pageSize: tpl.pageSize, orientation: tpl.orientation, fontFamily: tpl.fontFamily, fontSizePt: tpl.fontSizePt, lineSpacing: tpl.lineSpacing,
     margins: tpl.margins, visible: tpl.visible, values: tpl.values, logoDataUri: tpl.logoAssetId ? logoUri[tpl.logoAssetId] || null : null,
-    answerLines: tpl.answerLines, footerNote: tpl.footerNote,
+    answerLines: tpl.answerLines, footerNote: tpl.footerNote, signLine: tpl.signLine,
   }, "QUESTIONS_ONLY"), [tpl, logoUri, lang]);
   const num = (v: string, min: number, max: number) => Math.min(max, Math.max(min, Number(v) || min));
 
@@ -211,6 +211,7 @@ function Editor({ t, tpl, set, logos, fonts, fields, lang, busy, onSave, onUploa
         </fieldset>
 
         <label className="block text-sm"><span className="mb-1 block font-semibold">{T.footer}</span><input className={inputCls} maxLength={200} value={tpl.footerNote ?? ""} onChange={(e) => up({ footerNote: e.target.value || null })} /></label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={tpl.signLine} onChange={(e) => up({ signLine: e.target.checked })} />{T.signLine}</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={tpl.isDefault} onChange={(e) => up({ isDefault: e.target.checked })} />{T.isDefault}</label>
         <div className="flex gap-2">
           <button onClick={onSave} disabled={busy || !tpl.name.trim()} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{T.save}</button>

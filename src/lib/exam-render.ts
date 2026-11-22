@@ -6,23 +6,23 @@
 
 export type HeaderKey =
   | "republic" | "ministry" | "directorate" | "school" | "title" | "subject" | "grade" | "examKind" | "round" | "yearTerm"
-  | "teacher" | "time" | "total" | "model" | "student" | "section" | "date";
+  | "teacher" | "time" | "total" | "model" | "student" | "section" | "date" | "examNumber";
 
-export const HEADER_KEYS: HeaderKey[] = ["republic", "ministry", "directorate", "school", "title", "subject", "grade", "examKind", "round", "yearTerm", "teacher", "time", "total", "model", "student", "section", "date"];
+export const HEADER_KEYS: HeaderKey[] = ["republic", "ministry", "directorate", "school", "title", "subject", "grade", "examKind", "round", "yearTerm", "teacher", "time", "total", "model", "student", "section", "date", "examNumber"];
 
 /** حقول مخفية افتراضياً (يفعّلها المدرس) */
-export const HIDDEN_BY_DEFAULT: HeaderKey[] = ["teacher", "round", "date", "model"];
+export const HIDDEN_BY_DEFAULT: HeaderKey[] = ["teacher", "round", "date", "model", "examNumber"];
 
 export const LABELS: Record<"ar" | "en", Record<HeaderKey, string>> = {
   ar: {
     republic: "جمهورية العراق", ministry: "وزارة التربية", directorate: "المديرية العامة للتربية", school: "المدرسة", title: "عنوان الامتحان",
     subject: "المادة", grade: "الصف", examKind: "نوع الامتحان", round: "الدور", yearTerm: "العام الدراسي", teacher: "المدرس",
-    time: "الزمن", total: "الدرجة", model: "النموذج", student: "اسم الطالب", section: "الشعبة", date: "التاريخ",
+    time: "الزمن", total: "الدرجة", model: "النموذج", student: "اسم الطالب", section: "الشعبة", date: "التاريخ", examNumber: "الرقم الامتحاني",
   },
   en: {
     republic: "Republic of Iraq", ministry: "Ministry of Education", directorate: "Directorate of Education", school: "School", title: "Exam title",
     subject: "Subject", grade: "Grade", examKind: "Exam type", round: "Round", yearTerm: "Academic year", teacher: "Teacher",
-    time: "Time", total: "Marks", model: "Model", student: "Student name", section: "Section", date: "Date",
+    time: "Time", total: "Marks", model: "Model", student: "Student name", section: "Section", date: "Date", examNumber: "Exam No.",
   },
 };
 
@@ -45,6 +45,8 @@ export type RenderTemplate = {
   /** فراغ للإجابة تحت كل فرع (أسطر) في نسخة الأسئلة */
   answerLines: number;
   footerNote: string | null;
+  /** سطر «معلم/ة المادة: ....» أسفل الورقة بجانب عبارة الختام */
+  signLine?: boolean;
 };
 
 export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number };
@@ -112,14 +114,14 @@ function header(exam: RenderExam, tpl: RenderTemplate, variant: Variant, lang: "
     `<div class="student">${isOn("student", tpl, exam) ? `<span>${esc(LABELS[lang].student)}: ................................................</span>` : "<span></span>"}${isOn("section", tpl, exam) ? `<span>${esc(LABELS[lang].section)}: ........</span>` : ""}</div>`;
   const kindLine = [field("examKind", exam, tpl), isOn("round", tpl, exam) && field("round", exam, tpl) ? `${LABELS[lang].round} ${field("round", exam, tpl)}` : "", isOn("yearTerm", tpl, exam) ? field("yearTerm", exam, tpl) : ""].filter(Boolean).join("\n");
   const center = `${logo}${l("title")}${isOn("examKind", tpl, exam) && kindLine ? `<div class="hl">${richText(kindLine)}</div>` : ""}${keyTitle}`;
-  const right = `${l("republic")}${l("ministry")}${l("directorate")}${l("school")}`;
+  const right = `${l("republic")}${l("ministry")}${l("directorate")}${l("school")}${l("examNumber")}`;
   const left = `${l("subject")}${l("grade")}${l("time")}${l("total")}${l("teacher")}${l("model")}${l("date", { blank: "   /   /     " })}`;
 
   if (tpl.layout === "SCHOOL") {
-    return `<header class="h-school">${logo}${field("school", exam, tpl) && isOn("school", tpl, exam) ? `<div class="school">${esc(field("school", exam, tpl))}</div>` : ""}<div class="sub">${l("republic")}${l("ministry")}${l("directorate")}</div>${l("title")}${isOn("examKind", tpl, exam) && kindLine ? `<div class="hl">${richText(kindLine)}</div>` : ""}${keyTitle}<div class="grid4">${l("subject")}${l("grade")}${l("time")}${l("total")}${l("teacher")}${l("model")}${l("date", { blank: "   /   /     " })}</div></header>${studentRow}`;
+    return `<header class="h-school">${logo}${field("school", exam, tpl) && isOn("school", tpl, exam) ? `<div class="school">${esc(field("school", exam, tpl))}</div>` : ""}<div class="sub">${l("republic")}${l("ministry")}${l("directorate")}</div>${l("title")}${isOn("examKind", tpl, exam) && kindLine ? `<div class="hl">${richText(kindLine)}</div>` : ""}${keyTitle}<div class="grid4">${l("examNumber")}${l("subject")}${l("grade")}${l("time")}${l("total")}${l("teacher")}${l("model")}${l("date", { blank: "   /   /     " })}</div></header>${studentRow}`;
   }
   if (tpl.layout === "ACADEMIC") {
-    const cells = (["subject", "grade", "time", "total", "teacher", "model", "date"] as HeaderKey[]).filter((k) => isOn(k, tpl, exam)).map((k) => `<td><span class="lbl">${esc(LABELS[lang][k])}</span><br>${field(k, exam, tpl) ? richText(field(k, exam, tpl)) : "&nbsp;"}</td>`).join("");
+    const cells = (["examNumber", "subject", "grade", "time", "total", "teacher", "model", "date"] as HeaderKey[]).filter((k) => isOn(k, tpl, exam)).map((k) => `<td><span class="lbl">${esc(LABELS[lang][k])}</span><br>${field(k, exam, tpl) ? richText(field(k, exam, tpl)) : "&nbsp;"}</td>`).join("");
     return `<header class="h-academic"><div class="cols"><div>${right}</div><div class="center">${center}</div></div><table class="cells"><tr>${cells}</tr></table></header>${studentRow}`;
   }
   if (tpl.layout === "MINIMAL") {
@@ -161,7 +163,11 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
   const n = (x: number) => digits(x, ar);
   const marks = ar ? "درجة" : "marks";
   const notes = pickNotes(exam, lang, n);
-  const footer = variant === "ANSWER_KEY" || !tpl.footerNote ? "" : `<p class="note">${richText(tpl.footerNote)}</p>`;
+  const signLabel = lang === "ar" ? "معلم/ة المادة" : "Subject teacher";
+  const sign = tpl.signLine ? `<span>${esc(signLabel)}: ${field("teacher", exam, tpl) ? richText(field("teacher", exam, tpl)) : "................"}</span>` : "";
+  const footer = variant === "ANSWER_KEY" || (!tpl.footerNote && !sign) ? ""
+    : sign ? `<div class="note foot"><span>${tpl.footerNote ? richText(tpl.footerNote) : ""}</span>${sign}</div>`
+    : `<p class="note">${richText(tpl.footerNote ?? "")}</p>`;
   let footerPlaced = false;
   const body = exam.sections.map((s, i) => {
     const rows = s.branches.map((b, j) => {
@@ -234,6 +240,7 @@ li:last-child { margin-bottom: 0; }
 .note { text-align: center; font-weight: 700; margin: 2em 0 0; break-before: avoid; break-inside: avoid; }
 .tail { break-inside: avoid; }
 .tail > .note { margin-top: 1.6em; }
+.foot { display: flex; justify-content: space-between; align-items: baseline; gap: 2em; text-align: start; }
 ol.inline { display: flex; flex-wrap: wrap; gap: 0.45em 2.6em; }
 ol.inline li { margin: 0; }
 </style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main></div></body></html>`;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { limit, parseBody } from "@/server/auth/route";
 import { requireExamAccess } from "@/server/exams/access";
 import { respondExam } from "@/server/exams/route";
-import { deleteQuestion, editQuestion, regenerateQuestion, undoQuestion } from "@/server/exams/service";
+import { deleteQuestion, duplicateQuestion, editQuestion, regenerateQuestion, undoQuestion } from "@/server/exams/service";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -23,7 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   return respondExam(await editQuestion(g.auth.user.id, (await params).id, b.data));
 }
 
-const actionSchema = z.object({ action: z.enum(["regenerate", "undo"]) });
+const actionSchema = z.object({ action: z.enum(["regenerate", "undo", "duplicate"]) });
 
 /** إعادة توليد سؤال واحد، أو التراجع عن آخر تغيير */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,6 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("res" in b) return b.res;
   const id = (await params).id;
   if (b.data.action === "undo") return respondExam(await undoQuestion(g.auth.user.id, id));
+  if (b.data.action === "duplicate") return respondExam(await duplicateQuestion(g.auth.user.id, id));
   const rl = await limit([[`regen:m:${g.auth.user.id}`, 6, 60], [`regen:d:${g.auth.user.id}`, 100, 86_400]]);
   if (rl) return rl;
   return respondExam(await regenerateQuestion(g.auth.user.id, id));
