@@ -34,7 +34,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const defaultName = `${input.exam.title}${mdl}${sfx}`;
   return (
     <ExamSheet
-      examId={id} defaultName={defaultName} model={model} modelLetters={{ A: modelDisplay("A", input.exam.language), B: modelDisplay("B", input.exam.language), C: modelDisplay("C", input.exam.language), D: modelDisplay("D", input.exam.language) }} html={html} pageSize={input.renderTemplate.pageSize} orientation={input.renderTemplate.orientation} variant={v as "questions" | "answers" | "key" | "sheet"} t={templateDicts[locale]}
+      examId={id} defaultName={defaultName} title={input.exam.title} model={model} modelLetters={{ A: modelDisplay("A", input.exam.language), B: modelDisplay("B", input.exam.language), C: modelDisplay("C", input.exam.language), D: modelDisplay("D", input.exam.language) }} html={html} pageSize={input.renderTemplate.pageSize} orientation={input.renderTemplate.orientation} variant={v as "questions" | "answers" | "key" | "sheet"} t={templateDicts[locale]}
       templates={templates} selectedTemplateId={input.selectedTemplateId ?? input.template.id}
       fields={HEADER_KEYS.filter((k) => k !== "student" && k !== "section").map((k) => ({ key: k, label: LABELS[lang][k], placeholder: input.renderExam.values[k] ?? input.renderTemplate.values[k] ?? "" }))}
       values={input.headerValues}

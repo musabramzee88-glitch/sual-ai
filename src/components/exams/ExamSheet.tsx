@@ -6,20 +6,25 @@ import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
 
 type Props = {
-  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
+  examId: string; defaultName: string; title: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   templates: { id: string; name: string; preset: boolean; isDefault: boolean }[]; selectedTemplateId: string;
   fields: { key: string; label: string; placeholder: string }[]; values: Record<string, string>;
 };
 
 /** شريط ورقة الامتحان: النسخة، القالب، بيانات الترويسة، طباعة من الإطار، تنزيل PDF */
-export function ExamSheet({ examId, defaultName, html, variant, model, modelLetters, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
+export function ExamSheet({ examId, defaultName, title, html, variant, model, modelLetters, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
   const router = useRouter();
   const frame = useRef<SheetFrameHandle>(null);
   const [tplId, setTplId] = useState(selectedTemplateId);
   const [vals, setVals] = useState<Record<string, string>>(values);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<"" | "save" | "pdf">("");
-  const [naming, setNaming] = useState(false);
+  const [dialog, setDialog] = useState<"" | "pdf" | "docx" | "zip">("");
+  const naming = dialog !== "";
+  const setNaming = (v: boolean) => { if (!v) setDialog(""); };
+  const [zipFormat, setZipFormat] = useState<"pdf" | "docx">("pdf");
+  const [zipModels, setZipModels] = useState<string[]>(["A", "B", "C", "D"]);
+  const [zipVariants, setZipVariants] = useState<string[]>(["questions", "key"]);
   const [fileName, setFileName] = useState(defaultName);
   const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -46,10 +51,11 @@ export function ExamSheet({ examId, defaultName, html, variant, model, modelLett
     router.refresh();
   }
 
-  async function pdf() {
-    setNaming(false);
+  /** ينزّل ملفاً من الخادم باسم يختاره المدرس (يُنظَّف الاسم في الخادم أيضاً) */
+  async function download(url: string, fallback: string) {
+    setDialog("");
     setBusy("pdf"); setMsg(null);
-    const r = await fetch(`/api/v1/exams/${examId}/export?variant=${variant}${model ? `&model=${model}` : ""}&name=${encodeURIComponent(fileName.trim())}`).catch(() => null);
+    const r = await fetch(url).catch(() => null);
     if (!r?.ok) {
       setBusy("");
       const code = r?.status === 429 ? "RATE_LIMITED" : (await r?.json().catch(() => null))?.error?.code;
@@ -58,14 +64,20 @@ export function ExamSheet({ examId, defaultName, html, variant, model, modelLett
     }
     const blob = await r.blob();
     const cd = r.headers.get("content-disposition") ?? "";
-    const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(cd)?.[1] ?? "exam.pdf");
-    const url = URL.createObjectURL(blob);
+    const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(cd)?.[1] ?? fallback);
+    const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = name;
+    a.href = href; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setTimeout(() => URL.revokeObjectURL(href), 10_000);
     setBusy("");
   }
+  const submit = () => {
+    const name = encodeURIComponent(fileName.trim());
+    if (dialog === "zip") return download(`/api/v1/exams/${examId}/export-zip?format=${zipFormat}&models=${zipModels.join(",")}&variants=${zipVariants.join(",")}&name=${name}`, "exam.zip");
+    download(`/api/v1/exams/${examId}/export?format=${dialog}&variant=${variant}${model ? `&model=${model}` : ""}&name=${name}`, `exam.${dialog}`);
+  };
+  const toggle = (set: string[], v: string, fn: (x: string[]) => void) => fn(set.includes(v) ? set.filter((x) => x !== v) : [...set, v]);
 
   const tab = (v: Props["variant"], label: string) => (
     <a href={`/exams/${examId}/print?v=${v}${model ? `&m=${model}` : ""}`} className={`rounded-lg px-3 py-1.5 text-sm ${variant === v ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{label}</a>
@@ -79,7 +91,9 @@ export function ExamSheet({ examId, defaultName, html, variant, model, modelLett
         {tab("questions", s.questions)}{tab("answers", s.answers)}{tab("key", s.key)}{tab("sheet", s.answerSheet)}
         <span className="flex-1" />
         <button onClick={() => frame.current?.print()} className="rounded-lg border border-line px-4 py-2 font-semibold">{s.print}</button>
-        <button onClick={() => { setFileName(defaultName); setNaming(true); }} disabled={busy !== ""} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{busy === "pdf" ? s.pdfBusy : s.pdf}</button>
+        <button onClick={() => { setFileName(defaultName); setDialog("pdf"); }} disabled={busy !== ""} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{busy === "pdf" ? s.pdfBusy : s.pdf}</button>
+        <button onClick={() => { setFileName(defaultName); setDialog("docx"); }} disabled={busy !== ""} className="rounded-lg border border-line px-4 py-2 font-semibold disabled:opacity-60">{s.word}</button>
+        <button onClick={() => { setFileName(title); setDialog("zip"); }} disabled={busy !== ""} className="rounded-lg border border-line px-4 py-2 font-semibold disabled:opacity-60">{s.zip}</button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -118,17 +132,31 @@ export function ExamSheet({ examId, defaultName, html, variant, model, modelLett
 
 
       {naming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setNaming(false); }}>
-          <form role="dialog" aria-modal="true" aria-labelledby="pdf-name-title" className="w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); if (fileName.trim()) pdf(); }}>
-            <h2 id="pdf-name-title" className="font-bold">{s.pdfName}</h2>
-            <p className="text-xs text-muted">{s.pdfNameHint}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setNaming(false); }}>
+          <form role="dialog" aria-modal="true" aria-labelledby="pdf-name-title" className="my-auto w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); if (fileName.trim() && (dialog !== "zip" || zipVariants.length > 0)) submit(); }}>
+            <h2 id="pdf-name-title" className="font-bold">{dialog === "zip" ? s.zipTitle : s.pdfName}</h2>
+            <p className="text-xs text-muted">{dialog === "zip" ? s.zipHint : s.pdfNameHint}</p>
+            {dialog === "zip" && (
+              <div className="space-y-3 text-sm">
+                <fieldset className="flex flex-wrap items-center gap-3"><legend className="mb-1 font-semibold">{s.format}</legend>
+                  {(["pdf", "docx"] as const).map((f) => <label key={f} className="flex items-center gap-1.5"><input type="radio" name="zf" checked={zipFormat === f} onChange={() => setZipFormat(f)} />{f === "pdf" ? "PDF" : "Word"}</label>)}
+                </fieldset>
+                <fieldset className="flex flex-wrap items-center gap-3"><legend className="mb-1 font-semibold">{s.models}</legend>
+                  {(["A", "B", "C", "D"] as const).map((m) => <label key={m} className="flex items-center gap-1.5"><input type="checkbox" checked={zipModels.includes(m)} onChange={() => toggle(zipModels, m, setZipModels)} />{modelLetters[m]}</label>)}
+                  <span className="basis-full text-xs text-muted">{s.zipNoModel}</span>
+                </fieldset>
+                <fieldset className="flex flex-wrap items-center gap-3"><legend className="mb-1 font-semibold">{s.zipVariants}</legend>
+                  {([["questions", s.questions], ["answers", s.answers], ["key", s.key], ["sheet", s.answerSheet]] as const).map(([v, label]) => <label key={v} className="flex items-center gap-1.5"><input type="checkbox" checked={zipVariants.includes(v)} onChange={() => toggle(zipVariants, v, setZipVariants)} />{label}</label>)}
+                </fieldset>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input ref={nameInput} value={fileName} maxLength={100} dir="auto" onChange={(e) => setFileName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-line bg-transparent px-3 py-2" aria-label={s.pdfName} />
-              <span dir="ltr" className="text-sm text-muted" style={{ unicodeBidi: "isolate" }}>.pdf</span>
+              <span dir="ltr" className="text-sm text-muted" style={{ unicodeBidi: "isolate" }}>.{dialog === "zip" ? "zip" : dialog}</span>
             </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setNaming(false)} className="rounded-lg border border-line px-4 py-2">{s.dlCancel}</button>
-              <button type="submit" disabled={!fileName.trim()} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-50 dark:text-paper">{s.download}</button>
+              <button type="submit" disabled={!fileName.trim() || (dialog === "zip" && zipVariants.length === 0)} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-50 dark:text-paper">{s.download}</button>
             </div>
           </form>
         </div>

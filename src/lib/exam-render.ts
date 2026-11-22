@@ -75,6 +75,21 @@ export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 
 const RUN = /[A-Za-z0-9][A-Za-z0-9\s+\-−×÷=*/^().,√π<>≤≥²³%[\]{}|']*[A-Za-z0-9)²³%\]}|']|[A-Za-z0-9]/g;
 
+/** يقسم نصاً إلى مقاطع عربية ومقاطع لاتينية/رياضية (ltr) بالقاعدة نفسها لعزل المقاطع في الورقة وفي ملف Word */
+export function splitRuns(text: string): { text: string; ltr: boolean }[] {
+  const out: { text: string; ltr: boolean }[] = [];
+  if (!/[\u0600-\u06FF]/.test(text)) return text ? [{ text, ltr: false }] : [];
+  let last = 0;
+  for (const m of text.matchAll(RUN)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ text: text.slice(last, i), ltr: false });
+    out.push({ text: m[0], ltr: true });
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), ltr: false });
+  return out;
+}
+
 /** نص آمن مع عزل المقاطع الرياضية داخل العربية، وأسطر جديدة <br> */
 export function richText(text: string): string {
   const arabic = /[؀-ۿ]/.test(text);
@@ -91,14 +106,14 @@ export function richText(text: string): string {
   return out.replace(/\n/g, "<br>");
 }
 
-const digits = (n: number, ar: boolean) => (ar ? n.toLocaleString("ar-EG") : String(n));
+export const digits = (n: number, ar: boolean) => (ar ? n.toLocaleString("ar-EG") : String(n));
 
 /** قيمة حقل: من الامتحان، ثم القالب، وإلا فراغ للكتابة اليدوية */
-function field(key: HeaderKey, exam: RenderExam, tpl: RenderTemplate) {
+export function field(key: HeaderKey, exam: RenderExam, tpl: RenderTemplate) {
   return (exam.values[key] ?? tpl.values[key] ?? "").trim();
 }
 
-function isOn(key: HeaderKey, tpl: RenderTemplate, exam?: RenderExam) {
+export function isOn(key: HeaderKey, tpl: RenderTemplate, exam?: RenderExam) {
   if (exam?.forceShow?.includes(key)) return true;
   return tpl.visible[key] ?? !HIDDEN_BY_DEFAULT.includes(key);
 }
@@ -155,6 +170,12 @@ function media(b: RenderQuestion, variant: Variant) {
   return img + t;
 }
 
+/** نص الإجابة العادي (بلا HTML): للاختيار من متعدد يبدأ بحرف الخيار الصحيح */
+export function answerPlain(b: RenderQuestion, lang: "ar" | "en") {
+  const i = b.options?.findIndex((o) => o === b.answer) ?? -1;
+  return i >= 0 ? `${LETTERS[lang][i]}- ${b.answer}` : b.answer;
+}
+
 /** إجابة الاختيار من متعدد تبدأ بحرف الخيار الصحيح («ب- خمسة»)، وغيرها كما هي */
 function answerText(b: RenderQuestion, lang: "ar" | "en") {
   const i = b.options?.findIndex((o) => o === b.answer) ?? -1;
@@ -193,7 +214,11 @@ export function pickNotes(exam: RenderExam, lang: "ar" | "en", n: (x: number) =>
 /** أقصى طول (حرفاً) لفرع يُعدّ قصيراً فيُرصّ أفقياً */
 const INLINE_MAX = 34;
 
-const LETTERS = { ar: ["أ", "ب", "ج", "د", "هـ", "و"], en: ["a", "b", "c", "d", "e", "f"] };
+/** فروع قصيرة جداً بلا خيارات ولا صورة ولا جدول ولا فراغ إجابة (تعاريف، مصطلحات): تُرصّ أفقياً في نسخة الأسئلة فقط */
+export const isInlineSection = (s: RenderSection, variant: Variant, answerLines: number) =>
+  variant === "QUESTIONS_ONLY" && answerLines === 0 && s.branches.length > 1 && s.branches.every((b) => !b.options?.length && !b.image && !b.table && b.prompt.length <= INLINE_MAX && !b.prompt.includes("\n"));
+
+export const LETTERS = { ar: ["أ", "ب", "ج", "د", "هـ", "و"], en: ["a", "b", "c", "d", "e", "f"] };
 
 export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: Variant, opts: { forPdf?: boolean } = {}): string {
   const lang = exam.lang === "EN" ? "en" : "ar";
@@ -215,7 +240,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
       return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${media(b, variant)}${opts}${ans}${space}</li>`;
     });
     // فروع قصيرة جداً بلا خيارات ولا فراغ إجابة (تعاريف، مصطلحات): تُرصّ أفقياً بدل سطر لكل فرع
-    const inline = variant === "QUESTIONS_ONLY" && tpl.answerLines === 0 && s.branches.length > 1 && s.branches.every((b) => !b.options?.length && !b.image && !b.table && b.prompt.length <= INLINE_MAX && !b.prompt.includes("\n"));
+    const inline = isInlineSection(s, variant, tpl.answerLines);
     const last = i === exam.sections.length - 1 && footer !== "" && rows.length > 0;
     const cls = inline ? ' class="inline"' : "";
     const head = `<h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}`;

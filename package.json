@@ -26,6 +26,8 @@
     "@tesseract.js-data/ara": "^1.0.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "argon2": "^0.45.2",
+    "docx": "9.16.0",
+    "jszip": "3.10.2",
     "next": "15.5.29",
     "nodemailer": "^10.6.0",
     "pdfjs-dist": "^4.10.38",
