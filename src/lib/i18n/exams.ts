@@ -44,6 +44,7 @@ const ar = {
   errors: {
     AI_QUOTA: "انتهت الحصة اليومية لخدمة الذكاء الاصطناعي. حاول لاحقاً.",
     AI_UNAVAILABLE: "خدمة الذكاء الاصطناعي غير مهيأة على الخادم.",
+    NO_VALID_QUESTIONS: "لم يُنتج سؤال صالح من صفحات المصدر لهذا النوع (مثلاً لا آيات/أحاديث في هذه الصفحات، أو لم تطابق نص الكتاب حرفياً). جرّب نوعاً آخر أو وسّع نطاق الصفحات أو أضفه بنفسك.",
     AI_FAILED: "تعذّر توليد الأسئلة الآن (الخدمة مشغولة أو الرد غير صالح). حاول مرة أخرى.",
     RATE_LIMITED: "طلبات كثيرة متتالية. انتظر دقيقة ثم حاول.",
     TYPE_NOT_ALLOWED: "نوع سؤال غير متاح لهذه المادة.", PAGE_OUT_OF_RANGE: "الصفحات خارج نطاق الكتاب.",
@@ -99,6 +100,7 @@ const en: ExamDict = {
   errors: {
     AI_QUOTA: "The AI service's daily quota is used up. Try again later.",
     AI_UNAVAILABLE: "The AI service is not configured on the server.",
+    NO_VALID_QUESTIONS: "No valid question could be made from the source pages for this type (e.g. no verses/hadiths there, or they did not match the book text verbatim). Try another type, widen the page range, or add it yourself.",
     AI_FAILED: "Could not generate questions right now (service busy or invalid reply). Try again.",
     RATE_LIMITED: "Too many requests. Wait a minute and try again.",
     TYPE_NOT_ALLOWED: "Question type not available for this subject.", PAGE_OUT_OF_RANGE: "Pages are outside the book.",

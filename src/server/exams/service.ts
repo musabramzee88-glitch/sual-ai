@@ -271,7 +271,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
     const src = await loadSource(book.id, book.storageKey, settings.pages);
     const { bySection } = await askModel(ctx, exam.difficulty, [section], src, siblings.map((s) => s.prompt));
     const nq = bySection[0][0];
-    if (!nq) return fail("AI_FAILED");
+    if (!nq) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
       await tx.examQuestionRevision.create({ data: { questionId: q.id, version: q.version + 1, reason: "REGENERATE", snapshot: snapshot(q), editedById: userId } });
       await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: nq.prompt, options: nq.options ?? Prisma.DbNull, answer: nq.answer, sourcePages: nq.sourcePages, difficulty: nq.difficulty, cognitiveLevel: nq.cognitiveLevel } });
@@ -457,7 +457,7 @@ export async function generateMore(userId: string, sectionId: string, count: num
     const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
     const sec: Section = { type: s.type as GenType, count, marksEach: each };
     const { bySection } = await askModel(g.ctx, s.examModel.exam.difficulty, [sec], src, siblings.map((x) => x.prompt));
-    if (bySection[0].length === 0) return fail("AI_FAILED");
+    if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
       let order = siblings.at(-1)?.sortOrder ?? 0;
       for (const q of bySection[0]) await createChild(tx, s.examModelId, s.id, ++order, sec, q, s.chapterId, userId);
@@ -481,7 +481,7 @@ export async function addSection(userId: string, examId: string, input: Section)
   try {
     const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
     const { bySection, instructions } = await askModel(g.ctx, e.difficulty, [input], src);
-    if (bySection[0].length === 0) return fail("AI_FAILED");
+    if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
     const last = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
     await db.$transaction(async (tx) => {
       const inst = instructions[0];
