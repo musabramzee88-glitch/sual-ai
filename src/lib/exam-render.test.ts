@@ -186,3 +186,18 @@ describe("images and tables inside questions", () => {
     expect(renderExamHtml(mk({ table: { header: false, cells: [["a"]] } }), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
   });
 });
+
+describe("accent colour", () => {
+  const ex3: RenderExam = { lang: "AR", values: { title: "اختبار" }, sections: [{ instruction: "أجب:", marks: 5, branches: [{ prompt: "ما هو؟ وما أنواعه الرئيسة في الطبيعة؟", options: null, answer: "", marks: 5 }] }] };
+  it("defaults to black and takes a valid #rrggbb for frame and headings", () => {
+    expect(renderExamHtml(ex3, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain("--ac: #000000");
+    expect(renderExamHtml(ex3, { ...DEFAULT_TEMPLATE, accent: "#1e40af" }, "QUESTIONS_ONLY")).toContain("--ac: #1e40af");
+  });
+  it("ignores anything that is not a plain hex colour (no CSS injection)", () => {
+    for (const bad of ["red", "#12", "#1e40af; background:url(//x)", "}</style><script>", "url(x)"]) {
+      const html = renderExamHtml(ex3, { ...DEFAULT_TEMPLATE, accent: bad }, "QUESTIONS_ONLY");
+      expect(html).toContain("--ac: #000000");
+      expect(html).not.toContain("<script>");
+    }
+  });
+});

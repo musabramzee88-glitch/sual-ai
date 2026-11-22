@@ -26,6 +26,9 @@ export const LABELS: Record<"ar" | "en", Record<HeaderKey, string>> = {
   },
 };
 
+/** ألوان الترويسة المتاحة (الأسود هو الافتراضي ويناسب الطباعة بالأبيض والأسود) */
+export const ACCENTS = ["#1e40af", "#047857", "#7c2d12", "#9f1239", "#4c1d95"] as const;
+
 export const FONTS = ["Traditional Arabic", "Simplified Arabic", "Arial", "Tahoma", "Times New Roman", "Sakkal Majalla", "IBM Plex Sans Arabic", "Noto Naskh Arabic"] as const;
 export type Layout = "CLASSIC" | "SCHOOL" | "ACADEMIC" | "MINIMAL";
 
@@ -47,6 +50,8 @@ export type RenderTemplate = {
   footerNote: string | null;
   /** سطر «معلم/ة المادة: ....» أسفل الورقة بجانب عبارة الختام */
   signLine?: boolean;
+  /** لون الإطار والعناوين (#rrggbb)؛ فارغ = أسود. أي قيمة أخرى تُهمل */
+  accent?: string | null;
 };
 
 export type RenderTable = { header: boolean; cells: string[][] };
@@ -222,6 +227,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
     return `<section>${head}<ol${cls}>${rows.join("")}</ol></section>`;
   }).join("");
   const m = tpl.margins;
+  const ac = tpl.accent && /^#[0-9a-fA-F]{6}$/.test(tpl.accent) ? tpl.accent : "#000000";
   const size = `${tpl.pageSize} ${tpl.orientation === "LANDSCAPE" ? "landscape" : "portrait"}`;
   // PDF: هوامش الصفحة من @page (تتكرر في كل صفحة)؛ طباعة المتصفح: هامش صفر (لا رابط/تاريخ) والهوامش داخل الورقة
   const pageCss = opts.forPdf ? `@page { size: ${size}; margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; } .sheet { padding: 0; }`
@@ -231,31 +237,31 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
 ${pageCss}
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; color: #000; }
-.sheet { font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
+.sheet { --ac: ${ac}; font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
 .ltr { direction: ltr; unicode-bidi: isolate; word-spacing: 0; white-space: nowrap; }
 .strong { font-weight: 700; }
 .lbl { font-weight: 700; }
 .hl { line-height: 1.75; }
 .logo { max-height: 22mm; max-width: 30mm; display: block; margin: 0 auto 1.5mm; }
-.title { font-weight: 700; font-size: 1.12em; text-align: center; line-height: 1.7; }
-.keytitle { font-weight: 700; text-align: center; margin-top: 1.5mm; }
+.title { font-weight: 700; font-size: 1.12em; text-align: center; line-height: 1.7; color: var(--ac); }
+.keytitle { font-weight: 700; text-align: center; margin-top: 1.5mm; color: var(--ac); }
 header { font-size: 0.92em; }
-.h-classic { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 4mm; align-items: start; border-bottom: 3px double #000; padding-bottom: 3.5mm; }
+.h-classic { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 4mm; align-items: start; border-bottom: 3px double var(--ac); padding-bottom: 3.5mm; }
 .h-classic .center, .h-academic .center { text-align: center; }
 .h-classic .end { text-align: end; }
-.h-school { text-align: center; border-bottom: 2px solid #000; padding-bottom: 3.5mm; }
-.h-school .school { font-size: 1.25em; font-weight: 700; line-height: 1.7; }
+.h-school { text-align: center; border-bottom: 2px solid var(--ac); padding-bottom: 3.5mm; }
+.h-school .school { font-size: 1.25em; font-weight: 700; line-height: 1.7; color: var(--ac); }
 .h-school .sub { display: flex; justify-content: center; gap: 2em; flex-wrap: wrap; }
 .h-school .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.2em 1.2em; margin-top: 2.5mm; text-align: start; }
 .h-academic .cols { display: grid; grid-template-columns: 1fr 1.4fr; gap: 4mm; }
 .h-academic .cells { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-.h-academic .cells td { border: 1px solid #000; padding: 1.8mm 2.5mm; text-align: center; vertical-align: top; line-height: 1.6; }
-.h-minimal { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2.5mm; }
+.h-academic .cells td { border: 1px solid var(--ac); padding: 1.8mm 2.5mm; text-align: center; vertical-align: top; line-height: 1.6; }
+.h-minimal { text-align: center; border-bottom: 1px solid var(--ac); padding-bottom: 2.5mm; }
 .student { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 1px solid #000; margin-top: 3mm; padding: 0 0 2.5mm; font-size: 0.92em; }
 main { margin-top: 1.2em; }
 section { margin-top: 1.6em; break-inside: auto; }
 section:first-child { margin-top: 0; }
-h2 { font-size: 1em; font-weight: 700; margin: 0 0 0.6em; display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
+h2 { color: var(--ac); font-size: 1em; font-weight: 700; margin: 0 0 0.6em; display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
 h2 .mk { white-space: nowrap; font-weight: 700; }
 ol { list-style: none; margin: 0; padding: 0; }
 li { margin: 0 0 0.75em; break-inside: avoid; }
@@ -273,7 +279,7 @@ li:last-child { margin-bottom: 0; }
 .ans { margin-top: 0.35em; padding-inline-start: 2.4em; font-weight: 700; }
 .space { margin-top: 0.35em; padding-inline-start: 2.4em; }
 .rule { border-bottom: 1px dotted #777; height: 2em; }
-.exnote { margin: 1.1em 0 0; font-weight: 700; text-align: center; border: 1px solid #000; padding: 1.5mm 3mm; line-height: 1.7; }
+.exnote { margin: 1.1em 0 0; font-weight: 700; text-align: center; border: 1px solid var(--ac); padding: 1.5mm 3mm; line-height: 1.7; }
 .pick { font-weight: 700; margin: -0.2em 0 0.6em; font-size: 0.95em; }
 .note { text-align: center; font-weight: 700; margin: 2em 0 0; break-before: avoid; break-inside: avoid; }
 .tail { break-inside: avoid; }

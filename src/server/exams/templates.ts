@@ -39,13 +39,14 @@ export const templateSchema = z.object({
   answerLines: z.number().int().min(0).max(8),
   footerNote: text(200).nullable(),
   signLine: z.boolean().default(false),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().default(null),
   logoAssetId: z.string().min(10).max(40).nullable(),
   isDefault: z.boolean(),
 });
 export type TemplateInput = z.infer<typeof templateSchema>;
 
 /** شكل headerFields المخزَّن */
-type Stored = { layout: Layout; visible: Partial<Record<HeaderKey, boolean>>; values: Partial<Record<HeaderKey, string>>; answerLines: number; footerNote: string | null; signLine?: boolean; logoAssetId: string | null };
+type Stored = { layout: Layout; visible: Partial<Record<HeaderKey, boolean>>; values: Partial<Record<HeaderKey, string>>; answerLines: number; footerNote: string | null; signLine?: boolean; accent?: string | null; logoAssetId: string | null };
 
 export type TemplateView = Omit<TemplateInput, "isDefault"> & { id: string; preset: boolean; isDefault: boolean };
 
@@ -62,7 +63,7 @@ export function presets(lang: "ar" | "en" = "ar"): TemplateView[] {
     pageSize: "A4", orientation: "PORTRAIT", fontFamily: layout === "MINIMAL" ? "Simplified Arabic" : "Traditional Arabic",
     fontSizePt: layout === "MINIMAL" ? 13 : 14, lineSpacing: 1.65, margins: { ...DEFAULT_TEMPLATE.margins }, showPageNumbers: true,
     visible: layout === "MINIMAL" ? { republic: false, ministry: false, directorate: false, school: false } : {},
-    values: {}, answerLines: 0, footerNote: DEFAULT_TEMPLATE.footerNote, signLine: false, logoAssetId: null,
+    values: {}, answerLines: 0, footerNote: DEFAULT_TEMPLATE.footerNote, signLine: false, accent: null, logoAssetId: null,
   }));
 }
 
@@ -77,7 +78,7 @@ function toView(t: Prisma.ExamTemplateGetPayload<object>): TemplateView {
     fontSizePt: t.fontSizePt, lineSpacing: Number(t.lineSpacing),
     margins: { top: m.top ?? 12, right: m.right ?? 14, bottom: m.bottom ?? 12, left: m.left ?? 14 },
     showPageNumbers: t.showPageNumbers, visible: h.visible ?? {}, values: h.values ?? {},
-    answerLines: h.answerLines ?? 0, footerNote: h.footerNote === undefined ? DEFAULT_TEMPLATE.footerNote : h.footerNote, signLine: h.signLine ?? false, logoAssetId: h.logoAssetId ?? null,
+    answerLines: h.answerLines ?? 0, footerNote: h.footerNote === undefined ? DEFAULT_TEMPLATE.footerNote : h.footerNote, signLine: h.signLine ?? false, accent: h.accent ?? null, logoAssetId: h.logoAssetId ?? null,
   };
 }
 
@@ -94,7 +95,7 @@ async function ownsLogo(userId: string, assetId: string | null) {
 const data = (d: TemplateInput) => ({
   name: d.name, kind: d.layout, pageSize: d.pageSize, orientation: d.orientation, direction: "RTL" as const, fontFamily: d.fontFamily,
   fontSizePt: d.fontSizePt, lineSpacing: d.lineSpacing, margins: d.margins, showPageNumbers: d.showPageNumbers, isDefault: d.isDefault,
-  headerFields: { layout: d.layout, visible: d.visible, values: d.values, answerLines: d.answerLines, footerNote: d.footerNote, signLine: d.signLine, logoAssetId: d.logoAssetId } satisfies Stored,
+  headerFields: { layout: d.layout, visible: d.visible, values: d.values, answerLines: d.answerLines, footerNote: d.footerNote, signLine: d.signLine, accent: d.accent, logoAssetId: d.logoAssetId } satisfies Stored,
 });
 
 const MAX_TEMPLATES = 30;
@@ -220,7 +221,7 @@ async function effectiveTemplate(userId: string, templateId: string | null, cfg:
 export function toRender(t: TemplateView, logo: string | null): RenderTemplate {
   return {
     layout: t.layout, pageSize: t.pageSize, orientation: t.orientation, fontFamily: t.fontFamily, fontSizePt: t.fontSizePt, lineSpacing: t.lineSpacing,
-    margins: t.margins, visible: t.visible, values: t.values, logoDataUri: logo, answerLines: t.answerLines, footerNote: t.footerNote, signLine: t.signLine,
+    margins: t.margins, visible: t.visible, values: t.values, logoDataUri: logo, answerLines: t.answerLines, footerNote: t.footerNote, signLine: t.signLine, accent: t.accent,
   };
 }
 

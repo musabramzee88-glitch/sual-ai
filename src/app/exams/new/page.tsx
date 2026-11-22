@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuth } from "@/server/auth/session";
 import { canUseExams } from "@/server/exams/access";
-import { examOptions } from "@/server/exams/service";
+import { examOptions, listStructures } from "@/server/exams/service";
 import { GENERATABLE } from "@/server/exams/core";
 import { getLocale } from "@/lib/i18n/server";
 import { examDicts } from "@/lib/i18n/exams";
@@ -22,10 +22,11 @@ export default async function Page() {
     subject: { code: c.subject.code, name: en ? c.subject.nameEn : c.subject.nameAr, types: c.subject.questionTypes },
     chapters: c.chapters,
   }));
+  const structures = await listStructures(auth.user.id);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t.wizard.title}</h1>
-      <div className="rounded-2xl border border-line bg-surface p-5"><ExamWizard options={options} generatable={[...GENERATABLE]} t={t} /></div>
+      <div className="rounded-2xl border border-line bg-surface p-5"><ExamWizard options={options} structures={structures} generatable={[...GENERATABLE]} t={t} /></div>
     </div>
   );
 }

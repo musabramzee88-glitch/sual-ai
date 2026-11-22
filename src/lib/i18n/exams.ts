@@ -8,6 +8,7 @@ const ar = {
   status: { DRAFT: "مسودة", GENERATING: "جارٍ التوليد", READY: "جاهز", FAILED: "فشل التوليد", ARCHIVED: "مؤرشف" } as Record<string, string>,
   marks: "الدرجة", marksShort: "درجة", total: "المجموع", questions: "سؤالاً",
   wizard: {
+    fromPrevious: "ابدأ بهيكل امتحان سابق", fromScratch: "— امتحان جديد من الصفر —", fromPreviousHint: "يُنسخ الهيكل فقط (الصف والكتاب والأنواع وأعداد الفروع والدرجة والمدة). تختار أنت الفصول أو الصفحات الجديدة، وتتولّد أسئلة جديدة.",
     title: "إنشاء امتحان", grade: "الصف", subject: "المادة", book: "الكتاب", pick: "— اختر —",
     noOptions: "لا توجد كتب جاهزة بعد. يجب أن يرفع المسؤول الكتب ويؤكدها.",
     source: "المصدر", chapters: "الفصول", byPages: "نطاق صفحات", from: "من صفحة", to: "إلى صفحة", pagesOf: "صفحات الكتاب",
@@ -71,6 +72,7 @@ const en: ExamDict = {
   status: { DRAFT: "Draft", GENERATING: "Generating", READY: "Ready", FAILED: "Generation failed", ARCHIVED: "Archived" },
   marks: "Marks", marksShort: "marks", total: "Total", questions: "questions",
   wizard: {
+    fromPrevious: "Start from a previous exam structure", fromScratch: "— New exam from scratch —", fromPreviousHint: "Only the structure is copied (grade, book, types, number of items, total marks, duration). You choose the new chapters or pages and new questions are generated.",
     title: "Create an exam", grade: "Grade", subject: "Subject", book: "Book", pick: "— choose —",
     noOptions: "No books are ready yet. An administrator must upload and confirm them.",
     source: "Source", chapters: "Chapters", byPages: "Page range", from: "From page", to: "To page", pagesOf: "pages in the book",

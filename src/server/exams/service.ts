@@ -175,6 +175,27 @@ async function createChild(tx: Prisma.TransactionClient, modelId: string, parent
   return created;
 }
 
+/**
+ * هياكل امتحاناتي السابقة (آخر 12 جاهزاً): الأنواع وعدد فروع كل سؤال رئيس (كما هو الآن بعد تعديلاتك) والدرجة الكلية
+ * والنوع والصعوبة والمدة، لبدء امتحان جديد بالهيكل نفسه دون إعادة الإعداد. المحتوى لا يُنسخ (الفصول تختارها من جديد).
+ */
+export async function listStructures(userId: string) {
+  const exams = await db.exam.findMany({
+    where: { ownerId: userId, deletedAt: null, status: "READY", curriculumId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+    select: {
+      id: true, title: true, curriculumId: true, kind: true, difficulty: true, durationMinutes: true, totalMarks: true, createdAt: true,
+      models: { take: 1, select: { questions: { where: { deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, parentId: true, type: true } } } },
+    },
+  });
+  return exams.flatMap((e) => {
+    const qs = e.models[0]?.questions ?? [];
+    const sections = qs.filter((q) => !q.parentId && q.type).map((p) => ({ type: p.type as string, count: qs.filter((c) => c.parentId === p.id).length })).filter((x) => x.count > 0);
+    return sections.length && e.curriculumId ? [{ id: e.id, title: e.title, curriculumId: e.curriculumId, kind: e.kind, difficulty: e.difficulty, durationMinutes: e.durationMinutes, totalMarks: e.totalMarks, createdAt: e.createdAt.toISOString(), sections }] : [];
+  });
+}
+
 export const listExams = (userId: string) =>
   db.exam.findMany({
     where: { ownerId: userId, deletedAt: null },

@@ -3,13 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame } from "./SheetFrame";
-import { renderExamHtml, type HeaderKey, type Layout, type RenderExam } from "@/lib/exam-render";
+import { ACCENTS, renderExamHtml, type HeaderKey, type Layout, type RenderExam } from "@/lib/exam-render";
 
 type Tpl = {
   id: string; preset: boolean; isDefault: boolean; name: string; layout: Layout; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   fontFamily: string; fontSizePt: number; lineSpacing: number; margins: { top: number; right: number; bottom: number; left: number };
   showPageNumbers: boolean; visible: Partial<Record<HeaderKey, boolean>>; values: Partial<Record<HeaderKey, string>>;
-  answerLines: number; footerNote: string | null; signLine: boolean; logoAssetId: string | null;
+  answerLines: number; footerNote: string | null; signLine: boolean; accent: string | null; logoAssetId: string | null;
 };
 type Field = { key: HeaderKey; label: string; hidden: boolean; auto: boolean };
 
@@ -144,7 +144,7 @@ function Editor({ t, tpl, set, logos, fonts, fields, lang, busy, onSave, onUploa
   const html = useMemo(() => renderExamHtml(SAMPLE[lang], {
     layout: tpl.layout, pageSize: tpl.pageSize, orientation: tpl.orientation, fontFamily: tpl.fontFamily, fontSizePt: tpl.fontSizePt, lineSpacing: tpl.lineSpacing,
     margins: tpl.margins, visible: tpl.visible, values: tpl.values, logoDataUri: tpl.logoAssetId ? logoUri[tpl.logoAssetId] || null : null,
-    answerLines: tpl.answerLines, footerNote: tpl.footerNote, signLine: tpl.signLine,
+    answerLines: tpl.answerLines, footerNote: tpl.footerNote, signLine: tpl.signLine, accent: tpl.accent,
   }, "QUESTIONS_ONLY"), [tpl, logoUri, lang]);
   const num = (v: string, min: number, max: number) => Math.min(max, Math.max(min, Number(v) || min));
 
@@ -208,6 +208,16 @@ function Editor({ t, tpl, set, logos, fonts, fields, lang, busy, onSave, onUploa
               );
             })}
           </div>
+        </fieldset>
+
+        <fieldset className="rounded-xl border border-line p-3">
+          <legend className="px-1 text-sm font-semibold">{T.accent}</legend>
+          <div className="flex flex-wrap items-center gap-2">
+            {[null, ...ACCENTS].map((c) => (
+              <button key={c ?? "black"} type="button" aria-label={c ?? T.accentBlack} aria-pressed={tpl.accent === c} onClick={() => up({ accent: c })} className={`h-9 w-9 rounded-full border-2 ${tpl.accent === c ? "ring-2 ring-brand ring-offset-2 ring-offset-surface" : "border-line"}`} style={{ background: c ?? "#000" }} />
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted">{T.accentHint}</p>
         </fieldset>
 
         <label className="block text-sm"><span className="mb-1 block font-semibold">{T.footer}</span><input className={inputCls} maxLength={200} value={tpl.footerNote ?? ""} onChange={(e) => up({ footerNote: e.target.value || null })} /></label>

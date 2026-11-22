@@ -17,7 +17,7 @@ vi.mock("../ai/gemini", async (orig) => {
 });
 
 const { db } = await import("../db");
-const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions, updateSection, addManualQuestion, reorderQuestions, reorderSections, deleteSection, addSection, generateMore, updateExamMeta, distributeExamMarks, duplicateQuestion, duplicateSection } = await import("./service");
+const { createExam, getExam, editQuestion, regenerateQuestion, undoQuestion, deleteQuestion, examOptions, updateSection, addManualQuestion, reorderQuestions, reorderSections, deleteSection, addSection, generateMore, updateExamMeta, distributeExamMarks, duplicateQuestion, duplicateSection, listStructures } = await import("./service");
 const { AiError } = await import("../ai/gemini");
 
 const TAG = `ex${Date.now()}`;
@@ -264,6 +264,19 @@ describe("exam generation", () => {
     expect(e.sections[1].marks).toBe(9);
     expect(e.totalMarks).toBe(22);
     expect(e.sections.map((s) => s.sortOrder)).toEqual([1, 2, 3]);
+  });
+
+  it("previous exam structures: types, current item counts, totals, owner only", async () => {
+    reply = { questions: [q(0, "عرّف الضوء الأول", { answer: "أ" }), q(0, "عرّف الماء الثاني", { answer: "ب", sourcePages: [11] }), q(1, "علّل الظاهرة", { answer: "ج" })] };
+    const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "MIDTERM", difficulty: "HARD", durationMinutes: 50, totalMarks: 40, distribution: "smart", sections: [{ type: "DEFINE", count: 2, marksEach: 1 }, { type: "JUSTIFY", count: 1, marksEach: 1 }] });
+    if (!r.ok) throw new Error(r.code);
+    const mine = (await listStructures(userId)).find((x) => x.id === r.examId)!;
+    expect(mine).toMatchObject({ curriculumId: curId, kind: "MIDTERM", difficulty: "HARD", durationMinutes: 50, totalMarks: 40, sections: [{ type: "DEFINE", count: 2 }, { type: "JUSTIFY", count: 1 }] });
+    // بعد إضافة فرع يدوياً يُحسب العدد الحالي
+    const e = (await getExam(userId, r.examId))!;
+    await addManualQuestion(userId, e.sections[1].id, { prompt: "علّل آخر", answer: "د", marks: 2 });
+    expect((await listStructures(userId)).find((x) => x.id === r.examId)!.sections[1].count).toBe(2);
+    expect((await listStructures(otherId)).find((x) => x.id === r.examId)).toBeUndefined();
   });
 
   it("with a teacher's reference paper, the section instruction takes the teacher's wording and the paper is sent as style only", async () => {

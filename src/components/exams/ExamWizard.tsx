@@ -9,11 +9,12 @@ export type WizardCurriculum = {
   chapters: { id: string; title: string; pageStart: number | null; pageEnd: number | null }[];
 };
 type Row = { type: string; count: number; marksEach: number };
+export type WizardStructure = { id: string; title: string; curriculumId: string; kind: string; difficulty: string; durationMinutes: number | null; totalMarks: number; createdAt: string; sections: { type: string; count: number }[] };
 
 const sc = "w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm";
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
 
-export function ExamWizard({ options, generatable, t }: { options: WizardCurriculum[]; generatable: string[]; t: ExamDict }) {
+export function ExamWizard({ options, structures, generatable, t }: { options: WizardCurriculum[]; structures: WizardStructure[]; generatable: string[]; t: ExamDict }) {
   const router = useRouter();
   const grades = useMemo(() => [...new Map(options.map((o) => [o.grade.code, o.grade.name])).entries()], [options]);
   const [grade, setGrade] = useState("");
@@ -51,6 +52,18 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
     const allowed = (c?.subject.types.length ? c.subject.types : generatable).filter((x) => generatable.includes(x));
     setRows((rs) => rs.map((r) => (allowed.includes(r.type) ? r : { ...r, type: allowed[0] ?? "MCQ" })));
   };
+  /** يبدأ بهيكل امتحان سابق: الصف والمادة والكتاب والأنواع والأعداد والدرجة والنوع والصعوبة والمدة (لا الفصول ولا العنوان) */
+  const applyStructure = (id: string) => {
+    const st = structures.find((x) => x.id === id);
+    if (!st) return;
+    const c = options.find((o) => o.id === st.curriculumId);
+    if (c) { setGrade(c.grade.code); setSubject(c.subject.code); pickBook(c.id); }
+    const allowed = (c?.subject.types.length ? c.subject.types : generatable).filter((x) => generatable.includes(x));
+    const next = st.sections.filter((s) => allowed.includes(s.type)).map((s) => ({ type: s.type, count: Math.min(20, s.count), marksEach: 2 }));
+    if (next.length) setRows(next);
+    setKind(st.kind); setDifficulty(st.difficulty); setDuration(st.durationMinutes ? String(st.durationMinutes) : ""); setMarking("smart"); setTotal(st.totalMarks);
+    setTitle("");
+  };
   const setRow = (i: number, p: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const sourceOk = effMode === "chapters" ? chapterIds.length > 0 : pageFrom >= 1 && pageTo >= pageFrom && pageTo <= (cur?.pageCount ?? 0);
   const canGo = !!cur && sourceOk && rows.length > 0 && totalQ <= 40 && new Set(rows.map((r) => r.type)).size === rows.length && (manual || total >= Math.ceil(totalQ / 2)) && !busy;
@@ -84,6 +97,16 @@ export function ExamWizard({ options, generatable, t }: { options: WizardCurricu
 
   return (
     <div className="space-y-6">
+      {structures.length > 0 && (
+        <label className="block space-y-1 rounded-xl border border-dashed border-line p-3 text-sm">
+          <span className="font-semibold">{t.wizard.fromPrevious}</span>
+          <select className={sc} defaultValue="" onChange={(e) => { if (e.target.value) applyStructure(e.target.value); }}>
+            <option value="">{t.wizard.fromScratch}</option>
+            {structures.map((x) => <option key={x.id} value={x.id}>{x.title} — {x.sections.reduce((n, s) => n + s.count, 0)} · {x.totalMarks}</option>)}
+          </select>
+          <span className="block text-xs text-muted">{t.wizard.fromPreviousHint}</span>
+        </label>
+      )}
       <section className="grid gap-3 sm:grid-cols-3">
         <label className="space-y-1 text-sm"><span className="text-muted">{t.wizard.grade}</span>
           <select className={sc} value={grade} onChange={(e) => { setGrade(e.target.value); setSubject(""); setCurId(""); }}><option value="">{t.wizard.pick}</option>{grades.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select>

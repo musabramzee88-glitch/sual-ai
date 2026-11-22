@@ -6,13 +6,13 @@ import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
 
 type Props = {
-  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
+  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   templates: { id: string; name: string; preset: boolean; isDefault: boolean }[]; selectedTemplateId: string;
   fields: { key: string; label: string; placeholder: string }[]; values: Record<string, string>;
 };
 
 /** شريط ورقة الامتحان: النسخة، القالب، بيانات الترويسة، طباعة من الإطار، تنزيل PDF */
-export function ExamSheet({ examId, defaultName, html, variant, model, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
+export function ExamSheet({ examId, defaultName, html, variant, model, modelLetters, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
   const router = useRouter();
   const frame = useRef<SheetFrameHandle>(null);
   const [tplId, setTplId] = useState(selectedTemplateId);
@@ -85,7 +85,7 @@ export function ExamSheet({ examId, defaultName, html, variant, model, t, pageSi
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted">{s.models}:</span>
         {([null, "A", "B", "C", "D"] as const).map((m) => (
-          <Link key={m ?? "none"} href={`/exams/${examId}/print?v=${variant}${m ? `&m=${m}` : ""}`} aria-current={model === m} className={`rounded-lg px-3 py-1 ${model === m ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{m ?? s.noModel}</Link>
+          <Link key={m ?? "none"} href={`/exams/${examId}/print?v=${variant}${m ? `&m=${m}` : ""}`} aria-current={model === m} className={`rounded-lg px-3 py-1 ${model === m ? "bg-brand font-semibold text-white dark:text-paper" : "border border-line"}`}>{m ? modelLetters[m] : s.noModel}</Link>
         ))}
         <span className="text-xs text-muted">{s.modelsHint}</span>
       </div>
