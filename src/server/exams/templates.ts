@@ -58,7 +58,7 @@ export function presets(lang: "ar" | "en" = "ar"): TemplateView[] {
   return LAYOUTS.map((layout) => ({
     id: `preset:${layout}`, preset: true, isDefault: false, name: PRESET_NAMES[layout][lang], layout,
     pageSize: "A4", orientation: "PORTRAIT", fontFamily: layout === "MINIMAL" ? "Simplified Arabic" : "Traditional Arabic",
-    fontSizePt: layout === "MINIMAL" ? 13 : 14, lineSpacing: 1.5, margins: { ...DEFAULT_TEMPLATE.margins }, showPageNumbers: true,
+    fontSizePt: layout === "MINIMAL" ? 13 : 14, lineSpacing: 1.65, margins: { ...DEFAULT_TEMPLATE.margins }, showPageNumbers: true,
     visible: layout === "MINIMAL" ? { republic: false, ministry: false, directorate: false, school: false } : {},
     values: {}, answerLines: 0, footerNote: DEFAULT_TEMPLATE.footerNote, logoAssetId: null,
   }));

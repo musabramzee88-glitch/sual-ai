@@ -110,7 +110,7 @@ function header(exam: RenderExam, tpl: RenderTemplate, variant: Variant, lang: "
   const keyTitle = variant === "ANSWER_KEY" ? `<div class="keytitle">${lang === "ar" ? "الإجابات النموذجية" : "Answer key"}</div>` : "";
   const studentRow = variant === "ANSWER_KEY" || (!isOn("student", tpl, exam) && !isOn("section", tpl, exam)) ? "" :
     `<div class="student">${isOn("student", tpl, exam) ? `<span>${esc(LABELS[lang].student)}: ................................................</span>` : "<span></span>"}${isOn("section", tpl, exam) ? `<span>${esc(LABELS[lang].section)}: ........</span>` : ""}</div>`;
-  const kindLine = [field("examKind", exam, tpl), isOn("round", tpl, exam) && field("round", exam, tpl) ? `${LABELS[lang].round} ${field("round", exam, tpl)}` : "", isOn("yearTerm", tpl, exam) ? field("yearTerm", exam, tpl) : ""].filter(Boolean).join(" — ");
+  const kindLine = [field("examKind", exam, tpl), isOn("round", tpl, exam) && field("round", exam, tpl) ? `${LABELS[lang].round} ${field("round", exam, tpl)}` : "", isOn("yearTerm", tpl, exam) ? field("yearTerm", exam, tpl) : ""].filter(Boolean).join("\n");
   const center = `${logo}${l("title")}${isOn("examKind", tpl, exam) && kindLine ? `<div class="hl">${richText(kindLine)}</div>` : ""}${keyTitle}`;
   const right = `${l("republic")}${l("ministry")}${l("directorate")}${l("school")}`;
   const left = `${l("subject")}${l("grade")}${l("time")}${l("total")}${l("teacher")}${l("model")}${l("date", { blank: "   /   /     " })}`;
@@ -178,47 +178,51 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
 ${pageCss}
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; color: #000; }
-.sheet { font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; }
-.ltr { direction: ltr; unicode-bidi: isolate; }
+.sheet { font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
+.ltr { direction: ltr; unicode-bidi: isolate; word-spacing: 0; white-space: nowrap; }
 .strong { font-weight: 700; }
 .lbl { font-weight: 700; }
-.hl { line-height: 1.45; }
-.logo { max-height: 22mm; max-width: 30mm; display: block; margin: 0 auto 1mm; }
-.title { font-weight: 700; font-size: 1.1em; text-align: center; }
-.keytitle { font-weight: 700; text-align: center; margin-top: 1mm; }
+.hl { line-height: 1.75; }
+.logo { max-height: 22mm; max-width: 30mm; display: block; margin: 0 auto 1.5mm; }
+.title { font-weight: 700; font-size: 1.12em; text-align: center; line-height: 1.7; }
+.keytitle { font-weight: 700; text-align: center; margin-top: 1.5mm; }
 header { font-size: 0.92em; }
-.h-classic { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 3mm; align-items: start; border-bottom: 3px double #000; padding-bottom: 2mm; }
+.h-classic { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 4mm; align-items: start; border-bottom: 3px double #000; padding-bottom: 3.5mm; }
 .h-classic .center, .h-academic .center { text-align: center; }
 .h-classic .end { text-align: end; }
-.h-school { text-align: center; border-bottom: 2px solid #000; padding-bottom: 2mm; }
-.h-school .school { font-size: 1.25em; font-weight: 700; }
-.h-school .sub { display: flex; justify-content: center; gap: 6mm; flex-wrap: wrap; }
-.h-school .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1mm 4mm; margin-top: 1.5mm; text-align: start; }
-.h-academic .cols { display: grid; grid-template-columns: 1fr 1.4fr; gap: 3mm; }
-.h-academic .cells { width: 100%; border-collapse: collapse; margin-top: 2mm; }
-.h-academic .cells td { border: 1px solid #000; padding: 1mm 2mm; text-align: center; vertical-align: top; }
-.h-minimal { text-align: center; border-bottom: 1px solid #000; padding-bottom: 1.5mm; }
-.student { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 1px solid #000; padding: 1.2mm 0; font-size: 0.92em; }
-section { margin-top: 4mm; break-inside: auto; }
-h2 { font-size: 1em; font-weight: 700; margin: 0 0 1mm; display: flex; justify-content: space-between; gap: 4mm; break-after: avoid; }
+.h-school { text-align: center; border-bottom: 2px solid #000; padding-bottom: 3.5mm; }
+.h-school .school { font-size: 1.25em; font-weight: 700; line-height: 1.7; }
+.h-school .sub { display: flex; justify-content: center; gap: 2em; flex-wrap: wrap; }
+.h-school .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.2em 1.2em; margin-top: 2.5mm; text-align: start; }
+.h-academic .cols { display: grid; grid-template-columns: 1fr 1.4fr; gap: 4mm; }
+.h-academic .cells { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+.h-academic .cells td { border: 1px solid #000; padding: 1.8mm 2.5mm; text-align: center; vertical-align: top; line-height: 1.6; }
+.h-minimal { text-align: center; border-bottom: 1px solid #000; padding-bottom: 2.5mm; }
+.student { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 1px solid #000; margin-top: 3mm; padding: 0 0 2.5mm; font-size: 0.92em; }
+main { margin-top: 1.2em; }
+section { margin-top: 1.6em; break-inside: auto; }
+section:first-child { margin-top: 0; }
+h2 { font-size: 1em; font-weight: 700; margin: 0 0 0.6em; display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
 h2 .mk { white-space: nowrap; font-weight: 700; }
-ol { list-style: none; margin: 0; padding-inline-start: 5mm; }
-li { margin: 0.8mm 0; break-inside: avoid; }
-.item { display: flex; gap: 2mm; }
-.num { flex: none; }
+ol { list-style: none; margin: 0; padding: 0; }
+li { margin: 0 0 0.75em; break-inside: avoid; }
+li:last-child { margin-bottom: 0; }
+.item { display: flex; gap: 0.5em; }
+.num { flex: none; min-width: 1.9em; font-weight: 700; }
 .txt { flex: 1; }
-.opts { display: flex; flex-wrap: wrap; gap: 1mm 10mm; padding-inline-start: 7mm; }
-.ans { padding-inline-start: 7mm; font-weight: 700; }
-.space { padding-inline-start: 7mm; }
-.rule { border-bottom: 1px dotted #777; height: ${(tpl.fontSizePt * tpl.lineSpacing * 1.25).toFixed(1)}pt; }
-.exnote { margin: 3mm 0 0; font-weight: 700; text-align: center; border: 1px solid #000; padding: 1mm 2mm; }
-.pick { font-weight: 700; padding-inline-start: 5mm; font-size: 0.95em; }
-.note { text-align: center; font-weight: 700; margin-top: 8mm; }
+.opts { display: flex; flex-wrap: wrap; gap: 0.35em 2.6em; margin-top: 0.4em; padding-inline-start: 2.4em; }
+.opts span { break-inside: avoid; }
+.ans { margin-top: 0.35em; padding-inline-start: 2.4em; font-weight: 700; }
+.space { margin-top: 0.35em; padding-inline-start: 2.4em; }
+.rule { border-bottom: 1px dotted #777; height: 2em; }
+.exnote { margin: 1.1em 0 0; font-weight: 700; text-align: center; border: 1px solid #000; padding: 1.5mm 3mm; line-height: 1.7; }
+.pick { font-weight: 700; margin: -0.2em 0 0.6em; font-size: 0.95em; }
+.note { text-align: center; font-weight: 700; margin-top: 2.2em; }
 </style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}</main>${footer}</div></body></html>`;
 }
 
 export const DEFAULT_TEMPLATE: RenderTemplate = {
-  layout: "CLASSIC", pageSize: "A4", orientation: "PORTRAIT", fontFamily: "Traditional Arabic", fontSizePt: 14, lineSpacing: 1.5,
+  layout: "CLASSIC", pageSize: "A4", orientation: "PORTRAIT", fontFamily: "Traditional Arabic", fontSizePt: 14, lineSpacing: 1.65,
   margins: { top: 12, right: 14, bottom: 12, left: 14 }, visible: {}, values: {}, logoDataUri: null, answerLines: 0,
   footerNote: "مع تمنياتنا لكم بالنجاح والتوفيق",
 };
