@@ -124,3 +124,18 @@ describe("reference papers", async () => {
     expect(p).toContain("NEVER copy their questions");
   });
 });
+
+describe("verses printed in Uthmani script match the model's plain spelling", async () => {
+  const { verbatimOk } = await import("./core");
+  // رسم عثماني كما في الكتب: ألف وصل، ألف خنجرية، علامات وقف، همزة مفردة
+  const book = "قال تعالى: ﴿ وَٱعْتَصِمُوا۟ بِحَبْلِ ٱللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا۟ ۚ وَٱذْكُرُوا۟ نِعْمَتَ ٱللَّهِ عَلَيْكُمْ إِذْ كُنتُمْ أَعْدَآءً فَأَلَّفَ بَيْنَ قُلُوبِكُمْ ﴾ ٱلرَّحْمَـٰنُ ۞ سَلَـٰمٌ هِىَ";
+  const pages = new Map([[7, { text: book, trusted: true }]]);
+  it("accepts the same verse in plain spelling", () => {
+    expect(verbatimOk("واعتصموا بحبل الله جميعا ولا تفرقوا واذكروا نعمة الله عليكم", [7], pages)).toBe(true);
+    // الرسم العثماني يحذف بعض الألفات («سلم» لا «سلام»): كلمة مختلفة من ثمان تُحتمل (حد 85%)
+    expect(verbatimOk("الرحمن سلام هي واذكروا الله جميعا بحبل ولا", [7], pages)).toBe(true);
+  });
+  it("still rejects a misquote", () => {
+    expect(verbatimOk("واعتصموا بحبل الله جميعا ولا تنازعوا فتفشلوا وتذهب ريحكم", [7], pages)).toBe(false);
+  });
+});

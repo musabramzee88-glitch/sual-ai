@@ -120,7 +120,12 @@ export const RESPONSE_SCHEMA = {
 export type RawQuestion = { section?: number; prompt?: string; options?: string[]; answer?: string; sourcePages?: number[]; difficulty?: string; cognitiveLevel?: string };
 export type CleanQuestion = { prompt: string; options: string[] | null; answer: string; sourcePages: number[]; difficulty: "EASY" | "MEDIUM" | "HARD" | null; cognitiveLevel: (typeof COGNITIVE)[number] | null };
 
-const norm = (s: string) => s.normalize("NFKC").replace(/[ً-ٰٟـ]/g, "").replace(/[أإآ]/g, "ا").replace(/\s+/g, " ").trim().toLowerCase();
+/**
+ * تطبيع للمقارنة: يزيل كل علامات التشكيل والعلامات القرآنية (\p{M} تشمل علامات الوقف والألف الخنجرية)،
+ * ويوحّد أشكال الألف (ٱ أ إ آ) والياء (ى) فيطابق الرسم العثماني في الكتب رسمَ النموذج العادي.
+ */
+const norm = (s: string) =>
+  s.normalize("NFKC").replace(/[\p{M}\u0640\u06DE\u06DD]/gu, "").replace(/[\u0623\u0625\u0622\u0671]/g, "\u0627").replace(/\u0649/g, "\u064A").replace(/\s+/g, " ").trim().toLowerCase();
 
 /** ينظّف سؤالاً واحداً لنوعه؛ null إن لم يصلح (يُسقط ولا يُحفظ) */
 /** صفحات المصدر للتحقق: النص الموثوق (طبقة نص، لا OCR ولا صورة) يُستعمل لمطابقة النصوص المنقولة حرفياً */
