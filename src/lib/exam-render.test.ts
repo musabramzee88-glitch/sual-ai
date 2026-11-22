@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TEMPLATE, renderExamHtml, richText, type RenderExam } from "./exam-render";
+import { DEFAULT_TEMPLATE, renderExamHtml, richText, type RenderExam, type RenderSection } from "./exam-render";
 
 const exam: RenderExam = {
   lang: "AR",
@@ -73,5 +73,32 @@ describe("optional questions on the paper", () => {
     expect(html).toContain("أجب عن (٣) فروع فقط مما يأتي:");
     expect(html).toContain("أجب عن فرعين فقط مما يأتي:");
     expect((html.match(/class="pick"/g) ?? []).length).toBe(2);
+  });
+});
+
+describe("compact layout", () => {
+  const defs = (prompts: string[]) => ({ instruction: "عرّف ما يأتي:", marks: 10, branches: prompts.map((p) => ({ prompt: p, options: null, answer: "تعريف", marks: 2 })) });
+  const e = (...sections: RenderSection[]): RenderExam => ({ lang: "AR", values: {}, sections });
+  it("short items without options or answer space (definitions) flow horizontally, only in the questions copy", () => {
+    const short = e(defs(["الكشف الكهربائي", "الموصلات", "العوازل", "الشحنة المقيدة"]));
+    expect(renderExamHtml(short, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('<ol class="inline">');
+    expect(renderExamHtml(short, DEFAULT_TEMPLATE, "WITH_ANSWERS")).not.toContain('<ol class="inline">'); // الإجابة تحت كل فرع
+    expect(renderExamHtml(short, { ...DEFAULT_TEMPLATE, answerLines: 2 }, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
+  });
+  it("long items, single items and multiple-choice stay one per line", () => {
+    expect(renderExamHtml(e(defs(["عرّف ما هو الكشف الكهربائي وما أنواعه وكيف يعمل في الدائرة", "الموصلات"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
+    expect(renderExamHtml(e(defs(["الموصلات"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
+    const mcq = e({ instruction: "اختر:", marks: 4, branches: [{ prompt: "أ", options: ["1", "2", "3"], answer: "1", marks: 2 }, { prompt: "ب", options: ["1", "2", "3"], answer: "1", marks: 2 }] });
+    expect(renderExamHtml(mcq, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
+  });
+  it("the closing line sits inside the content and is kept with the last question (never alone on a page)", () => {
+    const html = renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY");
+    expect(html.indexOf('class="note"')).toBeLessThan(html.indexOf("</main>"));
+    // الختام داخل كتلة .tail مع آخر فرع (لا تنقسم)، سواء القسم الأخير عمودي أو أفقي
+    expect(html).toMatch(/<div class="tail"><ol><li>.*<\/li><\/ol><p class="note">/);
+    expect(renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"]), defs(["الموصلات", "العوازل", "الشحنة"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toMatch(/<div class="tail"><section>.*<\/section><p class="note">/);
+    expect((renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY").match(/class="note"/g) ?? []).length).toBe(1);
+    expect(renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"])), DEFAULT_TEMPLATE, "ANSWER_KEY")).not.toContain('class="note"');
+    expect(renderExamHtml(e(), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('class="note"'); // بلا أقسام: تبقى بعد المحتوى
   });
 });

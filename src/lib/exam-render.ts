@@ -150,6 +150,9 @@ export function pickNotes(exam: RenderExam, lang: "ar" | "en", n: (x: number) =>
   return { examNote, sectionNote };
 }
 
+/** أقصى طول (حرفاً) لفرع يُعدّ قصيراً فيُرصّ أفقياً */
+const INLINE_MAX = 34;
+
 const LETTERS = { ar: ["أ", "ب", "ج", "د", "هـ", "و"], en: ["a", "b", "c", "d", "e", "f"] };
 
 export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: Variant, opts: { forPdf?: boolean } = {}): string {
@@ -158,16 +161,27 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
   const n = (x: number) => digits(x, ar);
   const marks = ar ? "درجة" : "marks";
   const notes = pickNotes(exam, lang, n);
+  const footer = variant === "ANSWER_KEY" || !tpl.footerNote ? "" : `<p class="note">${richText(tpl.footerNote)}</p>`;
+  let footerPlaced = false;
   const body = exam.sections.map((s, i) => {
-    const items = s.branches.map((b, j) => {
+    const rows = s.branches.map((b, j) => {
       const opts = variant !== "ANSWER_KEY" && b.options?.length ? `<div class="opts">${b.options.map((o, k) => `<span>${LETTERS[lang][k]}- ${richText(o)}</span>`).join("")}</div>` : "";
       const ans = variant !== "QUESTIONS_ONLY" ? `<div class="ans">${variant === "WITH_ANSWERS" ? `<span class="lbl">${ar ? "الإجابة" : "Answer"}:</span> ` : ""}${richText(b.answer)}</div>` : "";
       const space = variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length ? `<div class="space">${'<div class="rule"></div>'.repeat(tpl.answerLines)}</div>` : "";
       return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${opts}${ans}${space}</li>`;
-    }).join("");
-    return `<section><h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}<ol>${items}</ol></section>`;
+    });
+    // فروع قصيرة جداً بلا خيارات ولا فراغ إجابة (تعاريف، مصطلحات): تُرصّ أفقياً بدل سطر لكل فرع
+    const inline = variant === "QUESTIONS_ONLY" && tpl.answerLines === 0 && s.branches.length > 1 && s.branches.every((b) => !b.options?.length && b.prompt.length <= INLINE_MAX && !b.prompt.includes("\n"));
+    const last = i === exam.sections.length - 1 && footer !== "" && rows.length > 0;
+    const cls = inline ? ' class="inline"' : "";
+    const head = `<h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}`;
+    if (last) footerPlaced = true;
+    // آخر قسم: عبارة الختام تُحبس مع آخر فرع في كتلة لا تنقسم فلا تنفرد بصفحة
+    // (المتصفح لا يلتزم دائماً بـ break-before: avoid). القسم الأفقي القصير يُحبس كله معها.
+    if (last && inline) return `<div class="tail"><section>${head}<ol${cls}>${rows.join("")}</ol></section>${footer}</div>`;
+    if (last) return `<section>${head}${rows.length > 1 ? `<ol>${rows.slice(0, -1).join("")}</ol>` : ""}<div class="tail"><ol>${rows[rows.length - 1]}</ol>${footer}</div></section>`;
+    return `<section>${head}<ol${cls}>${rows.join("")}</ol></section>`;
   }).join("");
-  const footer = variant === "ANSWER_KEY" || !tpl.footerNote ? "" : `<p class="note">${richText(tpl.footerNote)}</p>`;
   const m = tpl.margins;
   const size = `${tpl.pageSize} ${tpl.orientation === "LANDSCAPE" ? "landscape" : "portrait"}`;
   // PDF: هوامش الصفحة من @page (تتكرر في كل صفحة)؛ طباعة المتصفح: هامش صفر (لا رابط/تاريخ) والهوامش داخل الورقة
@@ -217,8 +231,12 @@ li:last-child { margin-bottom: 0; }
 .rule { border-bottom: 1px dotted #777; height: 2em; }
 .exnote { margin: 1.1em 0 0; font-weight: 700; text-align: center; border: 1px solid #000; padding: 1.5mm 3mm; line-height: 1.7; }
 .pick { font-weight: 700; margin: -0.2em 0 0.6em; font-size: 0.95em; }
-.note { text-align: center; font-weight: 700; margin-top: 2.2em; }
-</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}</main>${footer}</div></body></html>`;
+.note { text-align: center; font-weight: 700; margin: 2em 0 0; break-before: avoid; break-inside: avoid; }
+.tail { break-inside: avoid; }
+.tail > .note { margin-top: 1.6em; }
+ol.inline { display: flex; flex-wrap: wrap; gap: 0.45em 2.6em; }
+ol.inline li { margin: 0; }
+</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main></div></body></html>`;
 }
 
 export const DEFAULT_TEMPLATE: RenderTemplate = {
