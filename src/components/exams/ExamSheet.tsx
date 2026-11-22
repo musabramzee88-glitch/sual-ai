@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
+import { safeFileName } from "@/lib/file-name";
 
 type Props = {
   examId: string; defaultName: string; title: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
@@ -52,7 +53,7 @@ export function ExamSheet({ examId, defaultName, title, html, variant, model, mo
   }
 
   /** ينزّل ملفاً من الخادم باسم يختاره المدرس (يُنظَّف الاسم في الخادم أيضاً) */
-  async function download(url: string, fallback: string) {
+  async function download(url: string, finalName: string) {
     setDialog("");
     setBusy("pdf"); setMsg(null);
     const r = await fetch(url).catch(() => null);
@@ -63,8 +64,8 @@ export function ExamSheet({ examId, defaultName, title, html, variant, model, mo
       return;
     }
     const blob = await r.blob();
-    const cd = r.headers.get("content-disposition") ?? "";
-    const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(cd)?.[1] ?? fallback);
+    // الاسم يُحسب هنا بالدالة نفسها التي ينظّف بها الخادم (لا اعتماد على ترويسة الاستجابة التي قد تضيع مع برامج التنزيل)
+    const name = finalName;
     const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = href; a.download = name;
@@ -74,8 +75,9 @@ export function ExamSheet({ examId, defaultName, title, html, variant, model, mo
   }
   const submit = () => {
     const name = encodeURIComponent(fileName.trim());
-    if (dialog === "zip") return download(`/api/v1/exams/${examId}/export-zip?format=${zipFormat}&models=${zipModels.join(",")}&variants=${zipVariants.join(",")}&name=${name}`, "exam.zip");
-    download(`/api/v1/exams/${examId}/export?format=${dialog}&variant=${variant}${model ? `&model=${model}` : ""}&name=${name}`, `exam.${dialog}`);
+    if (dialog === "zip") return download(`/api/v1/exams/${examId}/export-zip?format=${zipFormat}&models=${zipModels.join(",")}&variants=${zipVariants.join(",")}&name=${name}`, safeFileName(fileName, title, "zip"));
+    const ext = dialog === "docx" ? "docx" : "pdf";
+    download(`/api/v1/exams/${examId}/export?format=${ext}&variant=${variant}${model ? `&model=${model}` : ""}&name=${name}`, safeFileName(fileName, defaultName, ext));
   };
   const toggle = (set: string[], v: string, fn: (x: string[]) => void) => fn(set.includes(v) ? set.filter((x) => x !== v) : [...set, v]);
 
