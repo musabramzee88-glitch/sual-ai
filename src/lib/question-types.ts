@@ -16,6 +16,8 @@ export const QUESTION_TYPES = [
   "REORDER", "VERB_FORMS",
   // القراءة والتاريخ والإسلامية
   "WHO_SAID",
+  // حفظ السور (المقرر)
+  "SURAH_RANGE",
 ] as const;
 export type QType = (typeof QUESTION_TYPES)[number];
 
@@ -24,7 +26,7 @@ export const NOT_GENERATABLE: readonly QType[] = ["DIAGRAM"];
 export const GENERATABLE_TYPES = QUESTION_TYPES.filter((t) => !NOT_GENERATABLE.includes(t));
 
 /** نص منقول حرفياً من الكتاب (قرآن، حديث، شعر): يُطابَق مع صفحة المصدر ويُنبَّه المدرس لمراجعته */
-export const VERBATIM_TYPES: readonly QType[] = ["COMPLETE_VERSE", "WRITE_VERSE", "WRITE_HADITH", "COMPLETE_POEM"];
+export const VERBATIM_TYPES: readonly QType[] = ["COMPLETE_VERSE", "WRITE_VERSE", "WRITE_HADITH", "COMPLETE_POEM", "SURAH_RANGE"];
 
 type Def = { ar: string; en: string; instAr: string; instEn: string; hint: string };
 
@@ -63,6 +65,11 @@ export const QT: Record<QType, Def> = {
   CORRECT_ERROR: { ar: "صحّح الخطأ", en: "Correct the mistake", instAr: "صحّح الخطأ في الجمل الآتية:", instEn: "Correct the mistakes:", hint: "a sentence with exactly one deliberate mistake related to the lesson; answer is the corrected sentence" },
   WRITING: { ar: "التعبير / الإنشاء", en: "Writing", instAr: "اكتب موضوعاً تعبيرياً في واحد مما يأتي:", instEn: "Write about:", hint: "a writing task on a lesson topic with 2-3 guiding points; answer lists the expected elements" },
   REORDER: { ar: "رتّب الكلمات", en: "Put in order", instAr: "رتّب الكلمات الآتية لتكوّن جملاً مفيدة:", instEn: "Put the words in order to make sentences:", hint: "the words of a sentence from the lesson, shuffled and separated by ' / '; answer is the correct sentence" },
+  SURAH_RANGE: {
+    ar: "أكمل السورة من الآية … إلى الآية … (المحفوظ)", en: "Complete the surah from verse … to verse … (memorisation)",
+    instAr: "أكمل السور الآتية من الآية إلى الآية المحدّدة:", instEn: "Complete each surah from the given verse to the given verse:",
+    hint: "memorisation question in the Iraqi style «أكمل سورة (اسم السورة) من الآية (أ) إلى الآية (ب)». Use ONLY surahs/verse ranges that the source marks as required memorisation (المطلوب حفظه / احفظ / للحفظ / سورة … من الآية … إلى الآية …) and that are printed on the cited pages; never invent a range. prompt = «سورة (الاسم) من الآية (أ) إلى الآية (ب)» with the verse numbers as the book numbers them and nothing else (do NOT print the verses in the prompt); answer = the verses of that range in order, copied EXACTLY from the source page (words, spelling and order), without verse numbers. Keep each range within what the book requires; cite the page that prints those verses",
+  },
   WHO_SAID: { ar: "من القائل؟ ولمن؟", en: "Who said it?", instAr: "من القائل؟ ولمن قال؟ وفي أي مناسبة؟", instEn: "Who said it, to whom and when?", hint: "quote a sentence said by a character in a lesson story/text of the source (in quotes); answer: who said it, to whom, and the occasion, per the book" },
   VERB_FORMS: { ar: "صيغة الفعل الصحيحة", en: "Verb forms", instAr: "اكتب الفعل بالصيغة الصحيحة:", instEn: "Correct the verbs between brackets:", hint: "a sentence with the base verb in (brackets) to put in the correct tense/form taught in the book; answer is the full correct sentence" },
 };
@@ -73,7 +80,7 @@ const SOCIAL_CORE: QType[] = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "DE
 const LANG_CORE: QType[] = ["MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "REORDER", "VERB_FORMS", "CORRECT_ERROR", "CONVERT", "WORD_MEANINGS", "WORD_FORMS", "COMPREHENSION", "WRITING", "ESSAY"];
 
 export const SUBJECT_TYPES: Record<string, QType[]> = {
-  ISLAMIC: ["COMPLETE_VERSE", "WRITE_VERSE", "EXPLAIN_VERSE", "WORD_MEANINGS", "WRITE_HADITH", "LESSONS", "TAJWEED", "WHO_SAID", "DEFINE", "JUSTIFY", "LIST", "COMPARE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "ESSAY"],
+  ISLAMIC: ["SURAH_RANGE", "COMPLETE_VERSE", "WRITE_VERSE", "EXPLAIN_VERSE", "WORD_MEANINGS", "WRITE_HADITH", "LESSONS", "TAJWEED", "WHO_SAID", "DEFINE", "JUSTIFY", "LIST", "COMPARE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "ESSAY"],
   ETHICS: ["SITUATION", "LESSONS", "LIST", "JUSTIFY", "DEFINE", "MCQ", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ESSAY"],
   READING: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "WHO_SAID", "LESSONS", "JUSTIFY", "EXTRACT", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
   GRAMMAR: ["GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "MCQ", "TRUE_FALSE", "FILL_BLANK"],
@@ -105,7 +112,7 @@ export const qtLabels = (lang: "ar" | "en") => Object.fromEntries(QUESTION_TYPES
 export const TYPE_WEIGHT: Record<QType, number> = {
   MCQ: 1, TRUE_FALSE: 1, FILL_BLANK: 1, MATCHING: 1, WORD_MEANINGS: 1, WORD_FORMS: 1, REORDER: 1, VERB_FORMS: 1,
   DEFINE: 2, JUSTIFY: 2, LIST: 2, WHAT_IF: 2, EXTRACT: 2, CONVERT: 2, CORRECT_ERROR: 2, TAJWEED: 2, LESSONS: 2, SITUATION: 2, COMPUTE: 2, WHO_SAID: 2,
-  EXPLAIN_VERSE: 3, COMPARE: 3, GRAMMAR_PARSING: 3, COMPLETE_VERSE: 3, COMPLETE_POEM: 3, WRITE_HADITH: 3, COMPREHENSION: 3, EQUATION_BALANCING: 3, APPLIED: 3, DIAGRAM: 3,
+  EXPLAIN_VERSE: 3, SURAH_RANGE: 3, COMPARE: 3, GRAMMAR_PARSING: 3, COMPLETE_VERSE: 3, COMPLETE_POEM: 3, WRITE_HADITH: 3, COMPREHENSION: 3, EQUATION_BALANCING: 3, APPLIED: 3, DIAGRAM: 3,
   WRITE_VERSE: 4, PROBLEM: 4, PROOF: 4, ALGORITHM: 4, ESSAY: 4, WRITING: 5,
 };
 
@@ -114,7 +121,7 @@ export const TYPE_WEIGHT: Record<QType, number> = {
  * في مدارس وزارة التربية العراقية: سؤال رئيس بتعليمة واحدة ثم فروع قصيرة مرقّمة، بلغة الكتاب ومصطلحاته.
  */
 export const STYLE_BY_FAMILY: Record<string, string> = {
-  ISLAMIC: "Islamic education (التربية الإسلامية) in Iraqi schools: memorisation of verses is tested by «اكتب الآيات الكريمة من قوله تعالى ﴿…﴾ إلى قوله تعالى ﴿…﴾» and «أكمل»; then «ما معنى الكلمات الآتية» from the lesson's معاني المفردات, «ما الذي ترشد إليه الآيات الكريمة؟», «اكتب الحديث الشريف الذي يدل على…», «علّل», «عدّد», and questions on السيرة and الآداب. Use the book's wording for meanings and lessons. Quote Quran in ﴿ ﴾ exactly as printed.",
+  ISLAMIC: "Islamic education (التربية الإسلامية) in Iraqi schools: memorisation is tested first by «أكمل سورة (…) من الآية (أ) إلى الآية (ب)» using exactly the surahs/ranges the curriculum requires the student to memorise (stated in the book), then by «اكتب الآيات الكريمة من قوله تعالى ﴿…﴾ إلى قوله تعالى ﴿…﴾» and «أكمل»; then «ما معنى الكلمات الآتية» from the lesson's معاني المفردات, «ما الذي ترشد إليه الآيات الكريمة؟», «اكتب الحديث الشريف الذي يدل على…», «علّل», «عدّد», and questions on السيرة and الآداب. Use the book's wording for meanings and lessons. Quote Quran in ﴿ ﴾ exactly as printed.",
   ARABIC: "Arabic (القراءة/القواعد) in Iraqi schools: reading tests use «هات معاني الكلمات», «هات مفرد/جمع/ضد», «من القائل؟ ولمن؟», «ما الفكرة العامة للنص», «أكمل الأبيات» for المحفوظات; grammar tests use «أعرب ما بين القوسين», «استخرج من النص…», «حوّل… إلى…», «صحّح الخطأ», with example sentences in the book's style. Write full إعراب in the answers (e.g. فاعل مرفوع وعلامة رفعه الضمة الظاهرة على آخره).",
   ENGLISH: "English for Iraq exams: Q1 reading comprehension, then vocabulary (choose/match), grammar (correct the verbs between brackets, rewrite, rearrange words), a short dialogue to complete, and guided writing. Use only the vocabulary and structures of the source units. Simple, clear sentences for the grade.",
   OTHER_LANGUAGE: "Language exam in the Iraqi style: comprehension, vocabulary, grammar transformations, rearranging words, and short guided writing, using only the source unit's vocabulary.",

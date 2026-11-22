@@ -191,6 +191,56 @@ describe("exam generation", () => {
     expect(await updateSection(otherId, def.id, { marks: 1 })).toMatchObject({ ok: false, code: "NOT_FOUND" }); // ليس صاحبه
   });
 
+  it("optional questions: the student may leave a question or some branches; totals count only what is answered", async () => {
+    const types = ["DEFINE", "JUSTIFY", "LIST", "COMPARE", "WHAT_IF", "FILL_BLANK"] as const;
+    reply = { questions: types.flatMap((t, i) => [q(i, `سؤال ${t} الأول`, { answer: "أ" }), q(i, `سؤال ${t} الثاني`, { answer: "ب", sourcePages: [11] }), q(i, `سؤال ${t} الثالث`, { answer: "ج", sourcePages: [12] })]) };
+    const r = await createExam(userId, { curriculumId: curId, pageFrom: 10, pageTo: 12, kind: "MIDTERM", difficulty: "MIXED", totalMarks: 120, distribution: "equal", sections: types.map((t) => ({ type: t, count: 3, marksEach: 2 })) });
+    if (!r.ok) throw new Error(r.code);
+    let e = (await getExam(userId, r.examId))!;
+    expect(e.sections).toHaveLength(6);
+    expect(e.totalMarks).toBe(120);
+    expect(e.firstRequired).toBe(true);
+    expect(e.sectionsToAnswer).toBeNull();
+
+    // يجب أن يبقى سؤال يُترك وسؤال يُجاب عنه على الأقل
+    expect(await updateExamMeta(userId, r.examId, { sectionsToAnswer: 6 })).toMatchObject({ ok: false, code: "BAD_COUNT" });
+    expect(await updateExamMeta(userId, r.examId, { sectionsToAnswer: 0 })).toMatchObject({ ok: false, code: "BAD_COUNT" });
+    // ٦ أسئلة يجيب عن ٥ والأول إجباري: الدرجة الكلية = ٥ أقسام
+    expect((await updateExamMeta(userId, r.examId, { sectionsToAnswer: 5, firstRequired: true })).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sectionsToAnswer).toBe(5);
+    expect(e.totalMarks).toBe(100);
+    // التوزيع يعطي الأقسام درجات متساوية ومجموع المُجاب عنه = المطلوب
+    expect((await distributeExamMarks(userId, r.examId, 100, "smart")).ok).toBe(true);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections.map((s) => s.marks)).toEqual([20, 20, 20, 20, 20, 20]);
+    expect(e.totalMarks).toBe(100);
+
+    // فروع اختيارية داخل قسم: يجيب عن فرعين من ثلاثة
+    const first = e.sections[0];
+    expect(await updateSection(userId, first.id, { answerCount: 3 })).toMatchObject({ ok: false, code: "BAD_COUNT" }); // = العدد كله
+    expect(await updateSection(userId, first.id, { answerCount: 2 })).toMatchObject({ ok: true });
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections[0].answerCount).toBe(2);
+    expect(e.sections[0].branches.map((b) => b.marks)).toEqual([10, 10, 10]);
+    expect(e.sections[0].marks).toBe(20); // أعلى ما يُحصَّل من فرعين
+    expect(e.totalMarks).toBe(100);
+    expect(await updateSection(otherId, first.id, { answerCount: 1 })).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(await updateExamMeta(otherId, r.examId, { sectionsToAnswer: 2 })).toMatchObject({ ok: false, code: "NOT_FOUND" });
+
+    // حذف فرع حتى لا يبقى ما يُترك: العدد يُصحَّح إلى «الكل»
+    await deleteQuestion(userId, first.branches[2].id);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections[0].branches).toHaveLength(2);
+    expect(e.sections[0].answerCount).toBeNull();
+    // حذف أقسام حتى يتساوى العدد مع المطلوب: الامتحان يعود «الكل»
+    for (const s of e.sections.slice(4)) await deleteSection(userId, s.id);
+    e = (await getExam(userId, r.examId))!;
+    expect(e.sections).toHaveLength(4);
+    expect(e.sectionsToAnswer).toBeNull();
+    expect(e.totalMarks).toBe(e.sections.reduce((n, s) => n + s.marks, 0));
+  });
+
   it("with a teacher's reference paper, the section instruction takes the teacher's wording and the paper is sent as style only", async () => {
     const sci = await db.subject.findUniqueOrThrow({ where: { code: "SCIENCE" } });
     const g = await db.grade.findUniqueOrThrow({ where: { code: "PRI_5" } });

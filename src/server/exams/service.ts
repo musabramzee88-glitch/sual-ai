@@ -6,7 +6,7 @@ import { AiError, currentModel, geminiJson } from "../ai/gemini";
 import { renderPagesJpeg } from "../books/page-image";
 import { fileOf } from "../books/service";
 import { normalizeHonorifics, polishQuestion } from "@/lib/exam-text";
-import { distributeMarks, type MarkSection } from "./marks";
+import { distributeMarks, examTotal, sectionMarks, type MarkSection } from "./marks";
 import { pickSamples } from "./samples";
 import {
   buildPrompt, chooseInstruction, expandRanges, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
@@ -211,14 +211,6 @@ async function ownedQuestion(userId: string, questionId: string) {
   return q;
 }
 
-/** يعيد مجموع درجات القسم والامتحان بعد تعديل/حذف */
-async function recomputeMarks(tx: Prisma.TransactionClient, examId: string, parentId: string) {
-  const kids = await tx.examQuestion.findMany({ where: { parentId, deletedAt: null }, select: { marks: true } });
-  await tx.examQuestion.update({ where: { id: parentId }, data: { marks: kids.reduce((n, k) => n + Number(k.marks), 0) } });
-  const all = await tx.examQuestion.findMany({ where: { examModel: { examId }, parentId: { not: null }, deletedAt: null }, select: { marks: true } });
-  await tx.exam.update({ where: { id: examId }, data: { totalMarks: Math.round(all.reduce((n, k) => n + Number(k.marks), 0)) } });
-}
-
 export async function editQuestion(userId: string, questionId: string, patch: { prompt?: string; options?: string[] | null; answer?: string; marks?: number }) {
   const q = await ownedQuestion(userId, questionId);
   if (!q) return fail("NOT_FOUND");
@@ -240,7 +232,7 @@ export async function editQuestion(userId: string, questionId: string, patch: { 
         ...(patch.marks !== undefined ? { marks: patch.marks } : {}),
       },
     });
-    if (patch.marks !== undefined) await recomputeMarks(tx, q.examModel.examId, q.parentId!);
+    if (patch.marks !== undefined) await recomputeExam(tx, q.examModel.examId);
   });
   return { ok: true as const };
 }
@@ -250,7 +242,7 @@ export async function deleteQuestion(userId: string, questionId: string) {
   if (!q) return fail("NOT_FOUND");
   await db.$transaction(async (tx) => {
     await tx.examQuestion.update({ where: { id: q.id }, data: { deletedAt: new Date() } });
-    await recomputeMarks(tx, q.examModel.examId, q.parentId!);
+    await recomputeExam(tx, q.examModel.examId);
   });
   return { ok: true as const };
 }
@@ -295,7 +287,7 @@ export async function undoQuestion(userId: string, questionId: string) {
   await db.$transaction(async (tx) => {
     await tx.examQuestionRevision.create({ data: { questionId: q.id, version: q.version + 1, reason: "RESTORE", snapshot: snapshot(q), editedById: userId } });
     await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: s.prompt, options: s.options ?? Prisma.DbNull, answer: s.answer, marks: Number(s.marks), sourcePages: s.sourcePages } });
-    await recomputeMarks(tx, q.examModel.examId, q.parentId!);
+    await recomputeExam(tx, q.examModel.examId);
   });
   return { ok: true as const };
 }
@@ -320,23 +312,47 @@ async function ownedSection(userId: string, sectionId: string) {
   });
 }
 
-/** يعيد حساب درجة كل قسم (مجموع فروعه) والدرجة الكلية */
+/**
+ * يعيد حساب درجة كل قسم والدرجة الكلية مع احتساب ما يتركه الطالب: القسم الاختياري الفروع يحسب أكبر k فرع،
+ * والامتحان الاختياري الأسئلة يحسب الأول الإلزامي + أكبر الباقي. ويصحّح الأعداد التي لم تعد صالحة بعد حذف فرع/قسم.
+ */
 async function recomputeExam(tx: Prisma.TransactionClient, examId: string) {
-  const parents = await tx.examQuestion.findMany({ where: { examModel: { examId }, parentId: null, deletedAt: null }, select: { id: true } });
-  let total = 0;
+  const parents = await tx.examQuestion.findMany({ where: { examModel: { examId }, parentId: null, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, answerCount: true } });
+  const totals: number[] = [];
   for (const p of parents) {
     const kids = await tx.examQuestion.findMany({ where: { parentId: p.id, deletedAt: null }, select: { marks: true } });
-    const m = kids.reduce((n, k) => n + Number(k.marks), 0);
-    total += m;
-    await tx.examQuestion.update({ where: { id: p.id }, data: { marks: m } });
+    const m = sectionMarks(kids.map((k) => Number(k.marks)), p.answerCount);
+    const stale = p.answerCount !== null && p.answerCount >= kids.length;
+    await tx.examQuestion.update({ where: { id: p.id }, data: { marks: m, ...(stale ? { answerCount: null } : {}) } });
+    totals.push(m);
   }
+  const exam = await tx.exam.findUniqueOrThrow({ where: { id: examId }, select: { sectionsToAnswer: true, firstRequired: true } });
+  const stale = exam.sectionsToAnswer !== null && exam.sectionsToAnswer >= parents.length;
+  if (stale) await tx.exam.update({ where: { id: examId }, data: { sectionsToAnswer: null } });
+  const total = examTotal(totals, { sectionsToAnswer: stale ? null : exam.sectionsToAnswer, firstRequired: exam.firstRequired });
   await tx.exam.update({ where: { id: examId }, data: { totalMarks: Math.round(total) } });
 }
 
-export async function updateExamMeta(userId: string, examId: string, patch: { title?: string; durationMinutes?: number | null }) {
+export async function updateExamMeta(userId: string, examId: string, patch: { title?: string; durationMinutes?: number | null; sectionsToAnswer?: number | null; firstRequired?: boolean }) {
   const e = await ownedExam(userId, examId);
-  if (!e) return fail("NOT_FOUND");
-  await db.exam.update({ where: { id: e.id }, data: { ...(patch.title !== undefined ? { title: patch.title } : {}), ...(patch.durationMinutes !== undefined ? { durationMinutes: patch.durationMinutes } : {}) } });
+  if (!e?.models[0]) return fail("NOT_FOUND");
+  if (patch.sectionsToAnswer !== undefined && patch.sectionsToAnswer !== null) {
+    const n = await db.examQuestion.count({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null } });
+    // يجب أن يترك الطالب سؤالاً واحداً على الأقل، وأن يجيب عن واحد على الأقل
+    if (patch.sectionsToAnswer < 1 || patch.sectionsToAnswer >= n) return fail("BAD_COUNT");
+  }
+  await db.$transaction(async (tx) => {
+    await tx.exam.update({
+      where: { id: e.id },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.durationMinutes !== undefined ? { durationMinutes: patch.durationMinutes } : {}),
+        ...(patch.sectionsToAnswer !== undefined ? { sectionsToAnswer: patch.sectionsToAnswer } : {}),
+        ...(patch.firstRequired !== undefined ? { firstRequired: patch.firstRequired } : {}),
+      },
+    });
+    if (patch.sectionsToAnswer !== undefined || patch.firstRequired !== undefined) await recomputeExam(tx, e.id);
+  });
   return { ok: true as const };
 }
 
@@ -344,21 +360,21 @@ export async function updateExamMeta(userId: string, examId: string, patch: { ti
 export async function distributeExamMarks(userId: string, examId: string, total: number, mode: "smart" | "equal") {
   const e = await ownedExam(userId, examId);
   if (!e?.models[0]) return fail("NOT_FOUND");
-  const rows = await db.examQuestion.findMany({ where: { examModelId: e.models[0].id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, parentId: true, type: true, difficulty: true } });
+  const rows = await db.examQuestion.findMany({ where: { examModelId: e.models[0].id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true, parentId: true, type: true, difficulty: true, answerCount: true } });
   const sections: MarkSection[] = rows.filter((r) => !r.parentId).map((p) => ({
-    id: p.id, type: (p.type ?? "ESSAY") as MarkSection["type"],
+    id: p.id, type: (p.type ?? "ESSAY") as MarkSection["type"], answerCount: p.answerCount,
     items: rows.filter((c) => c.parentId === p.id).map((c) => ({ id: c.id, difficulty: c.difficulty === "MIXED" ? null : (c.difficulty as "EASY" | "MEDIUM" | "HARD" | null) })),
   }));
-  const plan = distributeMarks(sections, total, mode);
+  const plan = distributeMarks(sections, total, mode, { sectionsToAnswer: e.sectionsToAnswer, firstRequired: e.firstRequired });
   if ("error" in plan) return { ok: false as const, code: plan.error, detail: String(plan.min) };
   await db.$transaction(async (tx) => {
     for (const s of plan.sections) {
       await tx.examQuestion.update({ where: { id: s.id }, data: { marks: s.marks } });
       for (const it of s.items) await tx.examQuestion.update({ where: { id: it.id }, data: { marks: it.marks } });
     }
-    await tx.exam.update({ where: { id: e.id }, data: { totalMarks: plan.total } });
+    await tx.exam.update({ where: { id: e.id }, data: { totalMarks: Math.round(plan.total) } });
   });
-  return { ok: true as const, total: plan.total };
+  return { ok: true as const, total: Math.round(plan.total) };
 }
 
 /** ترتيب الأقسام: ids كل الأقسام الحالية بالترتيب الجديد */
@@ -381,23 +397,39 @@ export async function reorderQuestions(userId: string, sectionId: string, ids: s
   return { ok: true as const };
 }
 
-/** تعديل القسم: نص التعليمة، و/أو درجته (تُقسم على فروعه بالتساوي، بأنصاف عند الحاجة) */
-export async function updateSection(userId: string, sectionId: string, patch: { instruction?: string; marks?: number }) {
+/**
+ * تعديل القسم: نص التعليمة، و/أو درجته، و/أو عدد الفروع التي يجيب عنها الطالب (answerCount، null = كلها).
+ * الدرجة تُقسم على الفروع التي يُجاب عنها بالتساوي (أنصاف عند الحاجة)؛ في القسم الاختياري تتساوى كل الفروع.
+ */
+export async function updateSection(userId: string, sectionId: string, patch: { instruction?: string; marks?: number; answerCount?: number | null }) {
   const s = await ownedSection(userId, sectionId);
   if (!s) return fail("NOT_FOUND");
   const lang = s.examModel.exam.language === "EN" ? "EN" : "AR";
+  const n = await db.examQuestion.count({ where: { parentId: s.id, deletedAt: null } });
+  if (patch.answerCount !== undefined && patch.answerCount !== null && (patch.answerCount < 1 || patch.answerCount >= n)) return fail("BAD_COUNT");
   await db.$transaction(async (tx) => {
     if (patch.instruction !== undefined) {
       const txt = lang === "AR" ? normalizeHonorifics(patch.instruction) : patch.instruction;
       await tx.examQuestion.update({ where: { id: s.id }, data: { instruction: txt, prompt: txt } });
     }
+    if (patch.answerCount !== undefined) await tx.examQuestion.update({ where: { id: s.id }, data: { answerCount: patch.answerCount } });
+    // عدد الفروع الذي سيُعتمد بعد هذا التعديل
+    const k = patch.answerCount !== undefined ? patch.answerCount ?? n : s.answerCount && s.answerCount < n ? s.answerCount : n;
     if (patch.marks !== undefined) {
       const kids = await tx.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { id: true } });
-      if (kids.length) {
+      if (kids.length && k < kids.length) {
+        const each = roundMarks(patch.marks / k);
+        for (const kid of kids) await tx.examQuestion.update({ where: { id: kid.id }, data: { marks: each } });
+      } else if (kids.length) {
         const each = roundMarks(patch.marks / kids.length);
         // آخر فرع يأخذ الفرق حتى يطابق المجموع ما كتبه المدرس
-        for (const [i, k] of kids.entries()) await tx.examQuestion.update({ where: { id: k.id }, data: { marks: i === kids.length - 1 ? roundMarks(patch.marks - each * (kids.length - 1)) : each } });
+        for (const [i, kid] of kids.entries()) await tx.examQuestion.update({ where: { id: kid.id }, data: { marks: i === kids.length - 1 ? roundMarks(patch.marks - each * (kids.length - 1)) : each } });
       }
+    } else if (patch.answerCount !== undefined && k < n) {
+      // تغيّر العدد دون درجة جديدة: تتساوى الفروع (الدرجة الحالية للقسم ÷ k)
+      const kids = await tx.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, select: { id: true } });
+      const each = roundMarks(Number(s.marks) / k);
+      for (const kid of kids) await tx.examQuestion.update({ where: { id: kid.id }, data: { marks: each } });
     }
     await recomputeExam(tx, s.examModel.examId);
   });

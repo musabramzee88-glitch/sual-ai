@@ -245,8 +245,9 @@ export async function examRenderInput(userId: string, examId: string, opts: { te
     lang: exam.language === "EN" ? "EN" : "AR",
     values: { ...derived, ...(cfg.values ?? {}) },
     forceShow: Object.keys(cfg.values ?? {}) as HeaderKey[],
+    sectionsToAnswer: exam.sectionsToAnswer, firstRequired: exam.firstRequired,
     sections: exam.sections.map((s) => ({
-      instruction: s.instruction ?? s.prompt, marks: s.marks,
+      instruction: s.instruction ?? s.prompt, marks: s.marks, answerCount: s.answerCount,
       branches: s.branches.map((b) => ({ prompt: b.prompt, options: Array.isArray(b.options) ? (b.options as string[]) : null, answer: b.answer ?? "", marks: b.marks })),
     })),
   };

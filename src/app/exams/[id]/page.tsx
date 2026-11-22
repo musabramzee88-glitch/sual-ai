@@ -21,7 +21,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const s = exam.settings as { ocrPages?: number[]; imagePages?: number[]; truncated?: boolean; made?: number; sections?: { count: number }[] };
   const requested = (s.sections ?? []).reduce((n, x) => n + x.count, 0);
   const sections: EditorSection[] = exam.sections.map((p) => ({
-    id: p.id, type: p.type ?? "ESSAY", instruction: p.instruction ?? p.prompt, marks: p.marks,
+    id: p.id, type: p.type ?? "ESSAY", instruction: p.instruction ?? p.prompt, marks: p.marks, answerCount: p.answerCount,
     branches: p.branches.map((q) => ({ id: q.id, prompt: q.prompt, options: (q.options as string[] | null) ?? null, answer: q.answer ?? "", marks: q.marks, sourcePages: q.sourcePages, version: q.version })),
   }));
   return (
@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       {s.truncated && <p className="text-xs text-muted">{t.editor.truncated}</p>}
       {exam.status === "READY" && (
         <div className="rounded-2xl border border-line bg-surface p-5">
-          <ExamEditor examId={exam.id} title={exam.title} duration={exam.durationMinutes} totalMarks={exam.totalMarks} sections={sections} lang={exam.language} t={t}
+          <ExamEditor examId={exam.id} title={exam.title} duration={exam.durationMinutes} totalMarks={exam.totalMarks} sectionsToAnswer={exam.sectionsToAnswer} firstRequired={exam.firstRequired} sections={sections} lang={exam.language} t={t}
             types={(exam.subject.questionTypes.length ? exam.subject.questionTypes : [...GENERATABLE]).filter((x) => (GENERATABLE as readonly string[]).includes(x))} />
         </div>
       )}

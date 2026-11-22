@@ -139,3 +139,20 @@ describe("verses printed in Uthmani script match the model's plain spelling", as
     expect(verbatimOk("واعتصموا بحبل الله جميعا ولا تنازعوا فتفشلوا وتذهب ريحكم", [7], pages)).toBe(false);
   });
 });
+
+describe("surah-range memorisation question", async () => {
+  const { cleanQuestion } = await import("./core");
+  const { SUBJECT_TYPES, VERBATIM_TYPES, QT } = await import("@/lib/question-types");
+  const book = "سُورَةُ ٱلْكَوْثَرِ بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ ﴿١﴾ إِنَّآ أَعْطَيْنَـٰكَ ٱلْكَوْثَرَ ﴿٢﴾ فَصَلِّ لِرَبِّكَ وَٱنْحَرْ ﴿٣﴾ إِنَّ شَانِئَكَ هُوَ ٱلْأَبْتَرُ";
+  const pages = new Map([[3, { text: book, trusted: true }]]);
+  it("is the first Islamic-education type, instruction mentions from-verse-to-verse, and is verified verbatim", () => {
+    expect(SUBJECT_TYPES.ISLAMIC[0]).toBe("SURAH_RANGE");
+    expect(VERBATIM_TYPES).toContain("SURAH_RANGE");
+    expect(QT.SURAH_RANGE.instAr).toContain("من الآية إلى الآية");
+  });
+  it("keeps a correct range copied from the book and drops a range with wrong text", () => {
+    const ok = cleanQuestion({ prompt: "سورة (الكوثر) من الآية (٢) إلى الآية (٣)", answer: "إنا أعطيناك الكوثر فصل لربك وانحر", sourcePages: [3] }, "SURAH_RANGE", pages, "AR");
+    expect(ok?.prompt).toContain("من الآية");
+    expect(cleanQuestion({ prompt: "سورة (الكوثر) من الآية (٢) إلى الآية (٣)", answer: "إنا أعطيناك الكوثر فصل لربك وأنحر الذبائح وأطعم الفقراء", sourcePages: [3] }, "SURAH_RANGE", pages, "AR")).toBeNull();
+  });
+});

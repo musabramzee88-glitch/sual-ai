@@ -6,7 +6,7 @@ import { MathText } from "./MathText";
 import { VERBATIM_TYPES, type QType } from "@/lib/question-types";
 
 export type EditorQuestion = { id: string; prompt: string; options: string[] | null; answer: string; marks: number; sourcePages: number[]; version: number };
-export type EditorSection = { id: string; type: string; instruction: string; marks: number; branches: EditorQuestion[] };
+export type EditorSection = { id: string; type: string; instruction: string; marks: number; answerCount: number | null; branches: EditorQuestion[] };
 
 const LETTERS_AR = ["أ", "ب", "ج", "د", "هـ", "و"];
 const LETTERS_EN = ["a", "b", "c", "d", "e", "f"];
@@ -155,6 +155,14 @@ function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSecti
           <input type="number" min={0.5} step={0.5} className={`${inp} w-20`} value={marks} onChange={(e) => setMarks(Number(e.target.value))} />
         </label>
         <button className={btn} disabled={busy || marks === s.marks || marks <= 0} onClick={() => run(call(`/api/v1/exams/sections/${s.id}`, "PATCH", { marks }))}>{t.editor.apply}</button>
+        {s.branches.length > 1 && (
+          <label className="flex items-center gap-1">{t.editor.optional.branches}
+            <select className={`${inp} w-auto`} disabled={busy} value={s.answerCount ?? 0} onChange={(e) => run(call(`/api/v1/exams/sections/${s.id}`, "PATCH", { answerCount: Number(e.target.value) || null }))}>
+              <option value={0}>{t.editor.optional.allBranches}</option>
+              {Array.from({ length: s.branches.length - 1 }, (_, k) => k + 1).map((k) => <option key={k} value={k}>{num(k)} {fill(t.editor.optional.ofBranches, { n: num(s.branches.length) })}</option>)}
+            </select>
+          </label>
+        )}
         <span className="flex-1" />
         <button className={btn} disabled={i === 0 || busy} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
         <button className={btn} disabled={i === count - 1 || busy} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>
@@ -174,11 +182,13 @@ function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSecti
   );
 }
 
-export function ExamEditor({ examId, title, duration, totalMarks, sections, lang, types, t }: {
-  examId: string; title: string; duration: number | null; totalMarks: number; sections: EditorSection[]; lang: "AR" | "EN"; types: string[]; t: ExamDict;
+export function ExamEditor({ examId, title, duration, totalMarks, sectionsToAnswer, firstRequired, sections, lang, types, t }: {
+  examId: string; title: string; duration: number | null; totalMarks: number; sectionsToAnswer: number | null; firstRequired: boolean; sections: EditorSection[]; lang: "AR" | "EN"; types: string[]; t: ExamDict;
 }) {
   const router = useRouter();
-  const meta = useAction(t), marks = useAction(t), add = useAction(t), order = useAction(t);
+  const meta = useAction(t), marks = useAction(t), add = useAction(t), order = useAction(t), pick = useAction(t);
+  const [toAnswer, setToAnswer] = useState(sectionsToAnswer ?? 0);
+  const [first, setFirst] = useState(firstRequired);
   const [showAnswers, setShowAnswers] = useState(true);
   const [name, setName] = useState(title);
   const [dur, setDur] = useState(duration ? String(duration) : "");
@@ -228,8 +238,26 @@ export function ExamEditor({ examId, title, duration, totalMarks, sections, lang
         </div>
       </div>
 
+      {sections.length > 1 && (
+        <div className="space-y-2 rounded-xl border border-line p-3 text-sm">
+          <h2 className="font-semibold">{t.editor.optional.title}</h2>
+          <p className="text-xs text-muted">{t.editor.optional.hint}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-1.5">{t.editor.optional.answers}
+              <select className={`${inp} w-auto`} value={toAnswer} onChange={(e) => setToAnswer(Number(e.target.value))}>
+                <option value={0}>{t.editor.optional.all}</option>
+                {Array.from({ length: sections.length - 1 }, (_, k) => k + 1).map((k) => <option key={k} value={k}>{k.toLocaleString(lang === "EN" ? "en" : "ar-EG")} {fill(t.editor.optional.ofN, { n: sections.length.toLocaleString(lang === "EN" ? "en" : "ar-EG") })}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={first} disabled={toAnswer === 0} onChange={(e) => setFirst(e.target.checked)} />{t.editor.optional.firstRequired}</label>
+            <button className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={pick.busy || (toAnswer === (sectionsToAnswer ?? 0) && first === firstRequired)} onClick={() => pick.run(call(`/api/v1/exams/${examId}`, "POST", { action: "meta", sectionsToAnswer: toAnswer || null, firstRequired: first }))}>{t.editor.optional.save}</button>
+          </div>
+          {pick.err && <p role="alert" className="text-xs text-danger">{pick.err}</p>}
+        </div>
+      )}
+
       {order.err && <p role="alert" className="text-xs text-danger">{order.err}</p>}
-      {sections.map((s, i) => <Section key={`${s.id}:${s.marks}:${s.instruction}`} s={s} i={i} count={sections.length} lang={lang} t={t} showAnswers={showAnswers} onMove={(d) => moveSection(i, d)} />)}
+      {sections.map((s, i) => <Section key={`${s.id}:${s.marks}:${s.instruction}:${s.answerCount}`} s={s} i={i} count={sections.length} lang={lang} t={t} showAnswers={showAnswers} onMove={(d) => moveSection(i, d)} />)}
 
       {free.length > 0 && (
         <div className="space-y-2 rounded-xl border border-dashed border-line p-3 text-sm">

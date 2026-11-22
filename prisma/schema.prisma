@@ -150,6 +150,7 @@ enum QuestionType {
   REORDER // رتّب الكلمات
   VERB_FORMS // صيغة الفعل
   WHO_SAID // من القائل؟ ولمن؟
+  SURAH_RANGE // أكمل السورة من الآية .. إلى الآية .. (المحفوظ المقرر)
 }
 
 enum Difficulty {
@@ -876,6 +877,10 @@ model Exam {
   settings          Json
   /// إعدادات الترويسة (حقول ظاهرة/مخفية وقيمها)
   headerConfig      Json?
+  /// عدد الأسئلة الرئيسة التي يجيب عنها الطالب (null = كلها؛ الباقي يتركه)
+  sectionsToAnswer  Int?
+  /// السؤال الأول إجباري حين يكون الجواب اختيارياً
+  firstRequired     Boolean             @default(true)
   status            ExamStatus          @default(DRAFT)
   deletedAt         DateTime?
   createdAt         DateTime            @default(now())
@@ -957,6 +962,8 @@ model ExamQuestion {
   cognitiveLevel CognitiveLevel?
   chapterId      String?
   sourcePages    Int[]
+  /// للسؤال الرئيس: عدد الفروع التي يجيب عنها الطالب (null = كلها)
+  answerCount    Int?
   isLocked       Boolean                @default(false)
   version        Int                    @default(1)
   deletedAt      DateTime?

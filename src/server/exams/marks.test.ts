@@ -39,3 +39,40 @@ describe("marks distribution", () => {
     expect(sum(p)).toBe(10);
   });
 });
+
+describe("optional questions (the student may leave some)", async () => {
+  const { sectionMarks, examTotal, effectiveCount } = await import("./marks");
+  const sec = (id: string, n: number, answerCount: number | null = null): MarkSection => ({ id, type: "DEFINE", answerCount, items: Array.from({ length: n }, (_, i) => ({ id: `${id}${i}`, difficulty: null })) });
+
+  it("a section's marks count only the branches the student answers", () => {
+    expect(sectionMarks([5, 5, 5, 5], 3)).toBe(15);
+    expect(sectionMarks([2, 4, 6], 2)).toBe(10); // أعلى ما يمكن تحصيله
+    expect(sectionMarks([5, 5], null)).toBe(10);
+    expect(sectionMarks([5, 5], 5)).toBe(10); // أكبر من العدد = الكل
+    expect(effectiveCount(4, 0)).toBe(4);
+  });
+  it("the exam total counts the compulsory first question plus the best of the rest", () => {
+    // ٦ أسئلة بـ٢٠ يجيب عن ٥ والأول إجباري = ١٠٠
+    expect(examTotal([20, 20, 20, 20, 20, 20], { sectionsToAnswer: 5, firstRequired: true })).toBe(100);
+    expect(examTotal([10, 20, 30, 40], { sectionsToAnswer: 2, firstRequired: true })).toBe(50); // 10 + أكبر واحد (40)
+    expect(examTotal([10, 20, 30, 40], { sectionsToAnswer: 2, firstRequired: false })).toBe(70);
+    expect(examTotal([10, 20], { sectionsToAnswer: null, firstRequired: true })).toBe(30);
+    expect(examTotal([10, 20], { sectionsToAnswer: 5, firstRequired: true })).toBe(30); // أكبر من العدد = الكل
+  });
+  it("distribution: 6 equal questions, answer 5 of them, total 100 → 20 each, exam total exactly 100", () => {
+    const p = ok(distributeMarks(Array.from({ length: 6 }, (_, i) => sec(`s${i}`, 3)), 100, "smart", { sectionsToAnswer: 5, firstRequired: true }));
+    expect(p.sections.map((s) => s.marks)).toEqual([20, 20, 20, 20, 20, 20]);
+    expect(p.total).toBe(100);
+  });
+  it("distribution: answer 3 of 5 branches inside a section → each branch carries section/3", () => {
+    const p = ok(distributeMarks([sec("a", 5, 3), sec("b", 2)], 30, "equal"));
+    const a = p.sections[0];
+    expect(a.items.map((i) => i.marks)).toEqual([a.marks / 3, a.marks / 3, a.marks / 3, a.marks / 3, a.marks / 3]);
+    expect(p.total).toBe(p.sections[0].marks + p.sections[1].marks);
+    expect(Math.abs(p.total - 30)).toBeLessThanOrEqual(1.5);
+  });
+  it("the minimum total only counts what is answered", () => {
+    expect("error" in distributeMarks([sec("a", 10, 2), sec("b", 10, 2)], 2, "equal")).toBe(false); // 2 + 2 فروع = ٢ درجة (نصف لكل)
+    expect("error" in distributeMarks(Array.from({ length: 4 }, (_, i) => sec(`s${i}`, 6)), 1, "equal", { sectionsToAnswer: 2, firstRequired: true })).toBe(true);
+  });
+});

@@ -48,12 +48,16 @@ export type RenderTemplate = {
 };
 
 export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number };
-export type RenderSection = { instruction: string; marks: number; branches: RenderQuestion[] };
+/** answerCount: عدد الفروع التي يجيب عنها الطالب (null = كلها) */
+export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; branches: RenderQuestion[] };
 export type RenderExam = {
   lang: "AR" | "EN";
   values: Partial<Record<HeaderKey, string>>;
   /** حقول كتب لها المدرس قيمة لهذا الامتحان: تظهر ولو كانت مخفية في القالب */
   forceShow?: HeaderKey[];
+  /** عدد الأسئلة الرئيسة التي يجيب عنها الطالب (null = كلها) والأول إجباري */
+  sectionsToAnswer?: number | null;
+  firstRequired?: boolean;
   sections: RenderSection[];
 };
 export type Variant = "QUESTIONS_ONLY" | "WITH_ANSWERS" | "ANSWER_KEY";
@@ -125,6 +129,27 @@ function header(exam: RenderExam, tpl: RenderTemplate, variant: Variant, lang: "
   return `<header class="h-classic"><div>${right}</div><div class="center">${center}</div><div class="end">${left}</div></header>${studentRow}`;
 }
 
+/** عدّاد عربي سليم: واحد/اثنان/٣–١٠ جمع قلة/١١+ تمييز مفرد منصوب */
+function arCount(n: number, one: string, two: string, few: string, many: string, num: (x: number) => string) {
+  if (n === 1) return `${one} واحد`;
+  if (n === 2) return two;
+  return `(${num(n)}) ${n <= 10 ? few : many}`;
+}
+
+/** عبارة ما يتركه الطالب، بأسلوب الأوراق العراقية */
+export function pickNotes(exam: RenderExam, lang: "ar" | "en", n: (x: number) => string) {
+  const total = exam.sections.length;
+  const take = exam.sectionsToAnswer && exam.sectionsToAnswer >= 1 && exam.sectionsToAnswer < total ? exam.sectionsToAnswer : null;
+  const examNote = take === null ? "" : lang === "ar"
+    ? `ملاحظة: أجب عن ${arCount(take, "سؤال", "سؤالين", "أسئلة", "سؤالاً", n)} فقط من الأسئلة الآتية${exam.firstRequired !== false ? "، والسؤال الأول إجباري" : ""}.`
+    : `Note: answer only ${take} of the following ${total} questions${exam.firstRequired !== false ? "; question 1 is compulsory" : ""}.`;
+  const sectionNote = (count: number | null | undefined, branches: number) => {
+    if (!count || count < 1 || count >= branches) return "";
+    return lang === "ar" ? `أجب عن ${arCount(count, "فرع", "فرعين", "فروع", "فرعاً", n)} فقط مما يأتي:` : `Answer only ${count} of the following:`;
+  };
+  return { examNote, sectionNote };
+}
+
 const LETTERS = { ar: ["أ", "ب", "ج", "د", "هـ", "و"], en: ["a", "b", "c", "d", "e", "f"] };
 
 export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: Variant, opts: { forPdf?: boolean } = {}): string {
@@ -132,6 +157,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
   const ar = lang === "ar";
   const n = (x: number) => digits(x, ar);
   const marks = ar ? "درجة" : "marks";
+  const notes = pickNotes(exam, lang, n);
   const body = exam.sections.map((s, i) => {
     const items = s.branches.map((b, j) => {
       const opts = variant !== "ANSWER_KEY" && b.options?.length ? `<div class="opts">${b.options.map((o, k) => `<span>${LETTERS[lang][k]}- ${richText(o)}</span>`).join("")}</div>` : "";
@@ -139,7 +165,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
       const space = variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length ? `<div class="space">${'<div class="rule"></div>'.repeat(tpl.answerLines)}</div>` : "";
       return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${opts}${ans}${space}</li>`;
     }).join("");
-    return `<section><h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2><ol>${items}</ol></section>`;
+    return `<section><h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}<ol>${items}</ol></section>`;
   }).join("");
   const footer = variant === "ANSWER_KEY" || !tpl.footerNote ? "" : `<p class="note">${richText(tpl.footerNote)}</p>`;
   const m = tpl.margins;
@@ -185,8 +211,10 @@ li { margin: 0.8mm 0; break-inside: avoid; }
 .ans { padding-inline-start: 7mm; font-weight: 700; }
 .space { padding-inline-start: 7mm; }
 .rule { border-bottom: 1px dotted #777; height: ${(tpl.fontSizePt * tpl.lineSpacing * 1.25).toFixed(1)}pt; }
+.exnote { margin: 3mm 0 0; font-weight: 700; text-align: center; border: 1px solid #000; padding: 1mm 2mm; }
+.pick { font-weight: 700; padding-inline-start: 5mm; font-size: 0.95em; }
 .note { text-align: center; font-weight: 700; margin-top: 8mm; }
-</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${body}</main>${footer}</div></body></html>`;
+</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}</main>${footer}</div></body></html>`;
 }
 
 export const DEFAULT_TEMPLATE: RenderTemplate = {

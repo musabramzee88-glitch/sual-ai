@@ -24,6 +24,11 @@ const ar = {
   bookKinds: { TEXTBOOK: "كتاب الطالب", EXERCISES: "كتاب التمارين", ACTIVITY: "كتاب النشاط" } as Record<string, string>,
   qt: qtLabels("ar"),
   editor: {
+    optional: {
+      title: "ما يتركه الطالب", hint: "يجيب الطالب عن بعض الأسئلة ويترك الباقي (مثلاً ٦ أسئلة يجيب عن ٥). الدرجة الكلية تُحسب لما يُجاب عنه فقط، وتظهر ملاحظة في الورقة. أعد «توزيع الدرجات» بعد التغيير ليتساوى توزيعها.",
+      answers: "يجيب الطالب عن", ofN: "من أصل {n}", all: "كل الأسئلة", firstRequired: "السؤال الأول إجباري", save: "حفظ",
+      branches: "يجيب عن", ofBranches: "من أصل {n}", allBranches: "كل الفروع",
+    },
     review: "راجع الأسئلة", page: "ص", answer: "الإجابة", showAnswers: "إظهار الإجابات", edit: "تعديل", save: "حفظ", cancel: "إلغاء",
     regenerate: "سؤال بديل", undo: "تراجع", del: "حذف", confirmDel: "حذف هذا السؤال؟", prompt: "نص السؤال", options: "الخيارات (خيار في كل سطر)",
     print: "الطباعة وتحميل PDF", printKey: "طباعة الإجابات النموذجية", deleteExam: "حذف الامتحان", confirmDeleteExam: "حذف الامتحان كله؟",
@@ -52,7 +57,7 @@ const ar = {
     TOO_MANY_QUESTIONS: "الحد الأقصى 40 سؤالاً.", DUPLICATE_SECTION: "لا تكرر نوع السؤال في قسمين.",
     SUBSCRIPTION_REQUIRED: "يتطلب اشتراكاً فعالاً.", SUBSCRIPTION_EXPIRED: "انتهى اشتراكك.", NOTHING_TO_UNDO: "لا يوجد تغيير للتراجع عنه.",
     ANSWER_NOT_IN_OPTIONS: "الإجابة يجب أن تطابق أحد الخيارات.", GENERIC: "حدث خطأ. حاول مرة أخرى.",
-    TOTAL_TOO_SMALL: "الدرجة الكلية صغيرة جداً لعدد الفروع.", BAD_ORDER: "تغيّر الامتحان، حدّث الصفحة.", SOURCE_MISSING: "مصدر الامتحان غير متاح.",
+    BAD_COUNT: "العدد غير صالح: يجب أن يُترك سؤال واحد على الأقل ويُجاب عن واحد على الأقل.", TOTAL_TOO_SMALL: "الدرجة الكلية صغيرة جداً لعدد الفروع.", BAD_ORDER: "تغيّر الامتحان، حدّث الصفحة.", SOURCE_MISSING: "مصدر الامتحان غير متاح.",
   } as Record<string, string>,
 };
 
@@ -80,6 +85,11 @@ const en: ExamDict = {
   bookKinds: { TEXTBOOK: "Textbook", EXERCISES: "Exercises book", ACTIVITY: "Activity book" },
   qt: qtLabels("en"),
   editor: {
+    optional: {
+      title: "What the student may leave", hint: "The student answers some questions and leaves the rest (e.g. 6 questions, answer 5). Total marks count only what is answered, and a note appears on the paper. Re-run “Distribute marks” after changing this.",
+      answers: "Student answers", ofN: "of {n}", all: "All questions", firstRequired: "Question 1 is compulsory", save: "Save",
+      branches: "Answer", ofBranches: "of {n}", allBranches: "All items",
+    },
     review: "Review the questions", page: "p.", answer: "Answer", showAnswers: "Show answers", edit: "Edit", save: "Save", cancel: "Cancel",
     regenerate: "Replace", undo: "Undo", del: "Delete", confirmDel: "Delete this question?", prompt: "Question", options: "Options (one per line)",
     print: "Print / PDF", printKey: "Print answer key", deleteExam: "Delete exam", confirmDeleteExam: "Delete the whole exam?",
@@ -108,7 +118,7 @@ const en: ExamDict = {
     TOO_MANY_QUESTIONS: "At most 40 questions.", DUPLICATE_SECTION: "Do not repeat a question type in two sections.",
     SUBSCRIPTION_REQUIRED: "An active subscription is required.", SUBSCRIPTION_EXPIRED: "Your subscription has expired.", NOTHING_TO_UNDO: "Nothing to undo.",
     ANSWER_NOT_IN_OPTIONS: "The answer must match one of the options.", GENERIC: "Something went wrong. Try again.",
-    TOTAL_TOO_SMALL: "The total is too small for the number of items.", BAD_ORDER: "The exam changed; refresh the page.", SOURCE_MISSING: "The exam source is not available.",
+    BAD_COUNT: "Invalid number: at least one must be left and at least one answered.", TOTAL_TOO_SMALL: "The total is too small for the number of items.", BAD_ORDER: "The exam changed; refresh the page.", SOURCE_MISSING: "The exam source is not available.",
   },
 };
 
