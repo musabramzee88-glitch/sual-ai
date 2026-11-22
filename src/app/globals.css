@@ -30,6 +30,16 @@
   }
 }
 
+/* يجعل عناصر المتصفح الأصلية (قوائم، حقول، تمرير) تتبع السمة فلا يظهر خط فاتح على خلفية بيضاء */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; }
+}
+input, select, textarea { color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
+select, select option, select optgroup { background-color: var(--surface); color: var(--ink); }
+input:-webkit-autofill { -webkit-text-fill-color: var(--ink); box-shadow: 0 0 0 1000px var(--surface) inset; }
+
 @theme inline {
   --color-paper: var(--paper);
   --color-surface: var(--surface);
