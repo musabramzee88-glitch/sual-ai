@@ -1,4 +1,5 @@
 import "server-only";
+import { existsSync } from "node:fs";
 import { chromium, type Browser } from "playwright-core";
 import { env } from "../env";
 
@@ -11,22 +12,52 @@ let queue: Promise<unknown> = Promise.resolve();
 
 export class PdfUnavailable extends Error {}
 
+/** مواضع Edge/Chrome/Chromium الشائعة (ويندوز ثم ماك ثم لينكس) إن وُجدت فعلاً على القرص */
+function installedBrowsers(): string[] {
+  const e = process.env;
+  const win = [
+    `${e["ProgramFiles(x86)"]}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${e.ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${e.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${e["ProgramFiles(x86)"]}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${e.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+  ];
+  const other = [
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome", "/usr/bin/microsoft-edge", "/usr/bin/chromium", "/usr/bin/chromium-browser",
+  ];
+  return [...win, ...other].filter((p) => !p.includes("undefined") && existsSync(p));
+}
+
 async function launch(): Promise<Browser> {
   const args = ["--no-sandbox", "--disable-gpu", "--font-render-hinting=none"];
-  if (env.CHROMIUM_PATH) return chromium.launch({ executablePath: env.CHROMIUM_PATH, args });
-  let last: unknown;
-  for (const channel of ["msedge", "chrome"]) {
+  const tried: string[] = [];
+  const attempt = async (label: string, opts: Parameters<typeof chromium.launch>[0]) => {
     try {
-      return await chromium.launch({ channel, args });
+      return await chromium.launch({ ...opts, args });
     } catch (e) {
-      last = e;
+      tried.push(`${label}: ${(e as Error).message.split("\n")[0]}`);
+      return null;
     }
+  };
+  // مسار صريح من .env يتقدّم؛ إن كان خاطئاً يُقال ذلك صراحة بدل خطأ عام
+  if (env.CHROMIUM_PATH) {
+    if (!existsSync(env.CHROMIUM_PATH)) throw new PdfUnavailable(`CHROMIUM_PATH points to a missing file: ${env.CHROMIUM_PATH}`);
+    const b = await attempt("CHROMIUM_PATH", { executablePath: env.CHROMIUM_PATH });
+    if (b) return b;
   }
-  try {
-    return await chromium.launch({ args }); // متصفح Playwright إن كان مثبّتاً
-  } catch {
-    throw new PdfUnavailable(`no Chromium found (${(last as Error)?.message?.split("\n")[0] ?? ""}); set CHROMIUM_PATH`);
+  for (const exe of installedBrowsers()) {
+    const b = await attempt(exe, { executablePath: exe });
+    if (b) return b;
   }
+  for (const channel of ["msedge", "chrome"] as const) {
+    const b = await attempt(channel, { channel });
+    if (b) return b;
+  }
+  const b = await attempt("playwright", {}); // متصفح Playwright إن كان مثبّتاً
+  if (b) return b;
+  console.error(`[pdf] could not start a browser. Tried:\n  ${tried.join("\n  ")}`);
+  throw new PdfUnavailable(`no usable Chromium/Edge/Chrome (${tried.length} attempts); set CHROMIUM_PATH`);
 }
 
 async function getBrowser() {

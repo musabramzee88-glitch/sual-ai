@@ -29,7 +29,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const lang = input.exam.language === "EN" ? "en" : "ar";
   return (
     <ExamSheet
-      examId={id} html={html} pageSize={input.renderTemplate.pageSize} orientation={input.renderTemplate.orientation} variant={v as "questions" | "answers" | "key"} t={templateDicts[locale]}
+      examId={id} defaultName={`${input.exam.title}${v === "key" ? (lang === "ar" ? " - الإجابات" : " - key") : v === "answers" ? (lang === "ar" ? " - مع الإجابات" : " - with answers") : ""}`} html={html} pageSize={input.renderTemplate.pageSize} orientation={input.renderTemplate.orientation} variant={v as "questions" | "answers" | "key"} t={templateDicts[locale]}
       templates={templates} selectedTemplateId={input.selectedTemplateId ?? input.template.id}
       fields={HEADER_KEYS.filter((k) => k !== "student" && k !== "section").map((k) => ({ key: k, label: LABELS[lang][k], placeholder: input.renderExam.values[k] ?? input.renderTemplate.values[k] ?? "" }))}
       values={input.headerValues}

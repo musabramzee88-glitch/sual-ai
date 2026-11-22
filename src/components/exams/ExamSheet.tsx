@@ -1,24 +1,35 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TemplatesDict } from "@/lib/i18n/templates";
 import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
 
 type Props = {
-  examId: string; html: string; variant: "questions" | "answers" | "key"; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
+  examId: string; defaultName: string; html: string; variant: "questions" | "answers" | "key"; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   templates: { id: string; name: string; preset: boolean; isDefault: boolean }[]; selectedTemplateId: string;
   fields: { key: string; label: string; placeholder: string }[]; values: Record<string, string>;
 };
 
 /** شريط ورقة الامتحان: النسخة، القالب، بيانات الترويسة، طباعة من الإطار، تنزيل PDF */
-export function ExamSheet({ examId, html, variant, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
+export function ExamSheet({ examId, defaultName, html, variant, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
   const router = useRouter();
   const frame = useRef<SheetFrameHandle>(null);
   const [tplId, setTplId] = useState(selectedTemplateId);
   const [vals, setVals] = useState<Record<string, string>>(values);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<"" | "save" | "pdf">("");
+  const [naming, setNaming] = useState(false);
+  const [fileName, setFileName] = useState(defaultName);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!naming) return;
+    nameInput.current?.focus();
+    nameInput.current?.select();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setNaming(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [naming]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const s = t.sheet;
 
@@ -36,8 +47,9 @@ export function ExamSheet({ examId, html, variant, t, pageSize, orientation, tem
   }
 
   async function pdf() {
+    setNaming(false);
     setBusy("pdf"); setMsg(null);
-    const r = await fetch(`/api/v1/exams/${examId}/export?variant=${variant}`).catch(() => null);
+    const r = await fetch(`/api/v1/exams/${examId}/export?variant=${variant}&name=${encodeURIComponent(fileName.trim())}`).catch(() => null);
     if (!r?.ok) {
       setBusy("");
       const code = r?.status === 429 ? "RATE_LIMITED" : (await r?.json().catch(() => null))?.error?.code;
@@ -67,7 +79,7 @@ export function ExamSheet({ examId, html, variant, t, pageSize, orientation, tem
         {tab("questions", s.questions)}{tab("answers", s.answers)}{tab("key", s.key)}
         <span className="flex-1" />
         <button onClick={() => frame.current?.print()} className="rounded-lg border border-line px-4 py-2 font-semibold">{s.print}</button>
-        <button onClick={pdf} disabled={busy !== ""} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{busy === "pdf" ? s.pdfBusy : s.pdf}</button>
+        <button onClick={() => { setFileName(defaultName); setNaming(true); }} disabled={busy !== ""} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-60 dark:text-paper">{busy === "pdf" ? s.pdfBusy : s.pdf}</button>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line p-3">
@@ -96,6 +108,23 @@ export function ExamSheet({ examId, html, variant, t, pageSize, orientation, tem
         </div>
       )}
 
+
+      {naming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setNaming(false); }}>
+          <form role="dialog" aria-modal="true" aria-labelledby="pdf-name-title" className="w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); if (fileName.trim()) pdf(); }}>
+            <h2 id="pdf-name-title" className="font-bold">{s.pdfName}</h2>
+            <p className="text-xs text-muted">{s.pdfNameHint}</p>
+            <div className="flex items-center gap-2">
+              <input ref={nameInput} value={fileName} maxLength={100} dir="auto" onChange={(e) => setFileName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-line bg-transparent px-3 py-2" aria-label={s.pdfName} />
+              <span dir="ltr" className="text-sm text-muted" style={{ unicodeBidi: "isolate" }}>.pdf</span>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setNaming(false)} className="rounded-lg border border-line px-4 py-2">{s.dlCancel}</button>
+              <button type="submit" disabled={!fileName.trim()} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white disabled:opacity-50 dark:text-paper">{s.download}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {msg && <p role="status" className={`text-sm ${msg.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>{msg.text}</p>}
 
       <p className="text-xs text-muted">{s.preview}</p>

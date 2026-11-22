@@ -7,12 +7,13 @@ import { notFound } from "@/server/exams/route";
 import { examRenderInput } from "@/server/exams/templates";
 import { htmlToPdf, PdfUnavailable } from "@/server/exams/pdf";
 import { renderExamHtml } from "@/lib/exam-render";
+import { contentDisposition, safeFileName } from "@/lib/file-name";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const VARIANT = { questions: "QUESTIONS_ONLY", answers: "WITH_ANSWERS", key: "ANSWER_KEY" } as const;
-const q = z.object({ variant: z.enum(["questions", "answers", "key"]).default("questions"), template: z.string().min(5).max(40).optional() });
+const q = z.object({ variant: z.enum(["questions", "answers", "key"]).default("questions"), template: z.string().min(5).max(40).optional(), name: z.string().max(200).optional() });
 
 /** تنزيل ورقة الامتحان PDF (الأسئلة، أو مع الإجابات، أو الإجابات النموذجية) بالقالب المحفوظ للامتحان */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -32,12 +33,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const pdf = await htmlToPdf(html, { pageNumbers: input.template.showPageNumbers, lang });
     await db.examExport.update({ where: { id: row.id }, data: { status: "SUCCEEDED", completedAt: new Date() } });
-    const base = `exam-${input.exam.id.slice(-6)}${p.data.variant === "questions" ? "" : `-${p.data.variant}`}.pdf`;
-    const pretty = `${input.exam.title.replace(/[\\/:*?"<>|\r\n]+/g, " ").trim().slice(0, 80) || "exam"}${p.data.variant === "key" ? (lang === "ar" ? " - الإجابات" : " - key") : p.data.variant === "answers" ? (lang === "ar" ? " - مع الإجابات" : " - with answers") : ""}.pdf`;
+    const ascii = `exam-${input.exam.id.slice(-6)}${p.data.variant === "questions" ? "" : `-${p.data.variant}`}.pdf`;
+    // الاسم الذي كتبه المدرس، وإلا عنوان الامتحان (+ نوع النسخة)
+    const suffix = p.data.variant === "key" ? (lang === "ar" ? " - الإجابات" : " - key") : p.data.variant === "answers" ? (lang === "ar" ? " - مع الإجابات" : " - with answers") : "";
+    const pretty = safeFileName(p.data.name, `${input.exam.title}${suffix}`);
     return new Response(new Uint8Array(pdf), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${base}"; filename*=UTF-8''${encodeURIComponent(pretty)}`,
+        "content-disposition": contentDisposition(pretty, ascii),
         "cache-control": "no-store",
       },
     });

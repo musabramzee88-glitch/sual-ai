@@ -4,7 +4,7 @@ import type { Locale } from "./dictionaries";
 const ar = {
   sheet: {
     title: "ورقة الامتحان", back: "العودة للتحرير", questions: "الأسئلة", answers: "الأسئلة مع الإجابات", key: "الإجابات النموذجية",
-    print: "طباعة", pdf: "تحميل PDF", pdfBusy: "جارٍ إنشاء PDF…", template: "القالب", manage: "إدارة القوالب",
+    print: "طباعة", pdf: "تحميل PDF", pdfBusy: "جارٍ إنشاء PDF…", pdfName: "اسم الملف", pdfNameHint: "يُحفظ بصيغة PDF. اكتب الاسم الذي تريده.", download: "تنزيل", dlCancel: "إلغاء", template: "القالب", manage: "إدارة القوالب",
     header: "بيانات الترويسة لهذا الامتحان", headerHint: "ما تكتبه هنا يخص هذا الامتحان ويتقدّم على قيم القالب. اتركه فارغاً لاستعمال قيمة القالب أو فراغ للكتابة اليدوية.",
     save: "حفظ وتحديث المعاينة", saved: "تم الحفظ", preview: "معاينة مطابقة للطباعة وPDF",
   },
@@ -34,7 +34,7 @@ type TemplatesDict = typeof ar;
 const en: TemplatesDict = {
   sheet: {
     title: "Exam sheet", back: "Back to editing", questions: "Questions", answers: "Questions with answers", key: "Answer key",
-    print: "Print", pdf: "Download PDF", pdfBusy: "Creating PDF…", template: "Template", manage: "Manage templates",
+    print: "Print", pdf: "Download PDF", pdfBusy: "Creating PDF…", pdfName: "File name", pdfNameHint: "Saved as a PDF. Type the name you want.", download: "Download", dlCancel: "Cancel", template: "Template", manage: "Manage templates",
     header: "Header details for this exam", headerHint: "Values here apply to this exam only and override the template. Leave empty to use the template value or a blank to fill by hand.",
     save: "Save and refresh preview", saved: "Saved", preview: "Preview identical to print and PDF",
   },
