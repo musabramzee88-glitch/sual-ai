@@ -263,6 +263,7 @@ export async function duplicateQuestion(userId: string, questionId: string) {
       data: {
         examModelId: q.examModelId, parentId: q.parentId, sortOrder: q.sortOrder + 1, type: q.type, prompt: q.prompt, options: q.options ?? Prisma.DbNull, answer: q.answer,
         marks: q.marks, difficulty: q.difficulty, cognitiveLevel: q.cognitiveLevel, chapterId: q.chapterId, sourcePages: q.sourcePages,
+        imageAssetId: q.imageAssetId, table: q.table ?? Prisma.DbNull,
       },
     });
     await tx.examQuestionRevision.create({ data: { questionId: c.id, version: 1, reason: "CREATE", snapshot: snapshot(c), editedById: userId } });
@@ -293,6 +294,7 @@ export async function duplicateSection(userId: string, sectionId: string) {
         data: {
           examModelId: s.examModelId, parentId: p.id, sortOrder: k.sortOrder, type: k.type, prompt: k.prompt, options: k.options ?? Prisma.DbNull, answer: k.answer,
           marks: k.marks, difficulty: k.difficulty, cognitiveLevel: k.cognitiveLevel, chapterId: k.chapterId, sourcePages: k.sourcePages,
+          imageAssetId: k.imageAssetId, table: k.table ?? Prisma.DbNull,
         },
       });
       await tx.examQuestionRevision.create({ data: { questionId: c.id, version: 1, reason: "CREATE", snapshot: snapshot(c), editedById: userId } });
@@ -322,7 +324,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
     if (!nq) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
       await tx.examQuestionRevision.create({ data: { questionId: q.id, version: q.version + 1, reason: "REGENERATE", snapshot: snapshot(q), editedById: userId } });
-      await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: nq.prompt, options: nq.options ?? Prisma.DbNull, answer: nq.answer, sourcePages: nq.sourcePages, difficulty: nq.difficulty, cognitiveLevel: nq.cognitiveLevel } });
+      await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: nq.prompt, imageAssetId: null, table: Prisma.DbNull, options: nq.options ?? Prisma.DbNull, answer: nq.answer, sourcePages: nq.sourcePages, difficulty: nq.difficulty, cognitiveLevel: nq.cognitiveLevel } });
     });
     return { ok: true as const };
   } catch (e) {

@@ -49,7 +49,9 @@ export type RenderTemplate = {
   signLine?: boolean;
 };
 
-export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number };
+export type RenderTable = { header: boolean; cells: string[][] };
+/** image: data URI لصورة السؤال؛ table: جدول داخل السؤال (خلايا فارغة يملؤها الطالب) */
+export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number; image?: string | null; table?: RenderTable | null };
 /** answerCount: عدد الفروع التي يجيب عنها الطالب (null = كلها) */
 export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; /** نوع السؤال (TRUE_FALSE يظهر في ورقة الإجابة بدائرتي صح/خطأ) */ type?: string | null; branches: RenderQuestion[] };
 export type RenderExam = {
@@ -139,6 +141,15 @@ function arCount(n: number, one: string, two: string, few: string, many: string,
   return `(${num(n)}) ${n <= 10 ? few : many}`;
 }
 
+/** صورة وجدول السؤال (في نسخة الأسئلة ومع الإجابات؛ المفتاح لا يكرّرهما) */
+function media(b: RenderQuestion, variant: Variant) {
+  if (variant === "ANSWER_KEY" || variant === "ANSWER_SHEET") return "";
+  const img = b.image && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(b.image) ? `<div class="qimg"><img src="${b.image}" alt=""></div>` : "";
+  const t = b.table && b.table.cells.length
+    ? `<table class="qt">${b.table.cells.map((r, i) => `<tr>${r.map((c) => (b.table!.header && i === 0 ? `<th>${richText(c)}</th>` : `<td>${richText(c)}</td>`)).join("")}</tr>`).join("")}</table>` : "";
+  return img + t;
+}
+
 /** إجابة الاختيار من متعدد تبدأ بحرف الخيار الصحيح («ب- خمسة»)، وغيرها كما هي */
 function answerText(b: RenderQuestion, lang: "ar" | "en") {
   const i = b.options?.findIndex((o) => o === b.answer) ?? -1;
@@ -196,10 +207,10 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
       const opts = variant !== "ANSWER_KEY" && b.options?.length ? `<div class="opts">${b.options.map((o, k) => `<span>${LETTERS[lang][k]}- ${richText(o)}</span>`).join("")}</div>` : "";
       const ans = variant !== "QUESTIONS_ONLY" ? `<div class="ans">${variant === "WITH_ANSWERS" ? `<span class="lbl">${ar ? "الإجابة" : "Answer"}:</span> ` : ""}${answerText(b, lang)}</div>` : "";
       const space = variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length ? `<div class="space">${'<div class="rule"></div>'.repeat(tpl.answerLines)}</div>` : "";
-      return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${opts}${ans}${space}</li>`;
+      return `<li><div class="item"><span class="num">${ar ? `${n(j + 1)}-` : `${j + 1}.`}</span><div class="txt">${richText(b.prompt)}</div></div>${media(b, variant)}${opts}${ans}${space}</li>`;
     });
     // فروع قصيرة جداً بلا خيارات ولا فراغ إجابة (تعاريف، مصطلحات): تُرصّ أفقياً بدل سطر لكل فرع
-    const inline = variant === "QUESTIONS_ONLY" && tpl.answerLines === 0 && s.branches.length > 1 && s.branches.every((b) => !b.options?.length && b.prompt.length <= INLINE_MAX && !b.prompt.includes("\n"));
+    const inline = variant === "QUESTIONS_ONLY" && tpl.answerLines === 0 && s.branches.length > 1 && s.branches.every((b) => !b.options?.length && !b.image && !b.table && b.prompt.length <= INLINE_MAX && !b.prompt.includes("\n"));
     const last = i === exam.sections.length - 1 && footer !== "" && rows.length > 0;
     const cls = inline ? ' class="inline"' : "";
     const head = `<h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}`;
@@ -252,6 +263,11 @@ li:last-child { margin-bottom: 0; }
 .item { display: flex; gap: 0.5em; }
 .num { flex: none; min-width: 1.9em; font-weight: 700; }
 .txt { flex: 1; }
+.qimg { margin: 0.5em 0 0; padding-inline-start: 2.4em; }
+.qimg img { max-width: 60%; max-height: 60mm; object-fit: contain; }
+.qt { border-collapse: collapse; margin: 0.55em 0 0.2em; margin-inline-start: 2.4em; max-width: calc(100% - 2.4em); break-inside: avoid; }
+.qt td, .qt th { border: 1px solid #000; padding: 0.2em 0.8em; min-width: 5.5em; height: 1.9em; text-align: center; line-height: 1.5; }
+.qt th { font-weight: 700; background: #eee; }
 .opts { display: flex; flex-wrap: wrap; gap: 0.35em 2.6em; margin-top: 0.4em; padding-inline-start: 2.4em; }
 .opts span { break-inside: avoid; }
 .ans { margin-top: 0.35em; padding-inline-start: 2.4em; font-weight: 700; }

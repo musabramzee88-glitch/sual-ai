@@ -1,15 +1,15 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "../db";
-import { env } from "../env";
 import { modelDisplay, modelOf, type ModelLabel } from "@/lib/exam-models";
 import { DEFAULT_TEMPLATE, FONTS, HEADER_KEYS, type HeaderKey, type Layout, type RenderExam, type RenderTemplate } from "@/lib/exam-render";
 import { getExam } from "./service";
+import { imageDataUris } from "./media";
 import { sniff } from "./samples";
+import { assetPath, assetsDir } from "./assets";
 
 /**
  * قوالب ورقة الامتحان: أربعة قوالب جاهزة في الكود (معرّفها preset:NAME) وقوالب المدرس في ExamTemplate.
@@ -126,13 +126,6 @@ export async function deleteTemplate(userId: string, id: string) {
 }
 
 // ── الشعار ─────────────────────────────────────────
-const assetsDir = () => path.resolve(env.STORAGE_DIR, "assets");
-function assetPath(storageKey: string) {
-  const p = path.resolve(assetsDir(), storageKey);
-  if (!p.startsWith(assetsDir() + path.sep)) throw new Error("bad asset path");
-  return p;
-}
-
 export async function uploadLogo(userId: string, bytes: Uint8Array) {
   if (bytes.length > MAX_LOGO_BYTES) return fail("FILE_TOO_LARGE");
   const mime = sniff(bytes);
@@ -140,7 +133,7 @@ export async function uploadLogo(userId: string, bytes: Uint8Array) {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const existing = await db.templateAsset.findFirst({ where: { ownerId: userId, kind: "LOGO", sha256 }, select: { id: true } });
   if (existing) return { ok: true as const, id: existing.id };
-  if ((await db.templateAsset.count({ where: { ownerId: userId } })) >= 20) return fail("TOO_MANY_LOGOS");
+  if ((await db.templateAsset.count({ where: { ownerId: userId, kind: "LOGO" } })) >= 20) return fail("TOO_MANY_LOGOS");
   const storageKey = `${randomBytes(16).toString("hex")}.${mime === "image/png" ? "png" : "jpg"}`;
   await mkdir(assetsDir(), { recursive: true });
   await writeFile(assetPath(storageKey), bytes);
@@ -198,6 +191,14 @@ export async function setExamHeader(userId: string, examId: string, d: z.infer<t
   return { ok: true as const };
 }
 
+/** جدول مخزَّن → جدول العارض (يتجاهل أي شكل غير سليم) */
+export function asTable(v: unknown): { header: boolean; cells: string[][] } | null {
+  const t = v as { header?: unknown; cells?: unknown } | null;
+  if (!t || !Array.isArray(t.cells) || t.cells.length === 0) return null;
+  const cells = t.cells.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? "")) : []));
+  return cells.every((r) => r.length > 0) ? { header: t.header === true, cells } : null;
+}
+
 type HeaderConfig = { preset?: string | null; values?: Partial<Record<HeaderKey, string>> };
 
 const KIND_AR: Record<string, string> = { QUIZ: "اختبار قصير", MONTHLY: "الامتحان الشهري", MIDTERM: "امتحان نصف السنة", FINAL: "امتحان نهاية السنة", MINISTERIAL_STYLE: "امتحان بأسلوب الوزاري" };
@@ -243,6 +244,7 @@ export async function examRenderInput(userId: string, examId: string, opts: { te
     ...(exam.academicYearLabel ? { yearTerm: exam.academicYearLabel } : {}),
     model: modelDisplay(opts.model ?? "A", en ? "EN" : "AR"),
   };
+  const images = await imageDataUris(userId, exam.sections.flatMap((s) => s.branches.map((b) => b.imageAssetId).filter((x): x is string => !!x)));
   const baseExam: RenderExam = {
     lang: exam.language === "EN" ? "EN" : "AR",
     values: { ...derived, ...(cfg.values ?? {}) },
@@ -250,7 +252,7 @@ export async function examRenderInput(userId: string, examId: string, opts: { te
     sectionsToAnswer: exam.sectionsToAnswer, firstRequired: exam.firstRequired,
     sections: exam.sections.map((s) => ({
       instruction: s.instruction ?? s.prompt, marks: s.marks, answerCount: s.answerCount, type: s.type,
-      branches: s.branches.map((b) => ({ prompt: b.prompt, options: Array.isArray(b.options) ? (b.options as string[]) : null, answer: b.answer ?? "", marks: b.marks })),
+      branches: s.branches.map((b) => ({ prompt: b.prompt, options: Array.isArray(b.options) ? (b.options as string[]) : null, answer: b.answer ?? "", marks: b.marks, image: b.imageAssetId ? images[b.imageAssetId] ?? null : null, table: asTable(b.table) })),
     })),
   };
   // نموذج محدّد (A/B/C/D): خلط مشتق من الأصل، ويظهر اسمه في الترويسة ولو كان حقل النموذج مخفياً

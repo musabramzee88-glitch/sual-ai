@@ -160,3 +160,29 @@ describe("answer sheet and model answer letters", () => {
     expect(renderExamHtml(e3, DEFAULT_TEMPLATE, "WITH_ANSWERS")).toContain("الإجابة:</span> ب- ثاني");
   });
 });
+
+describe("images and tables inside questions", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const mk = (b: Partial<RenderExam["sections"][0]["branches"][0]>): RenderExam => ({ lang: "AR", values: {}, sections: [{ instruction: "أجب:", marks: 5, branches: [{ prompt: "قصير", options: null, answer: "ج", marks: 5, ...b }, { prompt: "آخر", options: null, answer: "ج", marks: 0 }] }] });
+  it("shows the image and table under the question (questions and with-answers), not in the key", () => {
+    const e = mk({ image: PNG, table: { header: true, cells: [["الكمية", "القيمة"], ["", ""]] } });
+    const q = renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY");
+    expect(q).toContain(`<img src="${PNG}"`);
+    expect(q).toContain("<th>الكمية</th>");
+    expect(q).toContain("<td></td>");
+    expect(renderExamHtml(e, DEFAULT_TEMPLATE, "WITH_ANSWERS")).toContain('class="qimg"');
+    expect(renderExamHtml(e, DEFAULT_TEMPLATE, "ANSWER_KEY")).not.toContain('class="qimg"');
+    expect(renderExamHtml(e, DEFAULT_TEMPLATE, "ANSWER_SHEET")).not.toContain('class="qt"');
+  });
+  it("never injects HTML through table cells or a forged image source", () => {
+    const e = mk({ image: 'javascript:alert(1)" onerror="x', table: { header: false, cells: [["<script>alert(1)</script>", "<img src=x onerror=1>"]] } });
+    const html = renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY");
+    expect(html).not.toMatch(/<script|<img src=x|javascript:/);
+    expect(html).not.toContain('class="qimg"'); // مصدر غير data:image/png|jpeg يُهمَل
+    expect(html).toContain("&lt;script&gt;");
+  });
+  it("a branch with an image or table is not laid out horizontally", () => {
+    expect(renderExamHtml(mk({}), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('<ol class="inline">');
+    expect(renderExamHtml(mk({ table: { header: false, cells: [["a"]] } }), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).not.toContain('<ol class="inline">');
+  });
+});

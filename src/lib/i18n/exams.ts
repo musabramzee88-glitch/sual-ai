@@ -40,6 +40,7 @@ const ar = {
     marksTitle: "توزيع الدرجات", total: "الدرجة الكلية", smart: "ذكي (حسب النوع والصعوبة)", equal: "متساوٍ بين الأسئلة الرئيسة", distribute: "وزّع الدرجات", distributed: "وُزّعت الدرجات",
     tooSmall: "الدرجة الكلية أصغر من أن تعطي كل فرع نصف درجة (الحد الأدنى {n}).",
     sectionMarks: "درجة السؤال", apply: "تطبيق", editInstruction: "تعديل نص السؤال", up: "↑", down: "↓", moveUp: "نقل للأعلى", moveDown: "نقل للأسفل",
+    media: { addImage: "صورة", changeImage: "تغيير الصورة", removeImage: "حذف الصورة", imgHint: "PNG أو JPEG حتى 2MB", addTable: "جدول", editTable: "تعديل الجدول", removeTable: "حذف الجدول", rows: "الصفوف", cols: "الأعمدة", headerRow: "الصف الأول عناوين", saveTable: "حفظ الجدول" },
     duplicate: "نسخ", duplicateSection: "نسخ السؤال", status: { questions: "الفروع", remaining: "المتبقي حتى {t}: {n} درجة", over: "زيادة {n} درجة عن {t}", reached: "الدرجة مطابقة للهدف" },
     deleteSection: "حذف السؤال كاملاً", confirmDeleteSection: "حذف هذا السؤال بكل فروعه؟",
     addManual: "+ فرع أكتبه بنفسي", addAi: "+ فرع إضافي بالذكاء الاصطناعي", add: "إضافة",
@@ -58,7 +59,7 @@ const ar = {
     TOO_MANY_QUESTIONS: "الحد الأقصى 40 سؤالاً.", DUPLICATE_SECTION: "لا تكرر نوع السؤال في قسمين.",
     SUBSCRIPTION_REQUIRED: "يتطلب اشتراكاً فعالاً.", SUBSCRIPTION_EXPIRED: "انتهى اشتراكك.", NOTHING_TO_UNDO: "لا يوجد تغيير للتراجع عنه.",
     ANSWER_NOT_IN_OPTIONS: "الإجابة يجب أن تطابق أحد الخيارات.", GENERIC: "حدث خطأ. حاول مرة أخرى.",
-    TOO_MANY: "وصلت للحد الأقصى من الأسئلة في الامتحان.", BAD_COUNT: "العدد غير صالح: يجب أن يُترك سؤال واحد على الأقل ويُجاب عن واحد على الأقل.", TOTAL_TOO_SMALL: "الدرجة الكلية صغيرة جداً لعدد الفروع.", BAD_ORDER: "تغيّر الامتحان، حدّث الصفحة.", SOURCE_MISSING: "مصدر الامتحان غير متاح.",
+    FILE_TOO_LARGE: "الصورة أكبر من 2MB.", UNSUPPORTED_FILE: "الصورة يجب أن تكون PNG أو JPEG.", TOO_MANY_IMAGES: "وصلت للحد الأقصى من الصور (300).", TOO_MANY: "وصلت للحد الأقصى من الأسئلة في الامتحان.", BAD_COUNT: "العدد غير صالح: يجب أن يُترك سؤال واحد على الأقل ويُجاب عن واحد على الأقل.", TOTAL_TOO_SMALL: "الدرجة الكلية صغيرة جداً لعدد الفروع.", BAD_ORDER: "تغيّر الامتحان، حدّث الصفحة.", SOURCE_MISSING: "مصدر الامتحان غير متاح.",
   } as Record<string, string>,
 };
 
@@ -102,6 +103,7 @@ const en: ExamDict = {
     marksTitle: "Marks distribution", total: "Total marks", smart: "Smart (type and difficulty)", equal: "Equal main questions", distribute: "Distribute", distributed: "Marks distributed",
     tooSmall: "The total is too small to give every item half a mark (minimum {n}).",
     sectionMarks: "Question marks", apply: "Apply", editInstruction: "Edit question text", up: "↑", down: "↓", moveUp: "Move up", moveDown: "Move down",
+    media: { addImage: "Image", changeImage: "Change image", removeImage: "Remove image", imgHint: "PNG or JPEG up to 2MB", addTable: "Table", editTable: "Edit table", removeTable: "Remove table", rows: "Rows", cols: "Columns", headerRow: "First row is a header", saveTable: "Save table" },
     duplicate: "Duplicate", duplicateSection: "Duplicate question", status: { questions: "Items", remaining: "{n} marks left to reach {t}", over: "{n} marks over {t}", reached: "Marks match the target" },
     deleteSection: "Delete whole question", confirmDeleteSection: "Delete this question and all its items?",
     addManual: "+ Item I write", addAi: "+ AI item", add: "Add",
@@ -120,7 +122,7 @@ const en: ExamDict = {
     TOO_MANY_QUESTIONS: "At most 40 questions.", DUPLICATE_SECTION: "Do not repeat a question type in two sections.",
     SUBSCRIPTION_REQUIRED: "An active subscription is required.", SUBSCRIPTION_EXPIRED: "Your subscription has expired.", NOTHING_TO_UNDO: "Nothing to undo.",
     ANSWER_NOT_IN_OPTIONS: "The answer must match one of the options.", GENERIC: "Something went wrong. Try again.",
-    TOO_MANY: "You have reached the maximum number of questions in an exam.", BAD_COUNT: "Invalid number: at least one must be left and at least one answered.", TOTAL_TOO_SMALL: "The total is too small for the number of items.", BAD_ORDER: "The exam changed; refresh the page.", SOURCE_MISSING: "The exam source is not available.",
+    FILE_TOO_LARGE: "The image is larger than 2MB.", UNSUPPORTED_FILE: "The image must be PNG or JPEG.", TOO_MANY_IMAGES: "Image limit reached (300).", TOO_MANY: "You have reached the maximum number of questions in an exam.", BAD_COUNT: "Invalid number: at least one must be left and at least one answered.", TOTAL_TOO_SMALL: "The total is too small for the number of items.", BAD_ORDER: "The exam changed; refresh the page.", SOURCE_MISSING: "The exam source is not available.",
   },
 };
 

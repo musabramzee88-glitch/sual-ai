@@ -5,6 +5,7 @@ import { canUseExams } from "@/server/exams/access";
 import { getExam } from "@/server/exams/service";
 import { getLocale } from "@/lib/i18n/server";
 import { examDicts } from "@/lib/i18n/exams";
+import { asTable } from "@/server/exams/templates";
 import { ExamEditor, type EditorSection } from "@/components/exams/ExamEditor";
 import { GENERATABLE } from "@/server/exams/core";
 
@@ -22,7 +23,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const requested = (s.sections ?? []).reduce((n, x) => n + x.count, 0);
   const sections: EditorSection[] = exam.sections.map((p) => ({
     id: p.id, type: p.type ?? "ESSAY", instruction: p.instruction ?? p.prompt, marks: p.marks, answerCount: p.answerCount,
-    branches: p.branches.map((q) => ({ id: q.id, prompt: q.prompt, options: (q.options as string[] | null) ?? null, answer: q.answer ?? "", marks: q.marks, sourcePages: q.sourcePages, version: q.version })),
+    branches: p.branches.map((q) => ({ id: q.id, prompt: q.prompt, options: (q.options as string[] | null) ?? null, answer: q.answer ?? "", marks: q.marks, sourcePages: q.sourcePages, version: q.version, imageAssetId: q.imageAssetId, table: asTable(q.table) })),
   }));
   return (
     <div className="space-y-4">
