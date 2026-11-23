@@ -36,7 +36,10 @@ const schema = z.object({
   SMTP_REQUIRE_TLS: z.enum(["true", "false"]).default("true"),
   // SMS وبوابة الدفع — تُحدَّد في المرحلة 5
   SMS_PROVIDER: z.string().optional(),
-  PAYMENT_PROVIDER: z.string().optional(),
+  // بوابة الدفع بالبطاقة: sandbox = بوابة تجريبية محلية (لا دفع حقيقي، للاختبار فقط). فارغ = الدفع النقدي وحده
+  PAYMENT_PROVIDER: z.enum(["sandbox"]).optional(),
+  // سر توقيع إشعارات البوابة (32 حرفاً على الأقل)
+  PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
   // التخزين
   STORAGE_DIR: z.string().default("./storage"),
   // قراءة الكتب المصوّرة بـ OCR محلي (مكلفة على المعالج). false لتعطيلها.

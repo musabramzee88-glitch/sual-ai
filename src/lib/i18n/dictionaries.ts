@@ -104,6 +104,15 @@ const ar = {
     } as Record<string, string>,
   },
   subscribe: {
+    card: {
+      title: "الدفع بالبطاقة (Mastercard)", pay: "ادفع بالبطاقة", busy: "جارٍ التحويل لصفحة الدفع…", or: "أو الدفع نقداً",
+      testBanner: "وضع تجريبي: بوابة دفع محلية للاختبار، لا يُسحب أي مبلغ حقيقي.",
+      returnTitle: "نتيجة الدفع", ref: "رقم العملية", amount: "المبلغ", plan: "الباقة",
+      PENDING: "بانتظار تأكيد البوابة… تُحدَّث الصفحة تلقائياً.", INITIATED: "لم يكتمل الدفع بعد.", SUCCEEDED: "تم الدفع وتفعيل اشتراكك حتى", FAILED: "لم ينجح الدفع. لم يُسحب شيء، ويمكنك المحاولة مرة أخرى.", CANCELLED: "أُلغيت هذه العملية.", REFUNDED: "أُعيد المبلغ.",
+      notFound: "العملية غير موجودة.", toExams: "إلى امتحاناتي", retry: "محاولة أخرى",
+      sandboxTitle: "بوابة الدفع التجريبية", sandboxHint: "هذه الصفحة تحاكي صفحة البوابة الحقيقية. اختر النتيجة لتجربة التدفق كاملاً (يمر بالتحقق من التوقيع نفسه).", succeed: "محاكاة دفع ناجح", fail: "محاكاة دفع فاشل",
+      errors: { CARD_UNAVAILABLE: "الدفع بالبطاقة غير متاح الآن.", GATEWAY_ERROR: "تعذّر الاتصال ببوابة الدفع. حاول لاحقاً.", RATE_LIMITED: "محاولات كثيرة. انتظر قليلاً.", GENERIC: "حدث خطأ. حاول مرة أخرى." } as Record<string, string>,
+    },
     title: "الاشتراك", plans: "الباقات المتاحة", noPlans: "لم تُعلن الباقات بعد. تواصل مع الإدارة.", days: "يوم", iqd: "د.ع", choose: "طلب التفعيل (دفع نقدي)",
     note: "ملاحظة للإدارة (اختيارية)", instructions: "تعليمات الدفع", noInstructions: "لم تضبط الإدارة تعليمات الدفع بعد. تواصل معها.",
     cashFlow: "الدفع نقداً حسب التعليمات أدناه، ثم أرسل الطلب. يُفعَّل اشتراكك بعد تأكيد الإدارة للدفع، ولا يتم التفعيل تلقائياً.",
@@ -225,6 +234,15 @@ const en: Dictionary = {
     } as Record<string, string>,
   },
   subscribe: {
+    card: {
+      title: "Pay by card (Mastercard)", pay: "Pay by card", busy: "Redirecting to the payment page…", or: "Or pay in cash",
+      testBanner: "Test mode: a local test gateway, no real money is charged.",
+      returnTitle: "Payment result", ref: "Transaction", amount: "Amount", plan: "Plan",
+      PENDING: "Waiting for the gateway confirmation… this page refreshes itself.", INITIATED: "The payment is not complete yet.", SUCCEEDED: "Paid — your subscription is active until", FAILED: "The payment did not go through. Nothing was charged; you can try again.", CANCELLED: "This transaction was cancelled.", REFUNDED: "The amount was refunded.",
+      notFound: "Transaction not found.", toExams: "Go to my exams", retry: "Try again",
+      sandboxTitle: "Test payment gateway", sandboxHint: "This page imitates the real gateway page. Choose an outcome to try the whole flow (it goes through the same signature check).", succeed: "Simulate a successful payment", fail: "Simulate a failed payment",
+      errors: { CARD_UNAVAILABLE: "Card payment is not available right now.", GATEWAY_ERROR: "Could not reach the payment gateway. Try later.", RATE_LIMITED: "Too many attempts. Please wait.", GENERIC: "Something went wrong. Try again." },
+    },
     title: "Subscription", plans: "Available plans", noPlans: "Plans have not been announced yet. Contact the administration.", days: "days", iqd: "IQD", choose: "Request activation (cash payment)",
     note: "Note to the administration (optional)", instructions: "Payment instructions", noInstructions: "The administration has not set payment instructions yet. Please contact them.",
     cashFlow: "Pay in cash following the instructions below, then submit the request. Your subscription is activated only after the administration confirms the payment; nothing is activated automatically.",

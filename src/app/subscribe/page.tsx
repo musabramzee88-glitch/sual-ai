@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ShellCard, TeacherShell } from "@/components/TeacherShell";
-import { CancelRequestButton, CashRequestForm } from "@/components/SubscribeClient";
+import { CancelRequestButton, CardPayButtons, CashRequestForm } from "@/components/SubscribeClient";
+import { cardAvailable, cardIsTest } from "@/server/billing/card";
 import { getDictionary } from "@/lib/i18n/server";
 import { getMessage } from "@/server/admin/service";
 import { getAuth } from "@/server/auth/session";
@@ -42,6 +43,14 @@ export default async function Page() {
           <p className="text-sm text-muted">{s.noPlans}</p>
         ) : (
           <>
+            {cardAvailable() && (
+              <section className="space-y-2">
+                <h2 className="font-semibold">{s.card.title}</h2>
+                {cardIsTest() && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">{s.card.testBanner}</p>}
+                <CardPayButtons t={s} plans={plans.map((p) => ({ id: p.id, name: locale === "ar" ? p.nameAr : p.nameEn, durationDays: p.durationDays, priceIqd: p.priceIqd }))} />
+                <h2 className="pt-3 font-semibold">{s.card.or}</h2>
+              </section>
+            )}
             <p className="text-sm text-muted">{s.cashFlow}</p>
             <section>
               <h2 className="mb-1 font-semibold">{s.instructions}</h2>

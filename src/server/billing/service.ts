@@ -66,6 +66,25 @@ export async function cancelMyPendingRequest(userId: string) {
 const DAY = 86_400_000;
 
 /**
+ * تفعيل اشتراك (مشترك بين موافقة الدفع النقدي ونجاح الدفع بالبطاقة) داخل معاملة المستدعي.
+ * التجديد: إن وُجد اشتراك فعال لم ينتهِ تبدأ المدة الجديدة من نهايته ويُغلق القديم (الفهرس يسمح باشتراك فعال واحد).
+ */
+export async function activateSubscription(
+  tx: Prisma.TransactionClient,
+  o: { subscriptionId: string; userId: string; durationDays: number; now: Date; method: "CASH" | "CARD"; activatedById: string | null; reference: string },
+) {
+  const old = await tx.subscription.findFirst({ where: { userId: o.userId, status: "ACTIVE", NOT: { id: o.subscriptionId } } });
+  const base = old?.endsAt && old.endsAt > o.now ? old.endsAt : o.now;
+  if (old) await tx.subscription.update({ where: { id: old.id }, data: { status: "EXPIRED", notes: `Superseded by renewal ${o.reference}` } });
+  const endsAt = new Date(base.getTime() + o.durationDays * DAY);
+  await tx.subscription.update({
+    where: { id: o.subscriptionId },
+    data: { status: "ACTIVE", startsAt: o.now, endsAt, activatedAt: o.now, activatedById: o.activatedById, paymentMethod: o.method },
+  });
+  return endsAt;
+}
+
+/**
  * موافقة الإدارة على الدفع النقدي. ذرّية وغير قابلة للتكرار: تُحجز الحالة PENDING_REVIEW→APPROVED أولاً.
  * التجديد: إن وُجد اشتراك فعال لم ينتهِ تبدأ المدة الجديدة من نهايته (لا يخسر المدرس أياماً)
  * ويُغلق القديم (EXPIRED) لأن القيد يسمح باشتراك فعال واحد فقط.
@@ -80,15 +99,7 @@ export async function approveCashRequest(actor: Actor, requestId: string, note?:
     const req = await tx.paymentRequest.findUniqueOrThrow({ where: { id: requestId }, include: { plan: true } });
     if (!req.subscriptionId) throw new Error("Payment request without subscription");
 
-    const old = await tx.subscription.findFirst({ where: { userId: req.userId, status: "ACTIVE", NOT: { id: req.subscriptionId } } });
-    const base = old?.endsAt && old.endsAt > now ? old.endsAt : now;
-    if (old) await tx.subscription.update({ where: { id: old.id }, data: { status: "EXPIRED", notes: `Superseded by renewal ${req.reference}` } });
-
-    const endsAt = new Date(base.getTime() + req.plan.durationDays * DAY);
-    await tx.subscription.update({
-      where: { id: req.subscriptionId },
-      data: { status: "ACTIVE", startsAt: now, endsAt, activatedAt: now, activatedById: actor.adminId, paymentMethod: "CASH" },
-    });
+    const endsAt = await activateSubscription(tx, { subscriptionId: req.subscriptionId, userId: req.userId, durationDays: req.plan.durationDays, now, method: "CASH", activatedById: actor.adminId, reference: req.reference });
     await tx.paymentTransaction.updateMany({
       where: { paymentRequestId: requestId },
       data: { status: "SUCCEEDED", approvedById: actor.adminId, approvedAt: now, paidAt: now },
