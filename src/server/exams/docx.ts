@@ -3,6 +3,7 @@ import {
   AlignmentType, BorderStyle, Document, Footer, ImageRun, PageNumber, Packer, PageOrientation, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType,
   type ParagraphChild,
 } from "docx";
+import { mathTokens } from "@/lib/math-format";
 import {
   LABELS, LETTERS, answerPlain, digits, field, isInlineSection, isOn, pickNotes, splitRuns,
   type HeaderKey, type RenderExam, type RenderQuestion, type RenderTemplate, type Variant,
@@ -59,10 +60,17 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
     text.split("\n").forEach((line, li) => {
       if (li > 0) out.push(new TextRun({ break: 1 }));
       for (const seg of splitRuns(line.length ? line : "")) {
-        out.push(new TextRun({
-          text: seg.text, rightToLeft: ar && !seg.ltr, bold: st.bold, boldComplexScript: st.bold, color: st.color,
-          font: { ascii: font, hAnsi: font, cs: font, eastAsia: font }, size: st.size ?? sizeHalf, sizeComplexScript: st.size ?? sizeHalf,
-        }));
+        // مقاطع لاتينية/رياضية: أس ودليل ورموز صحيحة؛ العربي كما هو. النص اللاتيني الخالص (امتحان إنكليزي) يُنسَّق كنثر.
+        const toks = seg.ltr || !ar ? mathTokens(seg.text, { prose: !ar }) : [{ t: "text" as const, s: seg.text }];
+        // LRM حول المقطع الرياضي وسط العربية: يمنع Word من قلب ≤ ≥ ( ) وعكس ترتيب «x = -2»
+        if (seg.ltr && ar && toks.length) { toks[0] = { ...toks[0], s: `\u200E${toks[0].s}` }; toks[toks.length - 1] = { ...toks[toks.length - 1], s: `${toks[toks.length - 1].s}\u200E` }; }
+        for (const tk of toks) {
+          out.push(new TextRun({
+            text: tk.s, rightToLeft: ar && !seg.ltr, bold: st.bold, boldComplexScript: st.bold, color: st.color,
+            superScript: tk.t === "sup" || undefined, subScript: tk.t === "sub" || undefined,
+            font: { ascii: font, hAnsi: font, cs: font, eastAsia: font }, size: st.size ?? sizeHalf, sizeComplexScript: st.size ?? sizeHalf,
+          }));
+        }
       }
     });
     return out;

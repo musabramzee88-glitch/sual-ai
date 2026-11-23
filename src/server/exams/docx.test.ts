@@ -17,7 +17,7 @@ const exam: RenderExam = {
   ],
 };
 const xml = async (buf: Buffer) => (await (await JSZip.loadAsync(buf)).file("word/document.xml")!.async("string"));
-const text = (x: string) => [...x.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join(" ").replace(/\s+/g, " ");
+const text = (x: string) => [...x.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join(" ").replace(/\u200E/g, "").replace(/\s+/g, " ");
 
 describe("Word export", () => {
   it("is a valid .docx package with right-to-left Arabic paragraphs", async () => {
@@ -72,5 +72,18 @@ describe("Word export", () => {
     const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0x2c, 0x01, 0x90, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
     expect(imageSize(jpg)).toEqual({ w: 400, h: 300 });
     expect(imageSize(Buffer.from("not an image"))).toBeNull();
+  });
+});
+
+describe("Word export: math", () => {
+  it("writes powers and subscripts as real superscript/subscript runs", async () => {
+    const e: RenderExam = { lang: "AR", values: {}, sections: [{ instruction: "احسب:", marks: 5, branches: [{ prompt: "قوة بين q_1 = 2 × 10^-6 C و H2O عند r^2", options: null, answer: "", marks: 5 }] }] };
+    const x = await xml(await renderExamDocx(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY"));
+    expect(x).toContain('<w:vertAlign w:val="superscript"/>');
+    expect(x).toContain('<w:vertAlign w:val="subscript"/>');
+    const t = text(x);
+    expect(t).toContain("−6"); // ناقص حقيقي
+    expect(t).not.toContain("^");
+    expect(t).not.toContain("_");
   });
 });

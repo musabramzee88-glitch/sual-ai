@@ -68,6 +68,7 @@ export function buildPrompt(opts: {
     opts.sections.some((x) => VERBATIM_TYPES.includes(x.type)) ? "- Quran verses, hadiths and memorised poems must be copied CHARACTER-FOR-CHARACTER from the source pages. If a section cannot be filled from text that is actually printed in the source, write fewer questions for it — never quote from memory." : "",
     `- Difficulty: ${opts.difficulty === "MIXED" ? "a balanced mix of EASY, MEDIUM and HARD" : opts.difficulty}.`,
     opts.useLatinSymbols ? "- Write mathematical expressions with Latin symbols (x, y, a, b) and normal digits, as in Iraqi math books." : "",
+    "- Notation: plain text only, never LaTeX or $ signs. Powers as x^2 and 10^-6 (use ^{…} for longer exponents), subscripts as q_1, v_0 and H_2O, multiplication as × (never *), division as /, and ≤ ≥ ≠ ± → √ π ° where needed. Put a space around + − × = and keep every unit after its number (e.g. 3.2 × 10^-9 C).",
     ocrImg.length ? `- Pages ${ocrImg.join(", ")} are attached as IMAGES (their extracted text is unreliable): read their content from the images.` : "",
     ocrText.length ? `- The text of pages ${ocrText.join(", ")} was read by OCR and may contain errors, especially in numbers. Do not copy numbers from these pages unless they are unambiguous.` : "",
     "",

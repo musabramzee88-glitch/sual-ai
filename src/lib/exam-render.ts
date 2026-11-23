@@ -4,6 +4,8 @@
  * + unicode-bidi: isolate. القالب يحدد شكل الترويسة والخط والهوامش؛ الحقول تُخفى أو تُعدَّل قيمها.
  */
 
+import { MATH_RUN as RUN, latexLite, mathHtml } from "./math-format";
+
 export type HeaderKey =
   | "republic" | "ministry" | "directorate" | "school" | "title" | "subject" | "grade" | "examKind" | "round" | "yearTerm"
   | "teacher" | "time" | "total" | "model" | "student" | "section" | "date" | "examNumber";
@@ -73,10 +75,10 @@ export type Variant = "QUESTIONS_ONLY" | "WITH_ANSWERS" | "ANSWER_KEY" | "ANSWER
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const RUN = /[A-Za-z0-9][A-Za-z0-9\s+\-−×÷=*/^().,√π<>≤≥²³%[\]{}|']*[A-Za-z0-9)²³%\]}|']|[A-Za-z0-9]/g;
 
 /** يقسم نصاً إلى مقاطع عربية ومقاطع لاتينية/رياضية (ltr) بالقاعدة نفسها لعزل المقاطع في الورقة وفي ملف Word */
-export function splitRuns(text: string): { text: string; ltr: boolean }[] {
+export function splitRuns(raw: string): { text: string; ltr: boolean }[] {
+  const text = latexLite(raw);
   const out: { text: string; ltr: boolean }[] = [];
   if (!/[\u0600-\u06FF]/.test(text)) return text ? [{ text, ltr: false }] : [];
   let last = 0;
@@ -92,18 +94,12 @@ export function splitRuns(text: string): { text: string; ltr: boolean }[] {
 
 /** نص آمن مع عزل المقاطع الرياضية داخل العربية، وأسطر جديدة <br> */
 export function richText(text: string): string {
-  const arabic = /[؀-ۿ]/.test(text);
-  let out = "";
-  let last = 0;
-  if (arabic) {
-    for (const m of text.matchAll(RUN)) {
-      const i = m.index ?? 0;
-      out += esc(text.slice(last, i)) + `<span class="ltr">${esc(m[0])}</span>`;
-      last = i + m[0].length;
-    }
-  }
-  out += esc(text.slice(last));
-  return out.replace(/\n/g, "<br>");
+  const arabic = /[\u0600-\u06FF]/.test(latexLite(text));
+  // العربي المختلط: المقاطع اللاتينية/الرياضية تُعزل وتُنسَّق رياضياً؛ النص اللاتيني الخالص يُنسَّق كنثر (أس ودليل ورموز)
+  return splitRuns(text)
+    .map((seg) => (seg.ltr ? `<span class="ltr">${mathHtml(seg.text, esc)}</span>` : arabic ? esc(seg.text) : mathHtml(seg.text, esc, { prose: true })))
+    .join("")
+    .replace(/\n/g, "<br>");
 }
 
 export const digits = (n: number, ar: boolean) => (ar ? n.toLocaleString("ar-EG") : String(n));
@@ -264,6 +260,7 @@ ${pageCss}
 html, body { margin: 0; background: #fff; color: #000; }
 .sheet { --ac: ${ac}; font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
 .ltr { direction: ltr; unicode-bidi: isolate; word-spacing: 0; white-space: nowrap; }
+sup, sub { font-size: 0.72em; line-height: 0; }
 .strong { font-weight: 700; }
 .lbl { font-weight: 700; }
 .hl { line-height: 1.75; }
