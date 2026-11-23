@@ -12,6 +12,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { lastBackup } from "./backup.mjs";
 
 const win = process.platform === "win32";
 const PORT = process.env.PORT || "3000";
@@ -125,6 +126,18 @@ async function update(branch, first = false) {
   }
 }
 
+/** نسخة احتياطية يومية في عملية منفصلة (لا توقف الموقع): عند التشغيل إن مضى على آخر نسخة ناجحة 20 ساعة، ثم كل ساعة يُفحص */
+let backingUp = false;
+function dailyBackup() {
+  if (backingUp) return;
+  const { lastOk } = lastBackup();
+  if (lastOk && Date.now() - new Date(lastOk.at).getTime() < 20 * 3600 * 1000) return;
+  backingUp = true;
+  log("نسخة احتياطية يومية …");
+  const p = spawn(process.execPath, ["scripts/backup.mjs"], { stdio: "inherit" });
+  p.on("exit", (code) => { backingUp = false; if (code !== 0) log("تعذّرت النسخة الاحتياطية (التفاصيل أعلاه)؛ سأحاول بعد ساعة."); });
+}
+
 async function main() {
   const branch = out("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch || branch === "HEAD") { console.error("لست على فرع git."); process.exit(1); }
@@ -132,6 +145,8 @@ async function main() {
   await update(branch, true);
   startIfBuilt();
   setInterval(() => { update(branch).catch((e) => log("خطأ:", e.message)); }, INTERVAL);
+  setTimeout(dailyBackup, 30_000);
+  setInterval(dailyBackup, 3600 * 1000);
   const quit = async () => { stopping = true; await stopServer(); process.exit(0); };
   process.on("SIGINT", quit);
   process.on("SIGTERM", quit);

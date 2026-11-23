@@ -18,6 +18,7 @@
 /.next-live-a/
 /.next-live-b/
 .live-state.json
+/backups/
 /out/
 
 # production

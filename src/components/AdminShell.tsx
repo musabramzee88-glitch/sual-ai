@@ -6,7 +6,7 @@ import type { AdminDict } from "@/lib/i18n/admin";
 const items: [string, keyof AdminDict["nav"], AdminPermission][] = [
   ["/admin", "home", "VIEW_DASHBOARD"], ["/admin/curriculum", "curriculum", "MANAGE_CURRICULUM"], ["/admin/books", "books", "MANAGE_CURRICULUM"], ["/admin/samples", "samples", "MANAGE_CURRICULUM"], ["/admin/users", "users", "MANAGE_USERS"], ["/admin/requests", "requests", "APPROVE_PAYMENTS"],
   ["/admin/subscriptions", "subscriptions", "MANAGE_SUBSCRIPTIONS"], ["/admin/payments", "payments", "APPROVE_PAYMENTS"], ["/admin/plans", "plans", "MANAGE_PLANS"],
-  ["/admin/staff", "staff", "MANAGE_STAFF"], ["/admin/messages", "messages", "MANAGE_SYSTEM_MESSAGES"], ["/admin/audit", "audit", "VIEW_AUDIT_LOG"],
+  ["/admin/staff", "staff", "MANAGE_STAFF"], ["/admin/messages", "messages", "MANAGE_SYSTEM_MESSAGES"], ["/admin/audit", "audit", "VIEW_AUDIT_LOG"], ["/admin/status", "status", "MANAGE_STAFF"],
 ];
 
 export function AdminShell({ brand, t, perms, title, children }: { brand: string; t: AdminDict; perms: Set<AdminPermission>; title: string; children: React.ReactNode }) {

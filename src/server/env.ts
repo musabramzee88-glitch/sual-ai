@@ -45,6 +45,8 @@ const schema = z.object({
   OCR_WORKERS: z.coerce.number().int().min(1).max(4).default(2),
   // تصدير PDF: مسار متصفح Chromium/Chrome/Edge. فارغ = Edge ثم Chrome المثبّتان على الجهاز
   CHROMIUM_PATH: z.string().optional(),
+  // النسخ الاحتياطي (scripts/backup.mjs): تقرأ صفحة «حالة النظام» سجلّه من هنا
+  BACKUP_DIR: z.string().default("./backups"),
 });
 
 // المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة

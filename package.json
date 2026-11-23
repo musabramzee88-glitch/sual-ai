@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "live": "node scripts/live.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/backup.mjs restore",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
