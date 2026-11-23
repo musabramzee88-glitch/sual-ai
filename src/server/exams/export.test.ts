@@ -64,6 +64,27 @@ describe("export (Word and ZIP)", () => {
   });
 });
 
+describe.skipIf(!chromium)("two-page limit on the exported question paper", () => {
+  it("a big exam exports as a PDF of at most two pages (default template), while the answers copy is not limited", async () => {
+    const { countPdfPages } = await import("./fit");
+    const [track, grade, subject] = await Promise.all([
+      db.curriculumTrack.findUniqueOrThrow({ where: { code: "GENERAL" } }), db.grade.findUniqueOrThrow({ where: { code: "PRI_5" } }), db.subject.findUniqueOrThrow({ where: { code: "SCIENCE" } }),
+    ]);
+    const big = await db.exam.create({ data: { ownerId: userId, trackId: track.id, gradeId: grade.id, subjectId: subject.id, title: "امتحان كبير", kind: "FINAL", totalMarks: 100, settings: {}, status: "READY" } });
+    const model = await db.examModel.create({ data: { examId: big.id, label: "A" } });
+    for (let s = 0; s < 9; s++) {
+      const parent = await db.examQuestion.create({ data: { examModelId: model.id, sortOrder: s, type: "DEFINE", instruction: `عرّف ما يأتي ${s + 1}:`, prompt: "x", marks: 10, sourcePages: [] } });
+      for (let j = 0; j < 4; j++) await db.examQuestion.create({ data: { examModelId: model.id, parentId: parent.id, sortOrder: j, type: "DEFINE", prompt: `سؤال ${s + 1}-${j + 1}: ما هي العملية التي يصنع بها النبات غذاءه باستعمال ضوء الشمس والماء وثنائي أكسيد الكربون؟`, answer: "البناء الضوئي وهو عملية تحويل الطاقة الضوئية إلى طاقة كيميائية", marks: 2.5, sourcePages: [3] } });
+    }
+    const q = (await X.buildFile(userId, big.id, { format: "pdf", variant: "questions" }))!;
+    expect(countPdfPages(q.bytes)).toBeLessThanOrEqual(2);
+    const word = (await X.buildFile(userId, big.id, { format: "docx", variant: "questions" }))!;
+    expect(word.bytes.subarray(0, 2).toString("latin1")).toBe("PK");
+    const key = (await X.buildFile(userId, big.id, { format: "pdf", variant: "key" }))!;
+    expect(countPdfPages(key.bytes)).toBeGreaterThan(0); // المفتاح بلا حد صفحات
+  }, 180_000);
+});
+
 describe.skipIf(!chromium)("PDF in a ZIP", () => {
   it("renders real PDFs for each requested copy", async () => {
     const z = (await X.buildZip(userId, examId, { format: "pdf", models: ["A", "B"], variants: ["questions"] }))!;

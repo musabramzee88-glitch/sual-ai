@@ -54,6 +54,10 @@ export type RenderTemplate = {
   signLine?: boolean;
   /** لون الإطار والعناوين (#rrggbb)؛ فارغ = أسود. أي قيمة أخرى تُهمل */
   accent?: string | null;
+  /** عامل تقليص المسافات (1 = الأصل) يضبطه الملاءمة التلقائية للصفحات */
+  gap?: number;
+  /** false = يجوز تقسيم السؤال بين صفحتين (حل أخير حين لا تتسع الورقة في الحد الأقصى) */
+  keepSections?: boolean;
 };
 
 export type RenderTable = { header: boolean; cells: string[][] };
@@ -262,7 +266,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
     if (last) footerPlaced = true;
     // آخر قسم: عبارة الختام تُحبس مع آخر فرع في كتلة لا تنقسم فلا تنفرد بصفحة
     // (المتصفح لا يلتزم دائماً بـ break-before: avoid). القسم الأفقي القصير يُحبس كله معها.
-    const keep = keepTogether(s, variant, tpl.answerLines);
+    const keep = tpl.keepSections !== false && keepTogether(s, variant, tpl.answerLines);
     const sc = keep ? ' class="keep"' : "";
     if (last && inline) return `<div class="tail"><section${sc}>${head}<ol${cls}>${rows.join("")}</ol></section>${footer}</div>`;
     if (last) return `<section${sc}>${head}${rows.length > 1 ? `<ol>${rows.slice(0, -1).join("")}</ol>` : ""}<div class="tail"><ol>${rows[rows.length - 1]}</ol>${footer}</div></section>`;
@@ -273,13 +277,16 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
   const size = `${tpl.pageSize} ${tpl.orientation === "LANDSCAPE" ? "landscape" : "portrait"}`;
   // PDF: هوامش الصفحة من @page (تتكرر في كل صفحة)؛ طباعة المتصفح: هامش صفر (لا رابط/تاريخ) والهوامش داخل الورقة
   const pageCss = opts.forPdf ? `@page { size: ${size}; margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; } .sheet { padding: 0; }`
-    : `@page { size: ${size}; margin: 0; } .sheet { padding: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; }`;
+    : `@page { size: ${size}; margin: 0; } .sheet { padding: 0 ${m.right}mm 0 ${m.left}mm; }
+table.pg { width: 100%; border-collapse: collapse; } table.pg > thead > tr > td, table.pg > tbody > tr > td, table.pg > tfoot > tr > td { padding: 0; vertical-align: top; }
+.sp-t { height: ${m.top}mm; } .sp-b { height: ${m.bottom}mm; }`;
   const font = `"${tpl.fontFamily.replace(/"/g, "")}", "Traditional Arabic", "Simplified Arabic", "Noto Naskh Arabic", "IBM Plex Sans Arabic", Tahoma, Arial, sans-serif`;
+  const content = `${header(exam, tpl, variant, lang)}<main>${notes.examNote && variant !== "ANSWER_SHEET" ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main>`;
   return `<!doctype html><html lang="${lang}" dir="${ar ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>exam</title><style>
 ${pageCss}
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; color: #000; }
-.sheet { --ac: ${ac}; font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
+.sheet { --g: ${tpl.gap && tpl.gap > 0 ? tpl.gap : 1}; --ac: ${ac}; font-family: ${font}; font-size: ${tpl.fontSizePt}pt; line-height: ${tpl.lineSpacing}; word-spacing: 0.12em; text-rendering: optimizeLegibility; orphans: 3; widows: 3; }
 .ltr { direction: ltr; unicode-bidi: isolate; word-spacing: 0; white-space: nowrap; }
 sup, sub { font-size: 0.72em; line-height: 0; }
 .strong { font-weight: 700; }
@@ -301,14 +308,14 @@ header { font-size: 0.92em; }
 .h-academic .cells td { border: 1px solid var(--ac); padding: 1.8mm 2.5mm; text-align: center; vertical-align: top; line-height: 1.6; }
 .h-minimal { text-align: center; border-bottom: 1px solid var(--ac); padding-bottom: 2.5mm; }
 .student { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 1px solid #000; margin-top: 3mm; padding: 0 0 2.5mm; font-size: 0.92em; }
-main { margin-top: 1.2em; }
-section { margin-top: 1.6em; break-inside: auto; }
+main { margin-top: calc(1.2em * var(--g)); }
+section { margin-top: calc(1.6em * var(--g)); break-inside: auto; }
 section.keep { break-inside: avoid; }
 section:first-child { margin-top: 0; }
-h2 { color: var(--ac); font-size: 1em; font-weight: 700; margin: 0 0 0.6em; display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
+h2 { color: var(--ac); font-size: 1em; font-weight: 700; margin: 0 0 calc(0.6em * var(--g)); display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
 h2 .mk { white-space: nowrap; font-weight: 700; }
 ol { list-style: none; margin: 0; padding: 0; }
-li { margin: 0 0 0.75em; break-inside: avoid; }
+li { margin: 0 0 calc(0.75em * var(--g)); break-inside: avoid; }
 li:last-child { margin-bottom: 0; }
 .item { display: flex; gap: 0.5em; }
 .num { flex: none; min-width: 1.9em; font-weight: 700; }
@@ -325,18 +332,36 @@ li:last-child { margin-bottom: 0; }
 .rule { border-bottom: 1px dotted #777; height: 2em; }
 .exnote { margin: 1.1em 0 0; font-weight: 700; text-align: center; border: 1px solid var(--ac); padding: 1.5mm 3mm; line-height: 1.7; }
 .pick { font-weight: 700; margin: -0.2em 0 0.6em; font-size: 0.95em; }
-.note { text-align: center; font-weight: 700; margin: 2em 0 0; break-before: avoid; break-inside: avoid; }
+.note { text-align: center; font-weight: 700; margin: calc(2em * var(--g)) 0 0; break-before: avoid; break-inside: avoid; }
 .tail { break-inside: avoid; }
 .cells2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.9em 2.5em; margin-top: 1.4em; }
 .cell { display: flex; align-items: center; gap: 0.9em; break-inside: avoid; border-bottom: 1px dotted #999; padding-bottom: 0.5em; }
 .cell .no { min-width: 4.6em; font-weight: 700; }
 .bub { display: inline-flex; align-items: center; gap: 0.3em; }
 .bub i { display: inline-block; width: 1.15em; height: 1.15em; border: 1.5px solid #000; border-radius: 50%; }
-.tail > .note { margin-top: 1.6em; }
+.tail > .note { margin-top: calc(1.6em * var(--g)); }
 .foot { display: flex; justify-content: space-between; align-items: baseline; gap: 2em; text-align: start; }
 ol.inline { display: flex; flex-wrap: wrap; gap: 0.45em 2.6em; }
 ol.inline li { margin: 0; }
-</style></head><body><div class="sheet">${header(exam, tpl, variant, lang)}<main>${notes.examNote && variant !== "ANSWER_SHEET" ? `<p class="exnote">${esc(notes.examNote)}</p>` : ""}${body}${footerPlaced ? "" : footer}</main></div></body></html>`;
+</style></head><body><div class="sheet">${opts.forPdf ? content : `<table class="pg"><thead><tr><td><div class="sp-t"></div></td></tr></thead><tbody><tr><td>${content}</td></tr></tbody><tfoot><tr><td><div class="sp-b"></div></td></tr></tfoot></table>`}</div></body></html>`;
+}
+
+/**
+ * ضبط الورقة لتتسع في عدد صفحات محدّد: خطوات تصغّر تباعد الأسطر والمسافات والهوامش والخط تدريجياً (الخط حتى 11 نقطة
+ * والهوامش حتى 8–9 ملم) فتبقى الورقة مقروءة. k = 0 هو القالب كما هو.
+ */
+export const FIT_STEPS = 16;
+export function fitProfile(tpl: RenderTemplate, k: number): RenderTemplate {
+  if (k <= 0) return tpl;
+  const m = tpl.margins;
+  const shrink = (v: number, min: number, d: number) => Math.max(Math.min(v, min), +(v - d * k).toFixed(1));
+  return {
+    ...tpl,
+    lineSpacing: Math.min(tpl.lineSpacing, Math.max(1.3, +(tpl.lineSpacing - 0.04 * k).toFixed(2))),
+    fontSizePt: Math.max(Math.min(tpl.fontSizePt, 11), +(tpl.fontSizePt - 0.5 * Math.max(0, k - 2)).toFixed(1)),
+    gap: Math.max(0.55, +((tpl.gap ?? 1) - 0.035 * k).toFixed(2)),
+    margins: { top: shrink(m.top, 8, 0.5), bottom: shrink(m.bottom, 8, 0.5), left: shrink(m.left, 9, 0.4), right: shrink(m.right, 9, 0.4) },
+  };
 }
 
 export const DEFAULT_TEMPLATE: RenderTemplate = {

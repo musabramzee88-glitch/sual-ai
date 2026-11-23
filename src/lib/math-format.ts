@@ -76,7 +76,10 @@ export function mathTokens(run: string, opts: { prose?: boolean } = {}): MathTok
     const body = word.slice(lead.length);
     if (chemical(body)) {
       push("text", lead);
-      for (const m of body.matchAll(/([A-Z][a-z]?|\(|\))|(\d+)/g)) m[2] !== undefined ? push("sub", m[2]) : push("text", m[1]);
+      for (const m of body.matchAll(/([A-Z][a-z]?|\(|\))|(\d+)/g)) {
+        if (m[2] !== undefined) push("sub", m[2]);
+        else push("text", m[1]);
+      }
     } else push("text", word);
     word = "";
   };

@@ -1,11 +1,12 @@
 import "server-only";
 import JSZip from "jszip";
-import { renderExamHtml, type Variant } from "@/lib/exam-render";
+import { FIT_STEPS, fitProfile, renderExamHtml, type Variant } from "@/lib/exam-render";
 import { modelDisplay, type ModelLabel } from "@/lib/exam-models";
 import { safeFileName } from "@/lib/file-name";
 import { examRenderInput } from "./templates";
 import { htmlToPdf } from "./pdf";
 import { renderExamDocx } from "./docx";
+import { fitInput } from "./fit";
 
 /** تصدير ورقة الامتحان: PDF أو Word، وحزمة ZIP لعدة نماذج ونسخ. كل ملف يُبنى من العارض نفسه فيتطابق المحتوى. */
 export type ExportFormat = "pdf" | "docx";
@@ -27,9 +28,12 @@ export async function buildFile(userId: string, examId: string, o: { format: Exp
   if (!input) return null;
   const lang = input.exam.language === "EN" ? "en" : "ar";
   const variant = VARIANT[o.variant];
+  // نسخة الأسئلة تُضبط لتتسع في الحد الأقصى للصفحات (وجه وقفا). Word لا يُقاس فيُصغَّر خطوة إضافية للأمان.
+  const fit = await fitInput(input, variant);
+  const wordTpl = fit.info && fit.info.step > 0 ? fitProfile({ ...input.renderTemplate, keepSections: fit.info.keep }, Math.min(FIT_STEPS, fit.info.step + 1)) : fit.tpl;
   const bytes = o.format === "docx"
-    ? await renderExamDocx(input.renderExam, input.renderTemplate, variant, { pageNumbers: input.template.showPageNumbers })
-    : await htmlToPdf(renderExamHtml(input.renderExam, input.renderTemplate, variant, { forPdf: true }), { pageNumbers: input.template.showPageNumbers, lang });
+    ? await renderExamDocx(input.renderExam, wordTpl, variant, { pageNumbers: input.template.showPageNumbers })
+    : await htmlToPdf(renderExamHtml(input.renderExam, fit.tpl, variant, { forPdf: true }), { pageNumbers: input.template.showPageNumbers, lang });
   const ascii = `exam-${input.exam.id.slice(-6)}${o.model ? `-${o.model}` : ""}${o.variant === "questions" ? "" : `-${o.variant}`}.${o.format}`;
   return { bytes, ext: o.format, lang, title: input.exam.title, ascii, suffix: nameSuffix(lang, o.variant, o.model), examId: input.exam.id };
 }

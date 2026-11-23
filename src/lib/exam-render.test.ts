@@ -220,3 +220,48 @@ describe("keeping a question on one page", () => {
     expect(keepTogether(s, "QUESTIONS_ONLY", 4)).toBe(false); // أسطر إجابة تحت كل فرع
   });
 });
+
+describe("fit profiles (shrinking to fit a page limit)", () => {
+  it("step 0 is the template untouched; later steps only shrink, never below the readable minimums", async () => {
+    const { fitProfile, FIT_STEPS } = await import("./exam-render");
+    expect(fitProfile(DEFAULT_TEMPLATE, 0)).toBe(DEFAULT_TEMPLATE);
+    let prev = DEFAULT_TEMPLATE;
+    for (let k = 1; k <= FIT_STEPS; k++) {
+      const t = fitProfile(DEFAULT_TEMPLATE, k);
+      expect(t.fontSizePt).toBeLessThanOrEqual(prev.fontSizePt);
+      expect(t.lineSpacing).toBeLessThanOrEqual(prev.lineSpacing);
+      expect(t.gap ?? 1).toBeLessThanOrEqual(prev.gap ?? 1);
+      expect(t.fontSizePt).toBeGreaterThanOrEqual(11);
+      expect(t.lineSpacing).toBeGreaterThanOrEqual(1.3);
+      expect(t.gap ?? 1).toBeGreaterThanOrEqual(0.55);
+      expect(Math.min(t.margins.top, t.margins.bottom)).toBeGreaterThanOrEqual(8);
+      expect(Math.min(t.margins.left, t.margins.right)).toBeGreaterThanOrEqual(9);
+      prev = t;
+    }
+  });
+  it("never enlarges a template that is already small", async () => {
+    const { fitProfile } = await import("./exam-render");
+    const small = { ...DEFAULT_TEMPLATE, fontSizePt: 10, lineSpacing: 1.2, margins: { top: 6, right: 7, bottom: 6, left: 7 } };
+    const t = fitProfile(small, 8);
+    expect(t.fontSizePt).toBe(10);
+    expect(t.lineSpacing).toBeLessThanOrEqual(1.2);
+    expect(t.margins).toEqual(small.margins);
+  });
+  it("the spacing factor reaches the page CSS, and browser print keeps margins on every page (spacer rows)", () => {
+    const e: RenderExam = { lang: "AR", values: {}, sections: [{ instruction: "أ:", marks: 1, branches: [{ prompt: "ما هو الجواب الصحيح لهذا السؤال الطويل", options: null, answer: "", marks: 1 }] }] };
+    expect(renderExamHtml(e, { ...DEFAULT_TEMPLATE, gap: 0.7 }, "QUESTIONS_ONLY")).toContain("--g: 0.7");
+    const print = renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY");
+    expect(print).toContain('<table class="pg"><thead>');
+    expect(print).toContain("<tfoot>");
+    expect(print).toContain(".sp-t { height: 12mm; }");
+    const pdf = renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY", { forPdf: true });
+    expect(pdf).not.toContain('class="pg"'); // PDF: الهوامش من @page
+    expect(pdf).toContain("margin: 12mm 14mm 12mm 14mm");
+  });
+  it("splitting a question is allowed only when keepSections is false", () => {
+    const sec = { instruction: "قارن:", marks: 10, branches: Array.from({ length: 4 }, (_, i) => ({ prompt: "ا".repeat(20) + i, options: null, answer: "ج", marks: 2 })) };
+    const e: RenderExam = { lang: "AR", values: {}, sections: [sec] };
+    expect(renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('<section class="keep">');
+    expect(renderExamHtml(e, { ...DEFAULT_TEMPLATE, keepSections: false }, "QUESTIONS_ONLY")).not.toContain('<section class="keep">');
+  });
+});

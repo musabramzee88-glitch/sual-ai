@@ -17,7 +17,7 @@ const PNG = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA
 const base = (over: Partial<import("./templates").TemplateInput> = {}): import("./templates").TemplateInput => ({
   name: "قالب مدرستي", layout: "SCHOOL", pageSize: "A4", orientation: "PORTRAIT", fontFamily: "Traditional Arabic", fontSizePt: 14, lineSpacing: 1.5,
   margins: { top: 12, right: 14, bottom: 12, left: 14 }, showPageNumbers: true, visible: { teacher: true }, values: { school: "ثانوية الرافدين", teacher: "أ. علي حسن" },
-  answerLines: 0, footerNote: "مع تمنياتنا لكم بالنجاح", signLine: false, accent: null, logoAssetId: null, isDefault: true, ...over,
+  answerLines: 0, footerNote: "مع تمنياتنا لكم بالنجاح", signLine: false, accent: null, maxPages: 2, logoAssetId: null, isDefault: true, ...over,
 });
 
 beforeAll(async () => {

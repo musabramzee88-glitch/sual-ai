@@ -9,7 +9,7 @@ type Tpl = {
   id: string; preset: boolean; isDefault: boolean; name: string; layout: Layout; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   fontFamily: string; fontSizePt: number; lineSpacing: number; margins: { top: number; right: number; bottom: number; left: number };
   showPageNumbers: boolean; visible: Partial<Record<HeaderKey, boolean>>; values: Partial<Record<HeaderKey, string>>;
-  answerLines: number; footerNote: string | null; signLine: boolean; accent: string | null; logoAssetId: string | null;
+  answerLines: number; footerNote: string | null; signLine: boolean; accent: string | null; maxPages: number; logoAssetId: string | null;
 };
 type Field = { key: HeaderKey; label: string; hidden: boolean; auto: boolean };
 
@@ -221,6 +221,7 @@ function Editor({ t, tpl, set, logos, fonts, fields, lang, busy, onSave, onUploa
         </fieldset>
 
         <label className="block text-sm"><span className="mb-1 block font-semibold">{T.footer}</span><input className={inputCls} maxLength={200} value={tpl.footerNote ?? ""} onChange={(e) => up({ footerNote: e.target.value || null })} /></label>
+        <label className="block text-sm"><span className="mb-1 block font-semibold">{T.maxPages}</span><input type="number" min={0} max={10} className={`${inputCls} w-24`} value={tpl.maxPages} onChange={(e) => up({ maxPages: Math.min(10, Math.max(0, Math.round(Number(e.target.value) || 0))) })} /><span className="mt-1 block text-xs text-muted">{T.maxPagesHint}</span></label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={tpl.signLine} onChange={(e) => up({ signLine: e.target.checked })} />{T.signLine}</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={tpl.isDefault} onChange={(e) => up({ isDefault: e.target.checked })} />{T.isDefault}</label>
         <div className="flex gap-2">

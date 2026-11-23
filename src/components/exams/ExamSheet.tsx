@@ -7,13 +7,15 @@ import { SheetFrame, type SheetFrameHandle } from "./SheetFrame";
 import { safeFileName } from "@/lib/file-name";
 
 type Props = {
-  examId: string; defaultName: string; title: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
+  examId: string; fit: { max: number; pages: number | null; fits: boolean; adjusted: boolean; keep: boolean } | null; defaultName: string; title: string; html: string; variant: "questions" | "answers" | "key" | "sheet"; model: "A" | "B" | "C" | "D" | null; modelLetters: Record<"A" | "B" | "C" | "D", string>; t: TemplatesDict; pageSize: "A4" | "A3"; orientation: "PORTRAIT" | "LANDSCAPE";
   templates: { id: string; name: string; preset: boolean; isDefault: boolean }[]; selectedTemplateId: string;
   fields: { key: string; label: string; placeholder: string }[]; values: Record<string, string>;
 };
 
+const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ""));
+
 /** شريط ورقة الامتحان: النسخة، القالب، بيانات الترويسة، طباعة من الإطار، تنزيل PDF */
-export function ExamSheet({ examId, defaultName, title, html, variant, model, modelLetters, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
+export function ExamSheet({ examId, fit, defaultName, title, html, variant, model, modelLetters, t, pageSize, orientation, templates, selectedTemplateId, fields, values }: Props) {
   const router = useRouter();
   const frame = useRef<SheetFrameHandle>(null);
   const [tplId, setTplId] = useState(selectedTemplateId);
@@ -162,6 +164,11 @@ export function ExamSheet({ examId, defaultName, title, html, variant, model, mo
             </div>
           </form>
         </div>
+      )}
+      {fit && fit.pages !== null && (
+        <p role="status" className={`rounded-lg px-3 py-2 text-sm ${fit.fits ? "bg-brand-soft text-brand" : "bg-accent-soft text-danger"}`}>
+          {!fit.fits ? fill(s.fitOver, { p: fit.pages, m: fit.max }) : fit.adjusted ? fill(s.fitAdjusted, { m: fit.max }) : fill(s.fitOk, { p: fit.pages, m: fit.max })}
+        </p>
       )}
       {msg && <p role="status" className={`text-sm ${msg.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>{msg.text}</p>}
 

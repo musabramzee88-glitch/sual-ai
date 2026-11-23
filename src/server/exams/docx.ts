@@ -48,6 +48,7 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
   const sizeHalf = Math.round(tpl.fontSizePt * 2);
   const accent = tpl.accent && /^#[0-9a-fA-F]{6}$/.test(tpl.accent) ? tpl.accent.slice(1).toUpperCase() : "000000";
   const lineTw = Math.round(tpl.lineSpacing * 240);
+  const gapK = tpl.gap && tpl.gap > 0 ? tpl.gap : 1; // تقليص المسافات في الملاءمة التلقائية
   const m = tpl.margins;
   const base = PAGE[tpl.pageSize];
   const landscape = tpl.orientation === "LANDSCAPE";
@@ -78,7 +79,7 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
   const para = (text: string | ParagraphChild[], o: { st?: Style; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; before?: number; after?: number; start?: number; hanging?: number; keepNext?: boolean; border?: boolean } = {}) =>
     new Paragraph({
       bidirectional: ar, alignment: o.align, keepNext: o.keepNext, keepLines: true,
-      spacing: { line: lineTw, before: o.before ?? 0, after: o.after ?? 0 },
+      spacing: { line: lineTw, before: Math.round((o.before ?? 0) * gapK), after: Math.round((o.after ?? 0) * gapK) },
       indent: o.start !== undefined ? { start: o.start, hanging: o.hanging } : undefined,
       border: o.border ? { bottom: LINE } : undefined,
       children: typeof text === "string" ? runs(text, o.st) : text,
@@ -202,7 +203,7 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
         return;
       }
       // أجزاء السؤال بالترتيب؛ السؤال المحفوظ كاملاً (keepTogether) يربط كل جزء بالتالي (keepNext) إلا الأخير فيبقى في صفحة واحدة
-      const keep = keepTogether(s, variant, tpl.answerLines);
+      const keep = tpl.keepSections !== false && keepTogether(s, variant, tpl.answerLines);
       const parts: { base: boolean; make: (kn: boolean) => Paragraph | Table }[] = [];
       s.branches.forEach((b, j) => {
         const last = i === exam.sections.length - 1 && j === s.branches.length - 1;
