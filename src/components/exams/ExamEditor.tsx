@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExamDict } from "@/lib/i18n/exams";
 import { MathText } from "./MathText";
@@ -273,8 +274,8 @@ export function ExamEditor({ examId, title, duration, totalMarks, sectionsToAnsw
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <a href={`/exams/${examId}/print`} target="_blank" className="rounded-lg bg-brand px-4 py-2 font-semibold text-white dark:text-paper">{t.editor.print}</a>
-        <a href={`/exams/${examId}/print?key=1`} target="_blank" className="rounded-lg border border-line px-4 py-2">{t.editor.printKey}</a>
+        <Link href={`/exams/${examId}/print`} className="rounded-lg bg-brand px-4 py-2 font-semibold text-white dark:text-paper">{t.editor.print}</Link>
+        <Link href={`/exams/${examId}/print?v=key`} className="rounded-lg border border-line px-4 py-2">{t.editor.printKey}</Link>
         <label className="flex items-center gap-1.5 px-2"><input type="checkbox" checked={showAnswers} onChange={(e) => setShowAnswers(e.target.checked)} />{t.editor.showAnswers}</label>
         <span className="flex-1" />
         <button className="rounded-lg border border-line px-3 py-2 text-danger" onClick={async () => { if (window.confirm(t.editor.confirmDeleteExam) && (await call(`/api/v1/exams/${examId}`, "DELETE")).ok) router.push("/exams"); }}>{t.editor.deleteExam}</button>

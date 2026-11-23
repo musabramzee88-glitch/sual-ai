@@ -34,7 +34,7 @@ export const SheetFrame = forwardRef<SheetFrameHandle, { html: string; title: st
       <div ref={box} dir="ltr" className="w-full overflow-hidden" style={{ height: (maxHeight ? Math.min(maxHeight, height) : height) * scale }}>
         <iframe
           ref={frame} title={title} srcDoc={html} sandbox="allow-same-origin allow-modals" onLoad={measure}
-          className="block bg-white shadow"
+          className="mx-auto block bg-white shadow"
           style={{ width: w, height, transform: `scale(${scale})`, transformOrigin: "top left", direction: "ltr" }}
         />
       </div>

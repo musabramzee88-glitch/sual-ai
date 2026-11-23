@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/AuthShell";
+import { ShellCard, TeacherShell } from "@/components/TeacherShell";
 import { LogoutButton } from "@/components/AuthForms";
 import { getDictionary } from "@/lib/i18n/server";
 import Link from "next/link";
@@ -18,7 +18,7 @@ export default async function Page() {
   const exams = await canUseExams(auth);
   const isAdmin = !!(await loadAdmin(auth));
   return (
-    <AuthShell brand={t.brand} title={t.dashboard.title}>
+    <TeacherShell narrow><ShellCard title={t.dashboard.title}>
       <div className="space-y-4">
         <p>{t.dashboard.hello}، <strong>{auth.user.fullName}</strong></p>
         <p className="text-sm"><span className="text-muted">{t.dashboard.status}: </span><strong>{t.dashboard.states[auth.access]}</strong></p>
@@ -30,6 +30,6 @@ export default async function Page() {
           <LogoutButton t={t.auth} />
         </div>
       </div>
-    </AuthShell>
+    </ShellCard></TeacherShell>
   );
 }

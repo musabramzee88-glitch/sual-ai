@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/AuthShell";
+import { ShellCard, TeacherShell } from "@/components/TeacherShell";
 import { SecuritySettings } from "@/components/SecuritySettings";
 import { getDictionary } from "@/lib/i18n/server";
 import { getAuth } from "@/server/auth/session";
@@ -15,9 +15,9 @@ export default async function Page() {
   const { t } = await getDictionary();
   const u = auth.user;
   return (
-    <AuthShell brand={t.brand} title={t.security.title}>
+    <TeacherShell narrow><ShellCard title={t.security.title}>
       <SecuritySettings t={t.security} a={t.auth} state={{ loginSecurity: u.loginSecurity, emailVerified: u.emailVerified, phoneVerified: u.phoneVerified, smsAvailable: smsAvailable() }} />
       <Link href="/dashboard" className="mt-5 inline-block text-sm text-brand">{t.security.back}</Link>
-    </AuthShell>
+    </ShellCard></TeacherShell>
   );
 }

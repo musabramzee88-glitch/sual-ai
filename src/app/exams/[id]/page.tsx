@@ -6,6 +6,8 @@ import { getExam } from "@/server/exams/service";
 import { getLocale } from "@/lib/i18n/server";
 import { examDicts } from "@/lib/i18n/exams";
 import { asTable } from "@/server/exams/templates";
+import { ExamTabs } from "@/components/AppNav";
+import { navDicts } from "@/lib/i18n/nav";
 import { ExamEditor, type EditorSection } from "@/components/exams/ExamEditor";
 import { GENERATABLE } from "@/server/exams/core";
 
@@ -16,7 +18,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const auth = await getAuth();
   if (!auth) redirect("/login");
   if (!(await canUseExams(auth))) redirect("/exams");
-  const t = examDicts[await getLocale()];
+  const locale = await getLocale();
+  const t = examDicts[locale];
   const exam = await getExam(auth.user.id, (await params).id);
   if (!exam) notFound();
   const s = exam.settings as { ocrPages?: number[]; imagePages?: number[]; truncated?: boolean; made?: number; sections?: { count: number }[] };
@@ -32,8 +35,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <h1 className="text-xl font-bold" dir="auto">{exam.title}</h1>
           <p className="text-sm text-muted">{t.status[exam.status]} · {t.total}: {exam.totalMarks} {t.marksShort}</p>
         </div>
-        <Link href="/exams" className="text-sm text-muted">{t.title}</Link>
+        <Link href="/exams" className="hidden text-sm text-muted sm:inline">← {t.title}</Link>
       </div>
+      {exam.status === "READY" && <ExamTabs examId={exam.id} t={navDicts[locale === "en" ? "en" : "ar"]} />}
       {exam.status === "FAILED" && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-danger">{t.editor.failed} {exam.jobs[0]?.error && /QUOTA|day/i.test(exam.jobs[0].error) ? t.errors.AI_QUOTA : ""}</p>}
       {s.made != null && s.made < requested && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">{fill(t.editor.shortfall, { r: requested, m: s.made })}</p>}
       {(s.imagePages?.length ?? 0) > 0 && <p className="rounded-lg bg-brand-soft px-3 py-2 text-sm">{fill(t.editor.ocrWarn, { n: s.imagePages!.length })}</p>}

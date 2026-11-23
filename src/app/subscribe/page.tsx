@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/AuthShell";
+import { ShellCard, TeacherShell } from "@/components/TeacherShell";
 import { CancelRequestButton, CashRequestForm } from "@/components/SubscribeClient";
 import { getDictionary } from "@/lib/i18n/server";
 import { getMessage } from "@/server/admin/service";
@@ -21,7 +21,7 @@ export default async function Page() {
   const active = state.current?.status === "ACTIVE" && state.current.endsAt && state.current.endsAt > new Date() ? state.current : null;
   const blocked = auth.access === "BANNED" || auth.access === "ACCOUNT_SUSPENDED";
   return (
-    <AuthShell brand={t.brand} title={s.title}>
+    <TeacherShell narrow><ShellCard title={s.title}>
       <div className="space-y-6">
         {active && (
           <div className="rounded-xl bg-brand-soft p-4 text-sm">
@@ -52,6 +52,6 @@ export default async function Page() {
         )}
         <Link href="/dashboard" className="inline-block text-sm text-brand">{s.back}</Link>
       </div>
-    </AuthShell>
+    </ShellCard></TeacherShell>
   );
 }

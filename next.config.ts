@@ -27,6 +27,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // مجلد البناء: npm run live يبني النسخة الجديدة في مجلد بديل والقديمة ما زالت تعمل (scripts/live.mjs)
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // مكتبات Node تُحمَّل كما هي على الخادم (لا تُجمَّع)
   serverExternalPackages: ["pdfjs-dist", "argon2", "tesseract.js", "@napi-rs/canvas", "playwright-core"],
   experimental: {

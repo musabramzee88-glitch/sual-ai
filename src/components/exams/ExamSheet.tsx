@@ -90,8 +90,6 @@ export function ExamSheet({ examId, fit, defaultName, title, html, variant, mode
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={`/exams/${examId}`} className="text-sm text-muted underline">{s.back}</Link>
-        <span className="mx-2 h-5 w-px bg-line" />
         {tab("questions", s.questions)}{tab("answers", s.answers)}{tab("key", s.key)}{tab("sheet", s.answerSheet)}
         <span className="flex-1" />
         <button onClick={() => frame.current?.print()} className="rounded-lg border border-line px-4 py-2 font-semibold">{s.print}</button>
