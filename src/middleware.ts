@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { buildCsp, newNonce } from "@/lib/csp";
 
 const PROTECTED = ["/dashboard", "/subscribe", "/admin", "/settings", "/exams"];
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -36,7 +37,17 @@ export function middleware(req: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+  // صفحات HTML: سياسة nonce (Next يضع الرمز على سكربتاته من ترويسة الطلب)
+  const nonce = newNonce();
+  const csp = buildCsp({ nonce, dev: process.env.NODE_ENV !== "production" });
+  const headers = new Headers(req.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("content-security-policy", csp);
+  const res = NextResponse.next({ request: { headers } });
+  res.headers.set("content-security-policy", csp);
+  return res;
 }
 
-export const config = { matcher: ["/api/:path*", "/dashboard/:path*", "/dashboard", "/subscribe/:path*", "/subscribe", "/admin/:path*", "/admin", "/settings/:path*", "/exams", "/exams/:path*"] };
+// كل الصفحات وواجهة API، عدا الملفات الثابتة (لا تحتاج nonce)
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest).*)"] };

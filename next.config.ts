@@ -1,20 +1,10 @@
 import type { NextConfig } from "next";
+import { buildCsp } from "./src/lib/csp";
 
 const isDev = process.env.NODE_ENV !== "production";
 
-// سياسة أمان المحتوى — تُشدَّد أكثر (nonces) عند إضافة بوابة الدفع
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join("; ");
+// سياسة أمان المحتوى الأساسية (الملفات وواجهة API)؛ صفحات HTML تأخذ سياسة nonce أشد من الـ middleware (src/lib/csp.ts)
+const csp = buildCsp({ dev: isDev });
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
