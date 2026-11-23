@@ -96,7 +96,7 @@ describe("compact layout", () => {
     expect(html.indexOf('class="note"')).toBeLessThan(html.indexOf("</main>"));
     // الختام داخل كتلة .tail مع آخر فرع (لا تنقسم)، سواء القسم الأخير عمودي أو أفقي
     expect(html).toMatch(/<div class="tail"><ol><li>.*<\/li><\/ol><p class="note">/);
-    expect(renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"]), defs(["الموصلات", "العوازل", "الشحنة"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toMatch(/<div class="tail"><section>.*<\/section><p class="note">/);
+    expect(renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"]), defs(["الموصلات", "العوازل", "الشحنة"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toMatch(/<div class="tail"><section[^>]*>.*<\/section><p class="note">/);
     expect((renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"])), DEFAULT_TEMPLATE, "QUESTIONS_ONLY").match(/class="note"/g) ?? []).length).toBe(1);
     expect(renderExamHtml(e(defs(["عرّف الكشف الكهربائي وبيّن أنواعه وطريقة عمله", "علّل سبب انحراف ورقتي الكشاف عند تقريب جسم مشحون"])), DEFAULT_TEMPLATE, "ANSWER_KEY")).not.toContain('class="note"');
     expect(renderExamHtml(e(), DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('class="note"'); // بلا أقسام: تبقى بعد المحتوى
@@ -199,5 +199,24 @@ describe("accent colour", () => {
       expect(html).toContain("--ac: #000000");
       expect(html).not.toContain("<script>");
     }
+  });
+});
+
+describe("keeping a question on one page", () => {
+  const sec = (n: number, len = 20): RenderExam["sections"][0] => ({ instruction: "قارن:", marks: 10, branches: Array.from({ length: n }, (_, i) => ({ prompt: "ا".repeat(len) + i, options: null, answer: "ج", marks: 2 })) });
+  it("a normal question stays whole (class keep); a very long one may split between its items", async () => {
+    const { keepTogether } = await import("./exam-render");
+    expect(keepTogether(sec(4), "QUESTIONS_ONLY", 0)).toBe(true);
+    expect(keepTogether(sec(30, 120), "QUESTIONS_ONLY", 0)).toBe(false);
+    expect(keepTogether(sec(30, 120), "ANSWER_SHEET", 0)).toBe(false);
+    const html = renderExamHtml({ lang: "AR", values: {}, sections: [sec(4), sec(30, 120)] }, DEFAULT_TEMPLATE, "QUESTIONS_ONLY");
+    expect((html.match(/<section class="keep">/g) ?? []).length).toBe(1);
+    expect(html).toContain("section.keep { break-inside: avoid; }");
+  });
+  it("answers and answer lines make a question taller, so fewer stay whole", async () => {
+    const { keepTogether } = await import("./exam-render");
+    const s = sec(8, 60);
+    expect(keepTogether(s, "QUESTIONS_ONLY", 0)).toBe(true);
+    expect(keepTogether(s, "QUESTIONS_ONLY", 4)).toBe(false); // أسطر إجابة تحت كل فرع
   });
 });

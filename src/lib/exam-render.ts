@@ -193,6 +193,25 @@ function sheetBody(exam: RenderExam, lang: "ar" | "en", n: (x: number) => string
   return `${lead}${cells.length ? `<div class="cells2">${cells.join("")}</div>` : `<p class="note">${ar ? "لا توجد أسئلة موضوعية في هذا الامتحان." : "This exam has no objective questions."}</p>`}`;
 }
 
+/**
+ * هل يبقى السؤال الرئيس كله في صفحة واحدة؟ تقدير لعدد أسطره: ما يتسع في نحو نصف صفحة يُحفظ كله (فإن لم يتسع في ما تبقى
+ * من الصفحة انتقل كله إلى التالية)، أما الطويل جداً فيجوز أن ينقسم بين فروعه كي لا يترك فراغاً كبيراً.
+ */
+export function keepTogether(s: RenderSection, variant: Variant, answerLines: number): boolean {
+  if (variant === "ANSWER_SHEET") return false;
+  if (isInlineSection(s, variant, answerLines)) return true;
+  let lines = 2; // العنوان
+  for (const b of s.branches) {
+    lines += Math.ceil((b.prompt.length || 1) / 80);
+    if (variant !== "ANSWER_KEY" && b.options?.length) lines += Math.ceil(b.options.join("      ").length / 90);
+    if (variant !== "QUESTIONS_ONLY") lines += Math.ceil((b.answer.length || 1) / 90);
+    if (variant === "QUESTIONS_ONLY" && !b.options?.length) lines += answerLines * 1.3;
+    if (variant !== "ANSWER_KEY") { if (b.image) lines += 9; if (b.table) lines += b.table.cells.length * 1.3 + 0.5; }
+    lines += 0.4; // المسافة بين الفروع
+  }
+  return lines <= 26;
+}
+
 /** عبارة ما يتركه الطالب، بأسلوب الأوراق العراقية */
 export function pickNotes(exam: RenderExam, lang: "ar" | "en", n: (x: number) => string) {
   const total = exam.sections.length;
@@ -243,9 +262,11 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
     if (last) footerPlaced = true;
     // آخر قسم: عبارة الختام تُحبس مع آخر فرع في كتلة لا تنقسم فلا تنفرد بصفحة
     // (المتصفح لا يلتزم دائماً بـ break-before: avoid). القسم الأفقي القصير يُحبس كله معها.
-    if (last && inline) return `<div class="tail"><section>${head}<ol${cls}>${rows.join("")}</ol></section>${footer}</div>`;
-    if (last) return `<section>${head}${rows.length > 1 ? `<ol>${rows.slice(0, -1).join("")}</ol>` : ""}<div class="tail"><ol>${rows[rows.length - 1]}</ol>${footer}</div></section>`;
-    return `<section>${head}<ol${cls}>${rows.join("")}</ol></section>`;
+    const keep = keepTogether(s, variant, tpl.answerLines);
+    const sc = keep ? ' class="keep"' : "";
+    if (last && inline) return `<div class="tail"><section${sc}>${head}<ol${cls}>${rows.join("")}</ol></section>${footer}</div>`;
+    if (last) return `<section${sc}>${head}${rows.length > 1 ? `<ol>${rows.slice(0, -1).join("")}</ol>` : ""}<div class="tail"><ol>${rows[rows.length - 1]}</ol>${footer}</div></section>`;
+    return `<section${sc}>${head}<ol${cls}>${rows.join("")}</ol></section>`;
   }).join("");
   const m = tpl.margins;
   const ac = tpl.accent && /^#[0-9a-fA-F]{6}$/.test(tpl.accent) ? tpl.accent : "#000000";
@@ -282,6 +303,7 @@ header { font-size: 0.92em; }
 .student { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 1px solid #000; margin-top: 3mm; padding: 0 0 2.5mm; font-size: 0.92em; }
 main { margin-top: 1.2em; }
 section { margin-top: 1.6em; break-inside: auto; }
+section.keep { break-inside: avoid; }
 section:first-child { margin-top: 0; }
 h2 { color: var(--ac); font-size: 1em; font-weight: 700; margin: 0 0 0.6em; display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; line-height: 1.6; break-after: avoid; }
 h2 .mk { white-space: nowrap; font-weight: 700; }

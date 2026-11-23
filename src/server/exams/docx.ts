@@ -5,7 +5,7 @@ import {
 } from "docx";
 import { mathTokens } from "@/lib/math-format";
 import {
-  LABELS, LETTERS, answerPlain, digits, field, isInlineSection, isOn, pickNotes, splitRuns,
+  LABELS, LETTERS, answerPlain, digits, field, isInlineSection, isOn, keepTogether, pickNotes, splitRuns,
   type HeaderKey, type RenderExam, type RenderQuestion, type RenderTemplate, type Variant,
 } from "@/lib/exam-render";
 
@@ -201,14 +201,18 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
         body.push(para(s.branches.map((b, j) => `${ar ? `${n(j + 1)}-` : `${j + 1}.`} ${b.prompt}`).join("          "), { start: 0, after: 80 }));
         return;
       }
+      // أجزاء السؤال بالترتيب؛ السؤال المحفوظ كاملاً (keepTogether) يربط كل جزء بالتالي (keepNext) إلا الأخير فيبقى في صفحة واحدة
+      const keep = keepTogether(s, variant, tpl.answerLines);
+      const parts: { base: boolean; make: (kn: boolean) => Paragraph | Table }[] = [];
       s.branches.forEach((b, j) => {
         const last = i === exam.sections.length - 1 && j === s.branches.length - 1;
-        body.push(para(`${ar ? `${n(j + 1)}-` : `${j + 1}.`}\t${b.prompt}`, { start: 567, hanging: 567, before: 60, keepNext: !!(b.options?.length || b.image || b.table) || variant !== "QUESTIONS_ONLY" || last }));
-        body.push(...mediaParas(b));
-        if (variant !== "ANSWER_KEY" && b.options?.length) body.push(para(b.options.map((o, k) => `${LETTERS[lang][k]}- ${o}`).join("      "), { start: 567, after: 40 }));
-        if (variant !== "QUESTIONS_ONLY") body.push(para([...(variant === "WITH_ANSWERS" ? runs(`${ar ? "الإجابة" : "Answer"}: `, { bold: true }) : []), ...runs(answerPlain(b, lang), { bold: true })], { start: 567, after: 40 }));
-        if (variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length) for (let k = 0; k < tpl.answerLines; k++) body.push(new Paragraph({ border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: "777777", space: 1 } }, spacing: { before: 200 }, indent: { start: 567 }, children: [] }));
+        parts.push({ base: !!(b.options?.length || b.image || b.table) || variant !== "QUESTIONS_ONLY" || last, make: (kn) => para(`${ar ? `${n(j + 1)}-` : `${j + 1}.`}\t${b.prompt}`, { start: 567, hanging: 567, before: 60, keepNext: kn }) });
+        for (const m of mediaParas(b)) parts.push({ base: true, make: () => m });
+        if (variant !== "ANSWER_KEY" && b.options?.length) parts.push({ base: false, make: (kn) => para(b.options!.map((o, k) => `${LETTERS[lang][k]}- ${o}`).join("      "), { start: 567, after: 40, keepNext: kn }) });
+        if (variant !== "QUESTIONS_ONLY") parts.push({ base: false, make: (kn) => para([...(variant === "WITH_ANSWERS" ? runs(`${ar ? "الإجابة" : "Answer"}: `, { bold: true }) : []), ...runs(answerPlain(b, lang), { bold: true })], { start: 567, after: 40, keepNext: kn }) });
+        if (variant === "QUESTIONS_ONLY" && tpl.answerLines > 0 && !b.options?.length) for (let k = 0; k < tpl.answerLines; k++) parts.push({ base: false, make: (kn) => new Paragraph({ keepNext: kn, border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: "777777", space: 1 } }, spacing: { before: 200 }, indent: { start: 567 }, children: [] }) });
       });
+      parts.forEach((pt, idx) => body.push(pt.make(pt.base || (keep && idx < parts.length - 1))));
     });
   }
 
