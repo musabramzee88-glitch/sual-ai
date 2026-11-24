@@ -5,10 +5,10 @@ import { Logo } from "./Logo";
 
 export function SiteHeader({ t, locale }: { t: Dictionary; locale: Locale }) {
   const links = [
-    ["#features", t.nav.features],
-    ["#curricula", t.nav.curricula],
-    ["#how", t.nav.how],
-    ["#pricing", t.nav.pricing],
+    ["/#features", t.nav.features],
+    ["/#curricula", t.nav.curricula],
+    ["/#how", t.nav.how],
+    ["/#pricing", t.nav.pricing],
   ] as const;
   return (
     <header className="sticky top-0 z-30 border-b border-line/70 bg-paper/85 backdrop-blur">

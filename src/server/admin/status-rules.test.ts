@@ -50,4 +50,12 @@ describe("system status rules", () => {
     expect(b.hint).toContain("books:reprocess");
     expect(overall(evaluate({ ...healthy, books: { processing: 0, failed: 1, stuck: 0 } }))).toBe("warn");
   });
+  it("Arabic fonts are checked on Linux servers only", () => {
+    const f = (fonts: Raw["fonts"]) => evaluate({ ...healthy, fonts }).find((c) => c.key === "fonts");
+    expect(f({ platform: "win32", arabic: null })).toBeUndefined();
+    expect(f({ platform: "linux", arabic: "Amiri" })?.level).toBe("ok");
+    const miss = f({ platform: "linux", arabic: "DejaVu Sans" });
+    expect(miss?.level).toBe("warn");
+    expect(miss?.hint).toContain("60-sual-arabic.conf");
+  });
 });

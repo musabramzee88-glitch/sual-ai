@@ -14,6 +14,8 @@ export type Raw = {
   ai: { keyConfigured: boolean; failed24h: number; lastError: string | null };
   books: { processing: number; failed: number; stuck: number };
   exports: { failed24h: number };
+  /** الخط الذي يُرسم به «Traditional Arabic» (لينكس فقط؛ null = لا يُعرف أو ليس لينكس) */
+  fonts?: { platform: string; arabic: string | null };
   now: number;
 };
 
@@ -64,6 +66,12 @@ export function evaluate(r: Raw): Check[] {
     ? { key: "books", level: "warn", value: `${r.books.stuck} كتاب عالق في المعالجة`, hint: "npm run books:reprocess يعيد معالجة العالقة." }
     : r.books.failed > 0 ? { key: "books", level: "warn", value: `${r.books.failed} كتاب فشلت معالجته`, hint: "راجعها في مكتبة الكتب." }
     : { key: "books", level: "ok", value: r.books.processing ? `${r.books.processing} قيد المعالجة` : "سليمة" });
+
+  if (r.fonts?.platform === "linux") {
+    out.push(r.fonts.arabic === "Amiri"
+      ? { key: "fonts", level: "ok", value: "مثبّتة" }
+      : { key: "fonts", level: "warn", value: "الخطوط العربية غير مثبّتة", hint: "أوراق PDF ستخرج بخط بديل. ثبّت الحزم وملف deploy/fonts/60-sual-arabic.conf (يفعلها سكربت تنصيب الخادم)." });
+  }
 
   out.push({ key: "exports", level: r.exports.failed24h >= 3 ? "warn" : "ok", value: r.exports.failed24h ? `${r.exports.failed24h} تصدير فاشل خلال 24 ساعة` : "سليم" });
   return out;

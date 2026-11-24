@@ -50,6 +50,13 @@ const schema = z.object({
   CHROMIUM_PATH: z.string().optional(),
   // النسخ الاحتياطي (scripts/backup.mjs): تقرأ صفحة «حالة النظام» سجلّه من هنا
   BACKUP_DIR: z.string().default("./backups"),
+  // بريد يصله تنبيه عند عطل (قاعدة البيانات، النسخ الاحتياطي، PDF، الذكاء الاصطناعي…) — فحص كل ساعة في الإنتاج
+  ALERT_EMAIL: z.string().email().optional(),
+  // التواصل والاسترجاع (تظهر في صفحات الشروط والخصوصية وتواصل معنا)
+  SUPPORT_EMAIL: z.string().email().optional(),
+  SUPPORT_WHATSAPP: z.string().regex(/^\+?[0-9 ]{7,20}$/).optional(),
+  // أيام طلب الاسترجاع بعد التفعيل (0 = لا استرجاع بعد التفعيل إلا لخلل من المنصة)
+  REFUND_DAYS: z.coerce.number().int().min(0).max(60).default(0),
   // عدد الوكلاء الموثوقين أمام الخادم (nginx = 1، Cloudflare ثم nginx = 2): يحدد أي عنوان في x-forwarded-for هو العميل الحقيقي
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(1),
 });

@@ -1,7 +1,7 @@
 import { CurriculumPicker, type PickerText } from "@/components/CurriculumPicker";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { ExamPaperPreview } from "@/components/ExamPaperPreview";
-import { Logo } from "@/components/Logo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { getDictionary } from "@/lib/i18n/server";
 import { listStages, listTracks } from "@/server/curriculum";
@@ -126,13 +126,7 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-line py-10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 text-sm text-muted md:flex-row md:items-center md:justify-between">
-          <Logo label={t.brand} />
-          <p>{t.footer.disclaimer}</p>
-          <p>© {new Date().getFullYear()} {t.brand}. {t.footer.rights}</p>
-        </div>
-      </footer>
+      <SiteFooter t={t} locale={locale} />
     </>
   );
 }

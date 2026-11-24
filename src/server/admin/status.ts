@@ -1,4 +1,5 @@
 import "server-only";
+import { execFile } from "node:child_process";
 import { readdir, readFile, statfs } from "node:fs/promises";
 import path from "node:path";
 import { db } from "../db";
@@ -31,12 +32,13 @@ export async function systemStatus() {
     db.uploadedBook.count({ where: { status: "PROCESSING", updatedAt: { lt: stuckBefore } } }).catch(() => 0),
     db.examExport.count({ where: { status: "FAILED", createdAt: { gte: since } } }).catch(() => 0),
   ]);
+  const arabic = process.platform !== "linux" ? null : await new Promise<string | null>((res) => execFile("fc-match", ["Traditional Arabic:lang=ar", "family"], { timeout: 5000 }, (e, out) => res(e ? null : out.trim().split(",")[0] || null)));
   const raw: Raw = {
     db: dbCheck, migrations: { files, applied },
     backup: { lastOkAt: lastOk?.at ?? null, lastAt: last?.at ?? null, lastError: last && !last.ok ? last.error ?? "خطأ" : null, dbBytes: lastOk?.dbBytes ?? null },
     disk: { freeBytes: disk }, pdf,
     ai: { keyConfigured: !!env.GEMINI_API_KEY, failed24h: failedJobs, lastError: lastJob?.error?.slice(0, 160) ?? null },
-    books: { processing, failed: failedBooks, stuck }, exports: { failed24h: failedExports }, now,
+    books: { processing, failed: failedBooks, stuck }, exports: { failed24h: failedExports }, fonts: { platform: process.platform, arabic }, now,
   };
   const checks = evaluate(raw);
   const version = await readFile(".live-state.json", "utf8").then((s) => (JSON.parse(s).builtCommit as string | null)?.slice(0, 7) ?? null).catch(() => null);
