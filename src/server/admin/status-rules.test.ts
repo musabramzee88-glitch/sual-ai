@@ -58,4 +58,11 @@ describe("system status rules", () => {
     expect(miss?.level).toBe("warn");
     expect(miss?.hint).toContain("60-sual-arabic.conf");
   });
+  it("off-site backup shows only when enabled, and warns when it fails", () => {
+    const o = (offsite: "ok" | "error" | null, offsiteError: string | null = null) => evaluate({ ...healthy, backup: { ...healthy.backup, offsite, offsiteError } }).find((c) => c.key === "offsite");
+    expect(o(null)).toBeUndefined();
+    expect(o("ok")?.level).toBe("ok");
+    expect(o("error", "rclone copy storage: timeout")).toMatchObject({ level: "warn" });
+    expect(o("error", "rclone copy storage: timeout")?.hint).toContain("timeout");
+  });
 });

@@ -8,7 +8,7 @@ export type Check = { key: string; level: Level; value: string; hint?: string };
 export type Raw = {
   db: { ok: boolean; ms: number; error?: string };
   migrations: { files: number; applied: number };
-  backup: { lastOkAt: string | null; lastAt: string | null; lastError: string | null; dbBytes: number | null };
+  backup: { lastOkAt: string | null; lastAt: string | null; lastError: string | null; dbBytes: number | null; offsite?: "ok" | "error" | null; offsiteError?: string | null };
   disk: { freeBytes: number | null };
   pdf: { ok: boolean; ms: number; error?: string };
   ai: { keyConfigured: boolean; failed24h: number; lastError: string | null };
@@ -48,6 +48,10 @@ export function evaluate(r: Raw): Check[] {
       hint: failedSince ? `آخر محاولة فشلت: ${r.backup.lastError}` : age > 26 ? "النسخ اليومي متوقف: هل نافذة start-sual مفتوحة؟" : undefined,
     });
   }
+
+  // النسخة خارج الخادم (OFFSITE_REMOTE): تظهر فقط إن كانت مفعّلة، فيُرسَل «عادت للعمل» حين تنجح بعد فشل
+  if (r.backup.offsite === "error") out.push({ key: "offsite", level: "warn", value: "النسخة خارج الخادم فشلت", hint: `النسخة المحلية سليمة، لكن لم تُرسل للتخزين الخارجي: ${r.backup.offsiteError ?? "خطأ"}` });
+  else if (r.backup.offsite === "ok") out.push({ key: "offsite", level: "ok", value: "تُرسل يومياً" });
 
   if (r.disk.freeBytes !== null) {
     const f = r.disk.freeBytes;

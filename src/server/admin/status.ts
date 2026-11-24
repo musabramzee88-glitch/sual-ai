@@ -18,7 +18,7 @@ export async function systemStatus() {
     readdir(path.resolve("prisma/migrations"), { withFileTypes: true }).then((d) => d.filter((x) => x.isDirectory()).length).catch(() => 0),
     db.$queryRaw<{ n: bigint }[]>`SELECT count(*)::bigint AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`.then((r) => Number(r[0]?.n ?? 0)).catch(() => 0),
   ]);
-  const log = await readFile(path.join(path.resolve(env.BACKUP_DIR), "backup-log.json"), "utf8").then((s) => JSON.parse(s) as { at: string; ok: boolean; error?: string; dbBytes?: number }[]).catch(() => []);
+  const log = await readFile(path.join(path.resolve(env.BACKUP_DIR), "backup-log.json"), "utf8").then((s) => JSON.parse(s) as { at: string; ok: boolean; error?: string; dbBytes?: number; offsite?: "ok" | "error"; offsiteError?: string }[]).catch(() => []);
   const lastOk = [...log].reverse().find((r) => r.ok) ?? null;
   const last = log.at(-1) ?? null;
   const disk = await statfs(path.resolve(env.STORAGE_DIR)).then((s) => Number(s.bavail) * Number(s.bsize)).catch(() => null);
@@ -35,7 +35,7 @@ export async function systemStatus() {
   const arabic = process.platform !== "linux" ? null : await new Promise<string | null>((res) => execFile("fc-match", ["Traditional Arabic:lang=ar", "family"], { timeout: 5000 }, (e, out) => res(e ? null : out.trim().split(",")[0] || null)));
   const raw: Raw = {
     db: dbCheck, migrations: { files, applied },
-    backup: { lastOkAt: lastOk?.at ?? null, lastAt: last?.at ?? null, lastError: last && !last.ok ? last.error ?? "خطأ" : null, dbBytes: lastOk?.dbBytes ?? null },
+    backup: { lastOkAt: lastOk?.at ?? null, lastAt: last?.at ?? null, lastError: last && !last.ok ? last.error ?? "خطأ" : null, dbBytes: lastOk?.dbBytes ?? null, offsite: lastOk?.offsite ?? null, offsiteError: lastOk?.offsiteError ?? null },
     disk: { freeBytes: disk }, pdf,
     ai: { keyConfigured: !!env.GEMINI_API_KEY, failed24h: failedJobs, lastError: lastJob?.error?.slice(0, 160) ?? null },
     books: { processing, failed: failedBooks, stuck }, exports: { failed24h: failedExports }, fonts: { platform: process.platform, arabic }, now,

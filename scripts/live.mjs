@@ -8,7 +8,7 @@
  *   ثم npm install / prisma migrate deploy / prisma generate، ثم يبني ويشغّل.
  * - لا يمسّ تعديلاتك المحلية: إن كان في الملفات المتتبَّعة تعديل محلي أو commits محلية يتوقف عن التحديث ويخبرك.
  * - فشل البناء يُبقي النسخة القديمة تعمل ولا يعيد المحاولة على التحديث نفسه.
- * متغيرات: PORT (3000)، LIVE_INTERVAL بالثواني (60).
+ * متغيرات: PORT (3000)، LIVE_INTERVAL بالثواني (60)، BIND_HOST (على الخادم 127.0.0.1 فلا يُفتح الموقع إلا عبر nginx).
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -33,7 +33,7 @@ let busy = false;
 
 function startServer() {
   log(`تشغيل الموقع على http://localhost:${PORT}`);
-  server = spawn("npx", ["next", "start", "-p", PORT], { stdio: "inherit", shell: win, detached: !win, env: { ...process.env, NEXT_DIST_DIR: state.dist } });
+  server = spawn("npx", ["next", "start", "-p", PORT, ...(process.env.BIND_HOST ? ["-H", process.env.BIND_HOST] : [])], { stdio: "inherit", shell: win, detached: !win, env: { ...process.env, NEXT_DIST_DIR: state.dist } });
   const me = server;
   me.on("exit", (code) => {
     if (server !== me || stopping) return;

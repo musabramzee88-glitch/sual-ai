@@ -13,7 +13,7 @@ export type AlertPlan = { mail: { subject: string; text: string } | null; next: 
 
 const LABELS: Record<string, string> = {
   db: "قاعدة البيانات", migrations: "تحديثات قاعدة البيانات", backup: "النسخ الاحتياطي", disk: "مساحة القرص", pdf: "محرّك PDF",
-  ai: "الذكاء الاصطناعي", books: "الكتب", exports: "التنزيلات", fonts: "الخطوط العربية",
+  ai: "الذكاء الاصطناعي", books: "الكتب", exports: "التنزيلات", fonts: "الخطوط العربية", offsite: "النسخة خارج الخادم",
 };
 const rank = { ok: 0, warn: 1, error: 2 } as const;
 

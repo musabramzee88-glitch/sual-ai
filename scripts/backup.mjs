@@ -8,6 +8,8 @@
  * المجلد: BACKUP_DIR في .env (الافتراضي ./backups). يُستحسن أن يكون على قرص آخر أو مجلد سحابي (OneDrive) ليبقى إن تلف الجهاز.
  * تُحفظ آخر BACKUP_KEEP نسخة لقاعدة البيانات (14 افتراضياً)؛ ملفات الكتب مرآة واحدة لا يُحذف منها شيء.
  * كل نسخة تُفحص بعد إنشائها (pg_restore --list) وتُسجَّل في backup-log.json (تقرؤه صفحة «حالة النظام»).
+ * نسخة خارج الجهاز (اختياري): OFFSITE_REMOTE في .env (مثلاً storagebox:sual) ⇒ بعد كل نسخة ناجحة يُرسَل المجلد بـ rclone
+ * (قاعدة البيانات sync بنفس التدوير، والملفات copy لا تحذف). إعداد الوجهة وكلمتها بـ «rclone config» على الخادم، لا في الكود.
  * كلمة مرور قاعدة البيانات تُمرَّر بمتغير PGPASSWORD لا في سطر الأوامر، ولا تُطبع.
  */
 import { spawnSync } from "node:child_process";
@@ -37,6 +39,18 @@ export const BACKUP_DIR = path.resolve(cfg("BACKUP_DIR", "./backups") || "./back
 const STORAGE_DIR = path.resolve(cfg("STORAGE_DIR", "./storage") || "./storage");
 const KEEP = Math.max(1, Number(cfg("BACKUP_KEEP", "14")) || 14);
 const LOG = path.join(BACKUP_DIR, "backup-log.json");
+const OFFSITE = cfg("OFFSITE_REMOTE", "").replace(/\/+$/, "");
+
+/** نسخ إلى خارج الجهاز بـ rclone؛ يعيد null عند النجاح أو رسالة الخطأ */
+function offsite(say) {
+  if (spawnSync("rclone", ["version"], { shell: win, stdio: "ignore" }).status !== 0) return "لم أجد rclone (ثبّته: apt install rclone)";
+  say(`إرسال النسخة إلى ${OFFSITE} …`);
+  for (const [mode, sub] of [["sync", "db"], ["copy", "storage"]]) {
+    const r = spawnSync("rclone", [mode, path.join(BACKUP_DIR, sub), `${OFFSITE}/${sub}`, "--transfers", "4"], { shell: win, encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] });
+    if (r.status !== 0) return `rclone ${mode} ${sub}: ${(r.stderr || "").trim().split("\n").pop()}`.slice(0, 200);
+  }
+  return null;
+}
 
 /** مكان أداة PostgreSQL: PG_BIN، ثم PATH، ثم مجلدات التثبيت المعتادة على ويندوز (أحدث نسخة) */
 export function pgTool(name) {
@@ -121,6 +135,11 @@ export function backup({ quiet = false } = {}) {
     const dumps = readdirSync(path.join(BACKUP_DIR, "db")).filter((f) => f.endsWith(".dump")).sort();
     for (const old of dumps.slice(0, Math.max(0, dumps.length - KEEP))) rmSync(path.join(BACKUP_DIR, "db", old), { force: true });
     row.ok = true;
+    if (OFFSITE) {
+      const err = offsite(say);
+      row.offsite = err ? "error" : "ok";
+      if (err) { row.offsiteError = err; console.error(`✘ النسخة محلياً تمت، لكن الإرسال خارج الجهاز فشل: ${err}`); }
+    }
   } catch (e) {
     row.error = e.message;
   }
