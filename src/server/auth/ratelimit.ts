@@ -1,5 +1,7 @@
 import "server-only";
 import { db } from "../db";
+import { env } from "../env";
+import { pickClientIp } from "./client-ip";
 
 /**
  * Rate limiting بنافذة ثابتة مخزّنة في PostgreSQL (ذرّي عبر upsert واحد).
@@ -20,7 +22,5 @@ export async function rateLimit(key: string, limit: number, windowSec: number): 
 export const purgeRateLimits = () => db.rateLimitBucket.deleteMany({ where: { resetAt: { lt: new Date() } } });
 
 export function clientIp(req: Request): string {
-  // خلف وكيل موثوق فقط: أول عنوان في x-forwarded-for
-  const xff = req.headers.get("x-forwarded-for");
-  return (xff?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown").trim().slice(0, 64);
+  return pickClientIp(req.headers.get("x-forwarded-for"), req.headers.get("x-real-ip"), env.TRUSTED_PROXY_HOPS);
 }

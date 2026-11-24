@@ -3,6 +3,16 @@ import { buildCsp, newNonce } from "@/lib/csp";
 
 const PROTECTED = ["/dashboard", "/subscribe", "/admin", "/settings", "/exams"];
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
+// أكبر جسم JSON مقبول (parseBody يحدّ أيضاً بـ 16 ألف حرف، وإشعارات الدفع بـ 64KB)
+const MAX_JSON_BODY = 256 * 1024;
+const MB = 1024 * 1024;
+/** مسارات الرفع وحدها تقبل أجساماً كبيرة، كلٌّ بسقفه (المسار نفسه يتحقق بدقة من الحجم والنوع) */
+const UPLOAD_LIMITS: [RegExp, number][] = [
+  [/^\/api\/v1\/admin\/books$/, 101 * MB],
+  [/^\/api\/v1\/admin\/samples$/, 21 * MB],
+  [/^\/api\/v1\/templates\/logos$/, 2 * MB],
+  [/^\/api\/v1\/exams\/questions\/[^/]+\/image$/, 3 * MB],
+];
 
 /**
  * حماية CSRF لواجهة /api/v1: أي طلب يغيّر الحالة يجب أن يأتي من نفس المصدر
@@ -28,6 +38,17 @@ export function middleware(req: NextRequest) {
     }
     if (!sameOrigin) {
       return NextResponse.json({ error: { code: "CSRF_BLOCKED", message: "Cross-site request blocked" } }, { status: 403 });
+    }
+  }
+
+  // حجم الجسم: السقف الكبير (middlewareClientMaxBodySize) لمسارات الرفع فقط؛ غيرها JSON صغير.
+  // يُرفض بالترويسة قبل قراءة الجسم إلى الذاكرة (لا إغراق للذاكرة بطلبات ضخمة على مسارات عامة كالدخول).
+  if (pathname.startsWith("/api/") && !SAFE.has(req.method)) {
+    const max = UPLOAD_LIMITS.find(([re]) => re.test(pathname))?.[1] ?? MAX_JSON_BODY;
+    const len = req.headers.get("content-length");
+    const chunked = req.headers.get("transfer-encoding")?.toLowerCase().includes("chunked") ?? false;
+    if ((len !== null && Number(len) > max) || (len === null && chunked)) {
+      return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Request too large" } }, { status: 413 });
     }
   }
 

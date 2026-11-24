@@ -50,6 +50,8 @@ const schema = z.object({
   CHROMIUM_PATH: z.string().optional(),
   // النسخ الاحتياطي (scripts/backup.mjs): تقرأ صفحة «حالة النظام» سجلّه من هنا
   BACKUP_DIR: z.string().default("./backups"),
+  // عدد الوكلاء الموثوقين أمام الخادم (nginx = 1، Cloudflare ثم nginx = 2): يحدد أي عنوان في x-forwarded-for هو العميل الحقيقي
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(1),
 });
 
 // المتغيرات الفارغة (KEY=) في .env تُعامل كأنها غير معرّفة

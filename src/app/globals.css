@@ -11,6 +11,7 @@
   --brand-soft: #e3f1ef;
   --accent: #d9902a;
   --accent-soft: #fbefdb;
+  --accent-strong: #84540f;
   --danger: #b4372f;
 }
 
@@ -26,6 +27,7 @@
     --brand-soft: #143a3a;
     --accent: #f0b35a;
     --accent-soft: #3a2c15;
+    --accent-strong: #f0b35a;
     --danger: #ef7a70;
   }
 }
@@ -51,6 +53,7 @@ input:-webkit-autofill { -webkit-text-fill-color: var(--ink); box-shadow: 0 0 0 
   --color-brand-soft: var(--brand-soft);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
   --color-danger: var(--danger);
   --font-sans: var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
 }

@@ -51,7 +51,7 @@ export default async function Home() {
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {tracks.map((tr, i) => (
                 <article key={tr.code} className="rounded-2xl border border-line bg-paper p-6">
-                  <span className={`inline-block rounded-lg px-2.5 py-1 text-xs font-bold ${i === 1 ? "bg-accent-soft text-accent" : "bg-brand-soft text-brand-strong"}`}>{tr.code === "INTERNATIONAL" ? "AR · EN" : "AR"}</span>
+                  <span className={`inline-block rounded-lg px-2.5 py-1 text-xs font-bold ${i === 1 ? "bg-accent-soft text-accent-strong" : "bg-brand-soft text-brand-strong"}`}>{tr.code === "INTERNATIONAL" ? "AR · EN" : "AR"}</span>
                   <h3 className="mt-3 text-xl font-bold">{name(tr)}</h3>
                   <p className="mt-2 text-sm leading-7 text-muted">{locale === "ar" ? tr.descriptionAr : tr.descriptionEn}</p>
                 </article>

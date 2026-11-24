@@ -42,12 +42,16 @@ function splitSection(marks: number, items: MarkItem[]): number[] {
   if (n === 0) return [];
   const each = marks / n;
   if (Number.isInteger(each * 2)) return items.map(() => each);
-  const floor = Math.floor(each);
-  let extra = marks - floor * n;
+  // الوحدة درجة كاملة حين يكفي القسم لدرجة لكل فرع وكانت درجته صحيحة، وإلا نصف درجة:
+  // لا يأخذ فرع صفراً (٦ درجات على ٨ فروع) ولا تُقرَّب درجة القسم (١٢٫٥ تبقى ١٢٫٥ لا ١٣)
+  const unit = Number.isInteger(marks) && marks >= n ? 1 : 0.5;
+  const units = Math.round(marks / unit);
+  const floor = Math.floor(units / n);
+  let extra = units - floor * n;
   const order = items.map((it, i) => [factor(it.difficulty), i] as const).sort((a, b) => b[0] - a[0]).map(([, i]) => i);
   const out = items.map(() => floor);
   for (const i of order) { if (extra <= 0) break; out[i]++; extra--; }
-  return out;
+  return out.map((u) => u * unit);
 }
 
 const half = (x: number) => Math.round(x * 2) / 2;
