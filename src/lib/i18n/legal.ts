@@ -75,7 +75,7 @@ export function legalDoc(kind: LegalKind, locale: Locale, c: LegalConfig): Legal
         { h: "الجهات التي تمر بها البيانات", list: ["الذكاء الاصطناعي (Google Gemini): تُرسل إليه صفحات الكتاب المختارة وتعليمات التوليد فقط، دون اسمك أو بياناتك الشخصية.", "خدمة البريد الإلكتروني: لإرسال رموز التحقق إلى بريدك.", "بوابة الدفع: عند الدفع بالبطاقة، وفق سياستها الخاصة.", "لا نشارك بياناتك مع أي جهة أخرى إلا إذا ألزمنا القانون العراقي بذلك."] },
         { h: "ملفات الارتباط (Cookies)", p: ["نستعمل ملفات ضرورية فقط: جلسة الدخول، والجهاز الموثوق (إن اخترته)، ولغة الواجهة. لا نستعمل ملفات تتبّع أو إعلانات."] },
         { h: "الحماية والاحتفاظ", list: ["الاتصال مشفّر (HTTPS)، وكلمات المرور والرموز تُخزَّن مشفّرة، ولكل امتحان صاحب واحد لا يراه غيره.", "نحتفظ بنسخ احتياطية يومية لحماية عملك من الضياع.", "نحتفظ ببياناتك ما دام حسابك قائماً؛ وعند طلب حذف الحساب نحذف بياناتك الشخصية وامتحاناتك، ونبقي سجلات الدفع المطلوبة قانونياً فقط."] },
-        { h: "حقوقك", p: ["يمكنك طلب نسخة من بياناتك أو تصحيحها أو حذف حسابك بالتواصل معنا.", `التواصل: ${contact}`] },
+        { h: "حقوقك", p: ["يمكنك حذف حسابك بنفسك من «الأمان» في الموقع أو «الحساب» في التطبيق، ويمكنك طلب نسخة من بياناتك أو تصحيحها بالتواصل معنا.", `التواصل: ${contact}`] },
       ],
     } : {
       title: "Privacy Policy",
@@ -86,7 +86,7 @@ export function legalDoc(kind: LegalKind, locale: Locale, c: LegalConfig): Legal
         { h: "Who processes it", list: ["AI (Google Gemini): receives only the selected textbook pages and generation instructions, never your name or personal data.", "Email service: to deliver verification codes.", "Payment gateway: when paying by card, under its own policy.", "We share data with no one else unless required by Iraqi law."] },
         { h: "Cookies", p: ["Only essential cookies: your sign-in session, a trusted device (if you choose it) and the interface language. No tracking or advertising cookies."] },
         { h: "Security and retention", list: ["Connections are encrypted (HTTPS), passwords and codes are stored hashed, and each exam is visible to its owner only.", "We keep daily backups to protect your work.", "We keep your data while your account exists; when you ask us to delete it we remove your personal data and exams, keeping only payment records required by law."] },
-        { h: "Your rights", p: ["You can ask for a copy of your data, correct it, or delete your account by contacting us.", `Contact: ${contact}`] },
+        { h: "Your rights", p: ["You can delete your account yourself from Security on the website or Account in the app, and ask us for a copy of your data or a correction.", `Contact: ${contact}`] },
       ],
     };
   }
