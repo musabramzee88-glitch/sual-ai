@@ -1,24 +1,22 @@
 import '../api/client.dart';
+import '../catalog.g.dart';
 
-/// رسائل عربية لرموز أخطاء الخادم (لا نعرض رموزاً خاماً للمدرس)
+/// رسالة عربية لخطأ الخادم: نفس نصوص الموقع (catalog.g.dart)، ثم رسائل عامة حسب الحالة
 String messageOf(Object e) {
   if (e is ApiError) {
-    const m = {
-      'INVALID_CREDENTIALS': 'البريد أو كلمة المرور غير صحيحة.',
-      'INVALID_CODE': 'الرمز غير صحيح.',
-      'CODE_EXPIRED': 'انتهت صلاحية الرمز. اطلب رمزاً جديداً.',
-      'TOO_MANY_ATTEMPTS': 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.',
-      'OTP_COOLDOWN': 'انتظر قليلاً قبل طلب رمز جديد.',
-      'NO_CHANNEL_AVAILABLE': 'تعذّر إرسال الرمز الآن.',
-      'ACCOUNT_RESTRICTED': 'هذا الحساب موقوف.',
-      'NOT_FOUND': 'لم يُعثر عليه.',
-      'PDF_UNAVAILABLE': 'تصدير PDF غير متاح الآن. جرّب Word.',
-    };
-    if (m.containsKey(e.code)) return m[e.code]!;
-    if (e.status == 429) return 'محاولات كثيرة. انتظر قليلاً.';
+    // لا ذكر للاشتراك أو الدفع داخل التطبيق (سياسة المتاجر): رسالة محايدة
+    if (e.code.startsWith('SUBSCRIPTION') || e.code.startsWith('PAYMENT') || e.code == 'PLAN_NOT_FOUND') return 'حسابك غير مفعّل لهذه الخدمة.';
+    final m = errorsAr[e.code];
+    if (m != null) return m;
+    if (e.code == 'NOT_FOUND') return 'لم يُعثر عليه (ربما حُذف).';
+    if (e.code == 'INVALID_PASSWORD') return 'كلمة المرور غير صحيحة.';
+    if (e.code == 'ADMIN_ACCOUNT') return 'حساب إداري: يُزال من لوحة الإدارة أولاً.';
+    if (e.code == 'PDF_UNAVAILABLE') return 'تصدير PDF غير متاح الآن. جرّب Word.';
+    if (e.status == 429) return errorsAr['RATE_LIMITED'] ?? 'طلبات كثيرة. انتظر قليلاً.';
     if (e.forbidden) return 'حسابك غير مفعّل لهذه الخدمة.';
     if (e.unauthorized) return 'انتهت الجلسة. سجّل الدخول من جديد.';
-    return 'حدث خطأ (${e.status}). حاول مرة أخرى.';
+    if (e.status >= 500) return 'الخادم مشغول الآن. حاول بعد قليل.';
+    return errorsAr['GENERIC'] ?? 'حدث خطأ. حاول مرة أخرى.';
   }
   return 'تعذّر الاتصال بالخادم. تأكد من الإنترنت.';
 }

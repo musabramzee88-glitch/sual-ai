@@ -2,6 +2,8 @@
 import { GENERATABLE_TYPES, QT, QUESTION_TYPES, VERBATIM_TYPES } from "./question-types";
 import { ACCENTS, FONTS, HEADER_KEYS, HIDDEN_BY_DEFAULT, LABELS } from "./exam-render";
 import { examDicts } from "./i18n/exams";
+import { dictionaries } from "./i18n/dictionaries";
+import { templateDicts } from "./i18n/templates";
 
 const s = (x: string) => `'${x.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$").replace(/\n/g, "\\n")}'`;
 const list = (xs: readonly string[]) => `[${xs.map(s).join(", ")}]`;
@@ -35,5 +37,9 @@ const layouts = ['CLASSIC', 'SCHOOL', 'ACADEMIC', 'MINIMAL'];
 const layoutNamesAr = {'CLASSIC': 'كلاسيكي', 'SCHOOL': 'مدرسي', 'ACADEMIC': 'أكاديمي', 'MINIMAL': 'بسيط'};
 const examKinds = ${map(examDicts.ar.kinds)};
 const difficulties = ${map(examDicts.ar.difficulties)};
+/** رسائل الأخطاء (الحساب + الامتحانات + القوالب) كما في الموقع */
+const errorsAr = ${map({ ...(templateDicts.ar.errors as Record<string, string>), ...dictionaries.ar.auth.errors, ...examDicts.ar.errors })};
+/** حالة الحساب (resolveAccess) */
+const accessStatesAr = ${map(dictionaries.ar.dashboard.states)};
 `;
 }

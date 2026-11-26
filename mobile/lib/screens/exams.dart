@@ -1,35 +1,40 @@
 import 'package:flutter/material.dart';
 import '../api/client.dart';
+import 'editor.dart';
 import 'errors.dart';
-import 'exam_detail.dart';
+import 'ui.dart';
 
 class ExamsPage extends StatefulWidget {
-  const ExamsPage({super.key, required this.api, required this.onLogout});
+  const ExamsPage({super.key, required this.api, required this.onLogout, required this.onNew});
   final SualApi api;
   final VoidCallback onLogout;
+  final VoidCallback onNew;
   @override
-  State<ExamsPage> createState() => _ExamsPageState();
+  State<ExamsPage> createState() => ExamsPageState();
 }
 
-class _ExamsPageState extends State<ExamsPage> {
+class ExamsPageState extends State<ExamsPage> {
   late Future<List<Map<String, dynamic>>> _f = widget.api.listExams();
 
-  void _reload() => setState(() => _f = widget.api.listExams());
+  void reload() => setState(() => _f = widget.api.listExams());
 
-  Future<void> _logout() async {
-    await widget.api.logout();
-    widget.onLogout();
+  Future<void> open(String id) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExamEditorPage(api: widget.api, id: id)));
+    reload();
   }
 
-  static const _status = {'READY': 'جاهز', 'GENERATING': 'قيد التوليد', 'FAILED': 'فشل', 'DRAFT': 'مسودة'};
+  Future<void> _delete(Map<String, dynamic> x) async {
+    if (!await confirm(context, 'حذف «${x['title']}»؟', body: 'لا يمكن التراجع.', yes: 'حذف', danger: true)) return;
+    if (!mounted) return;
+    if (await guarded(context, () => widget.api.deleteExam(x['id'] as String), ok: 'حُذف الامتحان.')) reload();
+  }
+
+  static const _status = {'READY': 'جاهز', 'GENERATING': 'قيد التوليد…', 'FAILED': 'فشل التوليد', 'DRAFT': 'مسودة', 'ARCHIVED': 'مؤرشف'};
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('امتحاناتي', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [IconButton(tooltip: 'تسجيل الخروج', onPressed: _logout, icon: const Icon(Icons.logout))],
-      ),
+      appBar: AppBar(title: const Text('امتحاناتي', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(tooltip: 'تحديث', onPressed: reload, icon: const Icon(Icons.refresh))]),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _f,
         builder: (c, s) {
@@ -37,12 +42,12 @@ class _ExamsPageState extends State<ExamsPage> {
           if (s.hasError) {
             final e = s.error!;
             if (e is ApiError && e.unauthorized) WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLogout());
-            return _Message(text: messageOf(e), action: 'إعادة المحاولة', onTap: _reload);
+            return EmptyState(text: messageOf(e), action: 'إعادة المحاولة', onTap: reload, icon: Icons.cloud_off);
           }
           final list = s.data!;
-          if (list.isEmpty) return const _Message(text: 'ما عندك امتحانات بعد.\nأنشئ أول امتحان من الموقع، وسيظهر هنا.');
+          if (list.isEmpty) return EmptyState(text: 'ما عندك امتحانات بعد.', action: 'أنشئ أول امتحان', onTap: widget.onNew, icon: Icons.quiz_outlined);
           return RefreshIndicator(
-            onRefresh: () async { _reload(); await _f; },
+            onRefresh: () async { reload(); await _f; },
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: list.length,
@@ -52,13 +57,16 @@ class _ExamsPageState extends State<ExamsPage> {
                 final ready = x['status'] == 'READY';
                 return Card(
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
                     title: Text(x['title'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('${(x['subject'] as Map?)?['nameAr'] ?? ''} · ${(x['grade'] as Map?)?['nameAr'] ?? ''}\n${_status[x['status']] ?? x['status']} · ${x['totalMarks']} درجة'),
+                    subtitle: Text('${(x['subject'] as Map?)?['nameAr'] ?? ''} · ${(x['grade'] as Map?)?['nameAr'] ?? ''}\n${_status[x['status']] ?? x['status']} · ${ar(x['totalMarks'] as num? ?? 0)} درجة'),
                     isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_left),
-                    enabled: ready,
-                    onTap: ready ? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExamDetailPage(api: widget.api, id: x['id'] as String))) : null,
+                    leading: Icon(ready ? Icons.description : x['status'] == 'FAILED' ? Icons.error_outline : Icons.hourglass_top, color: ready ? brand : x['status'] == 'FAILED' ? Theme.of(context).colorScheme.error : amber),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (v) => v == 'delete' ? _delete(x) : null,
+                      itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('حذف'))],
+                    ),
+                    onTap: ready ? () => open(x['id'] as String) : null,
                   ),
                 );
               },
@@ -68,21 +76,4 @@ class _ExamsPageState extends State<ExamsPage> {
       ),
     );
   }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.action, this.onTap});
-  final String text;
-  final String? action;
-  final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(text, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
-            if (action != null) ...[const SizedBox(height: 14), FilledButton(onPressed: onTap, child: Text(action!))],
-          ]),
-        ),
-      );
 }

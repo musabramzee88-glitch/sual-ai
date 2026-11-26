@@ -188,6 +188,9 @@ npm run typecheck && npm run lint && npm run build
 - `OFFSITE_REMOTE` (rclone): بعد كل نسخة ناجحة `sync` لقاعدة البيانات و`copy` للملفات؛ الفشل يُسجَّل `offsite:"error"` فيظهر فحص `offsite` ويصل تنبيه. الدليل للمستخدم بالعربية: `deploy/README.md`.
 
 ## تطبيق الجوال (mobile/، Flutter)
-- يتصل بـ `/api/v1` نفسها بجلسة `sual_session` يحفظها العميل (`mobile/lib/api/client.dart`) ويرسلها كترويسة Cookie؛ الـ middleware يقبل الطلبات بلا Origin (عميل أصلي) ويحمي المتصفح من CSRF. أي تعديل على شكل رد API أو رموز الأخطاء يُحدَّث معه العميل واختباراته (`mobile/test`)، ويُشغَّل `live_server_test.dart` على خادم حي.
-- **لا دفع داخل التطبيق** (عمولة المتاجر): لا سعر ولا رابط اشتراك. التفاصيل والناقص في `mobile/README.md`.
-- أندرويد: `INTERNET` يجب أن تبقى في `AndroidManifest.xml` الرئيسي (بدونها لا يتصل التطبيق في النسخة النهائية). الترجمة العربية تحتاج `flutter_localizations` (بدونها يتعطل TextField).
+- تطبيق المدرس الكامل (الدخول والتسجيل، المعالج، المحرر بكل إجراءاته، الورقة PDF/Word/ZIP والطباعة، القوالب والشعارات، الحساب وحذفه) فوق `/api/v1` نفسها بجلسة `sual_session` يحفظها العميل (`mobile/lib/api/client.dart`). الموقع يبقى للدفع ولوحة الإدارة. التفاصيل: `mobile/README.md`.
+- **أي ميزة مدرس جديدة في الموقع تُضاف للتطبيق أيضاً**، وأي تغيير في شكل رد API يُحدَّث معه العميل واختباراته، ويُشغَّل `mobile/test/live_server_test.dart` على خادم حي.
+- القوائم المشتركة (أنواع الأسئلة، الترويسة، الخطوط، الأخطاء، حالات الحساب) تُولَّد: `npx tsx scripts/gen-mobile-catalog.ts` ← `mobile/lib/catalog.g.dart` (اختبار مزامنة `src/lib/mobile-catalog.test.ts`). لا تكتبها يدوياً في Dart.
+- **لا دفع ولا ذكر للاشتراك داخل التطبيق** (عمولة المتاجر): `errors.dart` يحوّل رموز SUBSCRIPTION_*/PAYMENT_* لرسالة محايدة، واختبار widget يتحقق.
+- `POST /api/v1/account/delete` (`deleteAccount` في `src/server/auth/account.ts`): يمسح البيانات الشخصية والمحتوى ويُبقي سجلات الدفع (Restrict) ويغلق الحساب؛ لا يحذف الإداريين. مطلوب لآبل لأن التطبيق فيه إنشاء حساب.
+- أندرويد: `INTERNET` في `AndroidManifest.xml` الرئيسي، وترجمة `flutter_localizations` (بدونهما لا يتصل التطبيق أو يتعطل). اختبار `small_screen_test.dart` يمنع تجاوز العرض على هاتف 360 بكسل.
