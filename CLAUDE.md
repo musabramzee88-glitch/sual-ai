@@ -186,3 +186,8 @@ npm run typecheck && npm run lint && npm run build
 - `deploy/install.sh` (Ubuntu، root، يُعاد تشغيله بأمان): PostgreSQL من PGDG (أحدث نسخة لتقرأ نسخ أي إصدار)، Node 22، Chromium من playwright-core (`CHROMIUM_PATH` يُكتب في .env)، الخطوط، مستخدم `sual`، مفتاح Deploy key للقراءة من GitHub، `.env` بأسرار مولَّدة (لا يُكتب فوقه)، خدمة systemd `sual` تشغّل `scripts/live.mjs` (تحديث تلقائي + نسخة يومية) مع `BIND_HOST=127.0.0.1`، nginx (110MB، مهلة 300 ث، `X-Forwarded-For $proxy_add_x_forwarded_for` ⇒ `TRUSTED_PROXY_HOPS=1`)، certbot، ufw، fail2ban، swap. أي متغير بيئة جديد مطلوب في الإنتاج: أضفه لقالب `.env` في السكربت.
 - `deploy/import.sh <مجلد>`: ينقل مجلد `npm run backup` من جهاز المستخدم (ينسخه إلى `/var/lib/sual/import` لأن `/root` مغلق على `sual`)، يوقف الخدمة، `backup.mjs restore` (نسخة أمان أولاً) ثم `prisma migrate deploy`.
 - `OFFSITE_REMOTE` (rclone): بعد كل نسخة ناجحة `sync` لقاعدة البيانات و`copy` للملفات؛ الفشل يُسجَّل `offsite:"error"` فيظهر فحص `offsite` ويصل تنبيه. الدليل للمستخدم بالعربية: `deploy/README.md`.
+
+## تطبيق الجوال (mobile/، Flutter)
+- يتصل بـ `/api/v1` نفسها بجلسة `sual_session` يحفظها العميل (`mobile/lib/api/client.dart`) ويرسلها كترويسة Cookie؛ الـ middleware يقبل الطلبات بلا Origin (عميل أصلي) ويحمي المتصفح من CSRF. أي تعديل على شكل رد API أو رموز الأخطاء يُحدَّث معه العميل واختباراته (`mobile/test`)، ويُشغَّل `live_server_test.dart` على خادم حي.
+- **لا دفع داخل التطبيق** (عمولة المتاجر): لا سعر ولا رابط اشتراك. التفاصيل والناقص في `mobile/README.md`.
+- أندرويد: `INTERNET` يجب أن تبقى في `AndroidManifest.xml` الرئيسي (بدونها لا يتصل التطبيق في النسخة النهائية). الترجمة العربية تحتاج `flutter_localizations` (بدونها يتعطل TextField).
