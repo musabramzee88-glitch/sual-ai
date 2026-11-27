@@ -44,6 +44,11 @@ export type Section = z.infer<typeof section>;
 
 export const instructionFor = (type: GenType, lang: "AR" | "EN") => (lang === "EN" ? QT[type].instEn : QT[type].instAr);
 
+/** صفحات كتاب النشاط تُرقَّم داخلياً +1000 كي لا تتصادم مع كتاب الطالب */
+export const ACTIVITY_OFFSET = 1000;
+export const pageLabel = (n: number) => (n >= ACTIVITY_OFFSET ? `كتاب النشاط — صفحة ${n - ACTIVITY_OFFSET}` : `صفحة ${n}`);
+/** علامة الصفحة في الموجّه: كتاب الطالب كما هو، والنشاط بمعرّفه الداخلي ليُرجَع في sourcePages */
+const pageMarker = (n: number) => (n >= ACTIVITY_OFFSET ? `${pageLabel(n)} (id ${n})` : `صفحة ${n}`);
 export type SourcePage = { pageNumber: number; text: string; isOcr: boolean; asImage: boolean };
 
 /** نص الطلب للنموذج: المنهج، المصدر بأرقام صفحاته، وأقسام الامتحان المطلوبة */
@@ -89,8 +94,8 @@ export function buildPrompt(opts: {
       "",
     ] : []),
     "SOURCE PAGES:",
-    ...opts.pages.filter((p) => !p.asImage).map((p) => `=== صفحة ${p.pageNumber} ===\n${p.text}`),
-    ...opts.pages.filter((p) => p.asImage).map((p) => `=== صفحة ${p.pageNumber} === (see attached image labelled page ${p.pageNumber})`),
+    ...opts.pages.filter((p) => !p.asImage).map((p) => `=== ${pageMarker(p.pageNumber)} ===\n${p.text}`),
+    ...opts.pages.filter((p) => p.asImage).map((p) => `=== ${pageMarker(p.pageNumber)} === (see attached image labelled page ${p.pageNumber})`),
   ];
   return lines.filter((l) => l !== "").join("\n");
 }

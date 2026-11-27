@@ -117,6 +117,7 @@ export function ExamWizard({ options, structures, generatable, t }: { options: W
         <label className="space-y-1 text-sm"><span className="text-muted">{t.wizard.book}</span>
           <select className={sc} value={curId} disabled={!subject} onChange={(e) => pickBook(e.target.value)}><option value="">{t.wizard.pick}</option>{books.map((b) => <option key={b.id} value={b.id}>{t.bookKinds[b.kind] ?? b.kind}{b.part ? ` — ${b.part}` : ""}</option>)}</select>
         </label>
+        {cur && cur.kind === "TEXTBOOK" && cur.subject.types.includes("UNSEEN_PASSAGE") && <p className="text-sm text-muted">{t.wizard.bothBooks}</p>}
       </section>
 
       {cur && (

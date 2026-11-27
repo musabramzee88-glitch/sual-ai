@@ -9,7 +9,7 @@ import { normalizeHonorifics, polishQuestion } from "@/lib/exam-text";
 import { distributeMarks, examTotal, sectionMarks, type MarkSection } from "./marks";
 import { pickSamples } from "./samples";
 import {
-  buildPrompt, chooseInstruction, expandRanges, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
+  ACTIVITY_OFFSET, buildPrompt, chooseInstruction, expandRanges, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
   cleanPassage, type CleanQuestion, type CreateExamInput, type GenType, type RawQuestion, type Section, type SourcePage,
 } from "./core";
 
@@ -61,6 +61,40 @@ async function loadSource(bookId: string, storageKey: string, pageNumbers: numbe
     images = (await renderPagesJpeg(bytes, imgPages, 1400)).map((r) => ({ data: r.jpeg, mime: "image/jpeg" as const }));
   }
   return { pages, images };
+}
+
+type AbRef = { bookId: string; pages: number[] };
+
+/** يحمّل كتاب الطالب وكتاب النشاط (إن وُجد) معاً؛ صفحات النشاط +ACTIVITY_OFFSET */
+async function loadSources(bookId: string, storageKey: string, pages: number[], ab?: AbRef | null) {
+  const main = await loadSource(bookId, storageKey, pages);
+  if (!ab?.pages.length) return main;
+  const book = await db.uploadedBook.findUnique({ where: { id: ab.bookId } });
+  if (!book) return main;
+  const extra = await loadSource(book.id, book.storageKey, ab.pages);
+  return { pages: [...main.pages, ...extra.pages.map((p) => ({ ...p, pageNumber: p.pageNumber + ACTIVITY_OFFSET }))], images: [...main.images, ...extra.images] };
+}
+
+/** كتاب النشاط المقابل لمنهج إنكليزي: صفحاته المناظرة لنطاق كتاب الطالب (فصل بفصل إن تطابق عدد الفصول، وإلا بالنسبة) */
+async function activitySource(cur: { id: string; kind: string; trackId: string; gradeId: string; branchId: string | null; subjectId: string; academicYearId: string; language: string; part: number; edition: string | null; chapters: { sortOrder: number; pageStart: number | null; pageEnd: number | null }[] }, chosenIdx: number[], ranges: { from: number; to: number }[], sbPages: number) {
+  if (cur.kind !== "TEXTBOOK" || cur.language !== "EN") return null;
+  const ab = await db.curriculum.findFirst({
+    where: { trackId: cur.trackId, gradeId: cur.gradeId, branchId: cur.branchId, subjectId: cur.subjectId, academicYearId: cur.academicYearId, language: cur.language, part: cur.part, edition: cur.edition, kind: "ACTIVITY", isActive: true },
+    include: { chapters: { orderBy: { sortOrder: "asc" } }, books: { where: { status: "READY", ownerId: null }, take: 1 } },
+  });
+  const book = ab?.books[0];
+  if (!ab || !book?.pageCount) return null;
+  let abRanges: { from: number; to: number }[] = [];
+  const usable = ab.chapters.filter((c) => c.pageStart != null && c.pageEnd != null);
+  if (chosenIdx.length && usable.length === cur.chapters.length) {
+    abRanges = chosenIdx.map((i) => ({ from: usable[i].pageStart!, to: usable[i].pageEnd! }));
+  } else {
+    const abPages = book.pageCount ?? 0;
+    const k = abPages / Math.max(1, sbPages);
+    abRanges = ranges.map((r) => ({ from: Math.max(1, Math.floor((r.from - 1) * k) + 1), to: Math.min(abPages, Math.max(1, Math.ceil(r.to * k))) }));
+  }
+  const { pages } = expandRanges(abRanges, book.pageCount);
+  return pages.length ? { bookId: book.id, pages } : null;
 }
 
 /** نطاقات متصلة من قائمة صفحات (لـ ExamSource) */
@@ -123,6 +157,8 @@ export async function createExam(userId: string, input: CreateExamInput) {
   }
   const { pages: pageNumbers, truncated } = expandRanges(ranges, book.pageCount);
   if (pageNumbers.length === 0) return fail("EMPTY_SOURCE");
+  const chosenIdx = input.chapterIds?.length ? input.chapterIds.map((id) => cur.chapters.findIndex((c) => c.id === id)).filter((i) => i >= 0) : [];
+  const abSrc = await activitySource({ ...cur, chapters: cur.chapters }, chosenIdx, ranges, book.pageCount).catch(() => null);
 
   const lang = cur.language === "EN" ? "EN" : "AR";
   const ctx: Ctx = { subject: lang === "EN" ? cur.subject.nameEn : cur.subject.nameAr, grade: lang === "EN" ? cur.grade.nameEn : cur.grade.nameAr, lang, useLatinSymbols: cur.subject.useLatinSymbols, family: cur.subject.family, samples: await pickSamples(cur.subjectId, cur.gradeId) };
@@ -132,15 +168,15 @@ export async function createExam(userId: string, input: CreateExamInput) {
     data: {
       ownerId: userId, curriculumId: cur.id, trackId: cur.trackId, gradeId: cur.gradeId, branchId: cur.branchId, subjectId: cur.subjectId,
       title: input.title ?? `${ctx.subject} — ${ctx.grade}`, kind: input.kind, language: lang, durationMinutes: input.durationMinutes, totalMarks, difficulty: input.difficulty,
-      settings: { sections: input.sections, pages: pageNumbers, truncated, bookId: book.id } as Prisma.InputJsonValue,
+      settings: { sections: input.sections, pages: pageNumbers, truncated, bookId: book.id, ab: abSrc } as Prisma.InputJsonValue,
       status: "GENERATING",
-      sources: { create: toRanges(pageNumbers).map((r) => ({ bookId: book.id, pageFrom: r.from, pageTo: r.to })) },
+      sources: { create: [...toRanges(pageNumbers).map((r) => ({ bookId: book.id, pageFrom: r.from, pageTo: r.to })), ...(abSrc ? toRanges(abSrc.pages).map((r) => ({ bookId: abSrc.bookId, pageFrom: r.from, pageTo: r.to })) : [])] },
     },
   });
   const job = await db.examGenerationJob.create({ data: { examId: exam.id, status: "RUNNING", aiProvider: "gemini", aiModel: currentModel(), startedAt: new Date() } });
 
   try {
-    const src = await loadSource(book.id, book.storageKey, pageNumbers);
+    const src = await loadSources(book.id, book.storageKey, pageNumbers, abSrc);
     if (src.pages.length === 0) throw new AiError("BAD_RESPONSE", "EMPTY_SOURCE_TEXT");
     const { bySection, dropped, instructions, passages } = await askModel(ctx, input.difficulty, input.sections, src);
     const made = bySection.reduce((n, s) => n + s.length, 0);
@@ -157,7 +193,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
         for (const [j, q] of qs.entries()) await createChild(tx, model.id, parent.id, j + 1, s, q, chapterId, userId);
       }
       const realMarks = input.sections.reduce((n, s, i) => n + s.marksEach * bySection[i].length, 0);
-      await tx.exam.update({ where: { id: exam.id }, data: { status: "READY", totalMarks: realMarks, settings: { sections: input.sections, pages: pageNumbers, truncated, bookId: book.id, imagePages: src.pages.filter((p) => p.asImage).map((p) => p.pageNumber), ocrPages: src.pages.filter((p) => p.isOcr).map((p) => p.pageNumber), dropped, made } as Prisma.InputJsonValue } });
+      await tx.exam.update({ where: { id: exam.id }, data: { status: "READY", totalMarks: realMarks, settings: { sections: input.sections, pages: pageNumbers, truncated, bookId: book.id, ab: abSrc, imagePages: src.pages.filter((p) => p.asImage).map((p) => p.pageNumber), ocrPages: src.pages.filter((p) => p.isOcr).map((p) => p.pageNumber), dropped, made } as Prisma.InputJsonValue } });
       await tx.examGenerationJob.update({ where: { id: job.id }, data: { status: "SUCCEEDED", finishedAt: new Date(), aiModel: currentModel() } });
     });
     // درجة كلية مطلوبة: توزيعها تلقائياً على ما كُتب فعلاً
@@ -339,7 +375,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
   const q = await ownedQuestion(userId, questionId);
   if (!q || !q.type) return fail("NOT_FOUND");
   const exam = q.examModel.exam;
-  const settings = exam.settings as { pages?: number[]; bookId?: string };
+  const settings = exam.settings as { pages?: number[]; bookId?: string; ab?: AbRef | null };
   const book = settings.bookId ? await db.uploadedBook.findUnique({ where: { id: settings.bookId } }) : null;
   if (!book || !settings.pages?.length) return fail("SOURCE_MISSING");
   const siblings = await db.examQuestion.findMany({ where: { parentId: q.parentId, deletedAt: null }, select: { prompt: true } });
@@ -347,7 +383,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
   const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family, samples: await pickSamples(exam.subjectId, exam.gradeId) };
   const section: Section = { type: q.type as GenType, count: 1, marksEach: Number(q.marks) };
   try {
-    const src = await loadSource(book.id, book.storageKey, settings.pages);
+    const src = await loadSources(book.id, book.storageKey, settings.pages, settings.ab);
     const parent = q.type === "UNSEEN_PASSAGE" && q.parentId ? await db.examQuestion.findUnique({ where: { id: q.parentId }, select: { passage: true } }) : null;
     const { bySection } = await askModel(ctx, exam.difficulty, [section], src, siblings.map((s) => s.prompt), parent?.passage);
     const nq = bySection[0][0];
@@ -557,12 +593,12 @@ export async function addManualQuestion(userId: string, sectionId: string, q: { 
 
 /** مصدر الامتحان وسياقه لتوليد إضافي */
 async function genContext(exam: { language: string; settings: unknown; difficulty: CreateExamInput["difficulty"]; subjectId: string; gradeId: string; subject: { nameAr: string; nameEn: string; useLatinSymbols: boolean; family: string }; grade: { nameAr: string; nameEn: string } }) {
-  const settings = exam.settings as { pages?: number[]; bookId?: string };
+  const settings = exam.settings as { pages?: number[]; bookId?: string; ab?: AbRef | null };
   const book = settings.bookId ? await db.uploadedBook.findUnique({ where: { id: settings.bookId } }) : null;
   if (!book || !settings.pages?.length) return null;
   const lang: "AR" | "EN" = exam.language === "EN" ? "EN" : "AR";
   const ctx: Ctx = { subject: lang === "EN" ? exam.subject.nameEn : exam.subject.nameAr, grade: lang === "EN" ? exam.grade.nameEn : exam.grade.nameAr, lang, useLatinSymbols: exam.subject.useLatinSymbols, family: exam.subject.family, samples: await pickSamples(exam.subjectId, exam.gradeId) };
-  return { book, pages: settings.pages, ctx, lang };
+  return { book, pages: settings.pages, ab: settings.ab ?? null, ctx, lang };
 }
 
 const aiFail = (e: unknown) => fail(e instanceof AiError && e.code === "QUOTA" ? "AI_QUOTA" : e instanceof AiError && e.code === "NO_KEY" ? "AI_UNAVAILABLE" : "AI_FAILED");
@@ -576,7 +612,7 @@ export async function generateMore(userId: string, sectionId: string, count: num
   const siblings = await db.examQuestion.findMany({ where: { parentId: s.id, deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { prompt: true, sortOrder: true, marks: true } });
   const each = Number(siblings.at(-1)?.marks ?? 1);
   try {
-    const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
+    const src = await loadSources(g.book.id, g.book.storageKey, g.pages, g.ab);
     const sec: Section = { type: s.type as GenType, count, marksEach: each };
     const { bySection } = await askModel(g.ctx, s.examModel.exam.difficulty, [sec], src, siblings.map((x) => x.prompt), s.type === "UNSEEN_PASSAGE" ? s.passage ?? null : undefined);
     if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
@@ -601,7 +637,7 @@ export async function addSection(userId: string, examId: string, input: Section)
   const g = await genContext(e);
   if (!g) return fail("SOURCE_MISSING");
   try {
-    const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
+    const src = await loadSources(g.book.id, g.book.storageKey, g.pages, g.ab);
     const { bySection, instructions, passages } = await askModel(g.ctx, e.difficulty, [input], src);
     if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
     const last = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });

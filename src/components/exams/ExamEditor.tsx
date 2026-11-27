@@ -147,7 +147,7 @@ function Question({ q, n, type, lang, t, showAnswer, first, last, onMove }: { q:
           {VERBATIM_TYPES.includes(type as QType) && <p className="rounded bg-accent-soft px-2 py-0.5 text-xs">⚠ {t.editor.verbatim}</p>}
           {showAnswer && <p className="rounded bg-brand-soft px-2 py-1 text-sm"><span className="font-semibold">{t.editor.answer}: </span><MathText text={q.answer} /></p>}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            {q.sourcePages.map((p) => <span key={p} className="rounded-full border border-line px-2 py-0.5 text-muted">{t.editor.page} {p}</span>)}
+            {q.sourcePages.map((p) => <span key={p} className="rounded-full border border-line px-2 py-0.5 text-muted">{p >= 1000 ? `${t.editor.activityBook} ${t.editor.page} ${p - 1000}` : `${t.editor.page} ${p}`}</span>)}
             <span className="flex-1" />
             <button className={btn} disabled={first} title={t.editor.moveUp} onClick={() => onMove(-1)}>{t.editor.up}</button>
             <button className={btn} disabled={last} title={t.editor.moveDown} onClick={() => onMove(1)}>{t.editor.down}</button>

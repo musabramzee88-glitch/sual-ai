@@ -203,6 +203,8 @@ class _WizardPageState extends State<WizardPage> {
               onChanged: _pickCurriculum,
             ),
           ],
+          if (_cur != null && _cur!['kind'] == 'TEXTBOOK' && ((_cur!['subject'] as Map?)?['questionTypes'] as List? ?? const []).contains('UNSEEN_PASSAGE'))
+            const Padding(padding: EdgeInsets.only(top: 8), child: Text('في الإنكليزي تُؤخذ الأسئلة من كتاب الطالب وكتاب النشاط معاً (إن رُفع كتاب النشاط لهذا الصف).', style: TextStyle(fontSize: 13, color: Colors.black54))),
         ]),
         if (_cur != null)
           _card('٢ المصدر', [
