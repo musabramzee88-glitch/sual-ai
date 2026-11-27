@@ -10,7 +10,7 @@ import { distributeMarks, examTotal, sectionMarks, type MarkSection } from "./ma
 import { pickSamples } from "./samples";
 import {
   buildPrompt, chooseInstruction, expandRanges, pickImagePages, RESPONSE_SCHEMA, sortIntoSections,
-  type CleanQuestion, type CreateExamInput, type GenType, type RawQuestion, type Section, type SourcePage,
+  cleanPassage, type CleanQuestion, type CreateExamInput, type GenType, type RawQuestion, type Section, type SourcePage,
 } from "./core";
 
 /**
@@ -76,16 +76,24 @@ function toRanges(pages: number[]): { from: number; to: number }[] {
 
 type Ctx = { subject: string; grade: string; lang: "AR" | "EN"; useLatinSymbols: boolean; family: string; samples: string[] };
 
-async function askModel(ctx: Ctx, difficulty: CreateExamInput["difficulty"], sections: Section[], src: Awaited<ReturnType<typeof loadSource>>, avoid?: string[]) {
-  const prompt = buildPrompt({ ...ctx, difficulty, sections, pages: src.pages, avoid });
-  const r = await geminiJson<{ questions?: RawQuestion[]; sectionInstructions?: { section: number; instruction: string }[] }>({ prompt, images: src.images, schema: RESPONSE_SCHEMA, maxOutputTokens: 16_384 });
+async function askModel(ctx: Ctx, difficulty: CreateExamInput["difficulty"], sections: Section[], src: Awaited<ReturnType<typeof loadSource>>, avoid?: string[], existingPassage?: string | null) {
+  const prompt = buildPrompt({ ...ctx, difficulty, sections, pages: src.pages, avoid, passage: existingPassage ?? undefined });
+  const r = await geminiJson<{ questions?: RawQuestion[]; passages?: { section: number; text: string }[]; sectionInstructions?: { section: number; instruction: string }[] }>({ prompt, images: src.images, schema: RESPONSE_SCHEMA, maxOutputTokens: 16_384 });
   // نص الصفحة الموثوق (طبقة نص أصلية، لا OCR ولا صورة) للتحقق من النصوص المنقولة حرفياً
   const allowed = new Map(src.pages.map((p) => [p.pageNumber, { text: p.text, trusted: !p.isOcr && !p.asImage }]));
   const sorted = sortIntoSections(r.questions ?? [], sections, allowed, ctx.lang);
   // تعليمة كل قسم: بصياغة أوراق المرجع إن وُجدت، وإلا الافتراضية
   const h = ctx.lang === "AR" ? normalizeHonorifics : (x: string) => x;
   const instructions = sections.map((sec, i) => h(chooseInstruction(sec.type, ctx.lang, r.sectionInstructions?.find((x) => x.section === i)?.instruction, ctx.samples.length > 0)));
-  return { ...sorted, instructions };
+  // القطعة الخارجية: الموجودة تبقى، والجديدة تُتحقق؛ بلا قطعة صالحة يسقط القسم كله (لا أسئلة عن نص غائب)
+  const passages = sections.map((sec, i): string | null => {
+    if (sec.type !== "UNSEEN_PASSAGE") return null;
+    if (existingPassage) return existingPassage;
+    const p = cleanPassage(r.passages?.find((x) => x.section === i)?.text, ctx.lang);
+    if (!p) sorted.bySection[i] = [];
+    return p;
+  });
+  return { ...sorted, instructions, passages };
 }
 
 const snapshot = (q: { prompt: string; options: unknown; answer: string | null; marks: unknown; sourcePages: number[] }) =>
@@ -134,7 +142,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
   try {
     const src = await loadSource(book.id, book.storageKey, pageNumbers);
     if (src.pages.length === 0) throw new AiError("BAD_RESPONSE", "EMPTY_SOURCE_TEXT");
-    const { bySection, dropped, instructions } = await askModel(ctx, input.difficulty, input.sections, src);
+    const { bySection, dropped, instructions, passages } = await askModel(ctx, input.difficulty, input.sections, src);
     const made = bySection.reduce((n, s) => n + s.length, 0);
     if (made === 0) throw new AiError("BAD_RESPONSE", "NO_VALID_QUESTIONS");
 
@@ -144,7 +152,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
         const qs = bySection[i];
         if (qs.length === 0) continue;
         const parent = await tx.examQuestion.create({
-          data: { examModelId: model.id, sortOrder: i + 1, type: s.type, instruction: instructions[i], prompt: instructions[i], marks: s.marksEach * qs.length, sourcePages: [], chapterId },
+          data: { examModelId: model.id, sortOrder: i + 1, type: s.type, instruction: instructions[i], prompt: instructions[i], passage: passages[i], marks: s.marksEach * qs.length, sourcePages: [], chapterId },
         });
         for (const [j, q] of qs.entries()) await createChild(tx, model.id, parent.id, j + 1, s, q, chapterId, userId);
       }
@@ -308,7 +316,7 @@ export async function duplicateSection(userId: string, sectionId: string) {
   const id = await db.$transaction(async (tx) => {
     await tx.examQuestion.updateMany({ where: { examModelId: s.examModelId, parentId: null, deletedAt: null, sortOrder: { gt: s.sortOrder } }, data: { sortOrder: { increment: 1 } } });
     const p = await tx.examQuestion.create({
-      data: { examModelId: s.examModelId, sortOrder: s.sortOrder + 1, type: s.type, instruction: s.instruction, prompt: s.prompt, marks: s.marks, answerCount: s.answerCount, chapterId: s.chapterId, sourcePages: [] },
+      data: { examModelId: s.examModelId, sortOrder: s.sortOrder + 1, type: s.type, instruction: s.instruction, prompt: s.prompt, passage: s.passage, marks: s.marks, answerCount: s.answerCount, chapterId: s.chapterId, sourcePages: [] },
     });
     for (const k of kids) {
       const c = await tx.examQuestion.create({
@@ -340,7 +348,8 @@ export async function regenerateQuestion(userId: string, questionId: string) {
   const section: Section = { type: q.type as GenType, count: 1, marksEach: Number(q.marks) };
   try {
     const src = await loadSource(book.id, book.storageKey, settings.pages);
-    const { bySection } = await askModel(ctx, exam.difficulty, [section], src, siblings.map((s) => s.prompt));
+    const parent = q.type === "UNSEEN_PASSAGE" && q.parentId ? await db.examQuestion.findUnique({ where: { id: q.parentId }, select: { passage: true } }) : null;
+    const { bySection } = await askModel(ctx, exam.difficulty, [section], src, siblings.map((s) => s.prompt), parent?.passage);
     const nq = bySection[0][0];
     if (!nq) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
@@ -480,18 +489,20 @@ export async function reorderQuestions(userId: string, sectionId: string, ids: s
  * تعديل القسم: نص التعليمة، و/أو درجته، و/أو عدد الفروع التي يجيب عنها الطالب (answerCount، null = كلها).
  * الدرجة تُقسم على الفروع التي يُجاب عنها بالتساوي (أنصاف عند الحاجة)؛ في القسم الاختياري تتساوى كل الفروع.
  */
-export async function updateSection(userId: string, sectionId: string, patch: { instruction?: string; marks?: number; answerCount?: number | null }) {
+export async function updateSection(userId: string, sectionId: string, patch: { instruction?: string; marks?: number; answerCount?: number | null; passage?: string }) {
   const s = await ownedSection(userId, sectionId);
   if (!s) return fail("NOT_FOUND");
   const lang = s.examModel.exam.language === "EN" ? "EN" : "AR";
   const n = await db.examQuestion.count({ where: { parentId: s.id, deletedAt: null } });
   if (patch.answerCount !== undefined && patch.answerCount !== null && (patch.answerCount < 1 || patch.answerCount >= n)) return fail("BAD_COUNT");
+  if (patch.passage !== undefined && s.type !== "UNSEEN_PASSAGE") return fail("NOT_A_PASSAGE");
   await db.$transaction(async (tx) => {
     if (patch.instruction !== undefined) {
       const txt = lang === "AR" ? normalizeHonorifics(patch.instruction) : patch.instruction;
       await tx.examQuestion.update({ where: { id: s.id }, data: { instruction: txt, prompt: txt } });
     }
     if (patch.answerCount !== undefined) await tx.examQuestion.update({ where: { id: s.id }, data: { answerCount: patch.answerCount } });
+    if (patch.passage !== undefined) await tx.examQuestion.update({ where: { id: s.id }, data: { passage: patch.passage.trim() } });
     // عدد الفروع الذي سيُعتمد بعد هذا التعديل
     const k = patch.answerCount !== undefined ? patch.answerCount ?? n : s.answerCount && s.answerCount < n ? s.answerCount : n;
     if (patch.marks !== undefined) {
@@ -567,7 +578,7 @@ export async function generateMore(userId: string, sectionId: string, count: num
   try {
     const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
     const sec: Section = { type: s.type as GenType, count, marksEach: each };
-    const { bySection } = await askModel(g.ctx, s.examModel.exam.difficulty, [sec], src, siblings.map((x) => x.prompt));
+    const { bySection } = await askModel(g.ctx, s.examModel.exam.difficulty, [sec], src, siblings.map((x) => x.prompt), s.type === "UNSEEN_PASSAGE" ? s.passage ?? null : undefined);
     if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
       let order = siblings.at(-1)?.sortOrder ?? 0;
@@ -591,12 +602,12 @@ export async function addSection(userId: string, examId: string, input: Section)
   if (!g) return fail("SOURCE_MISSING");
   try {
     const src = await loadSource(g.book.id, g.book.storageKey, g.pages);
-    const { bySection, instructions } = await askModel(g.ctx, e.difficulty, [input], src);
+    const { bySection, instructions, passages } = await askModel(g.ctx, e.difficulty, [input], src);
     if (bySection[0].length === 0) return fail("NO_VALID_QUESTIONS");
     const last = await db.examQuestion.findFirst({ where: { examModelId: e.models[0].id, parentId: null, deletedAt: null }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
     await db.$transaction(async (tx) => {
       const inst = instructions[0];
-      const parent = await tx.examQuestion.create({ data: { examModelId: e.models[0].id, sortOrder: (last?.sortOrder ?? 0) + 1, type: input.type, instruction: inst, prompt: inst, marks: 0, sourcePages: [] } });
+      const parent = await tx.examQuestion.create({ data: { examModelId: e.models[0].id, sortOrder: (last?.sortOrder ?? 0) + 1, type: input.type, instruction: inst, prompt: inst, passage: passages[0], marks: 0, sourcePages: [] } });
       for (const [j, q] of bySection[0].entries()) await createChild(tx, e.models[0].id, parent.id, j + 1, input, q, null, userId);
       await recomputeExam(tx, e.id);
     });

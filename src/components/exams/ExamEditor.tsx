@@ -9,7 +9,7 @@ import { VERBATIM_TYPES, type QType } from "@/lib/question-types";
 export type EditorTable = { header: boolean; cells: string[][]; style?: "GRID" | "PLAIN" | "BLANKS" };
 const STYLES = ["GRID", "PLAIN", "BLANKS"] as const;
 export type EditorQuestion = { id: string; prompt: string; options: string[] | null; answer: string; marks: number; sourcePages: number[]; version: number; imageAssetId: string | null; table: EditorTable | null };
-export type EditorSection = { id: string; type: string; instruction: string; marks: number; answerCount: number | null; branches: EditorQuestion[] };
+export type EditorSection = { id: string; type: string; instruction: string; marks: number; answerCount: number | null; passage?: string | null; branches: EditorQuestion[] };
 
 const LETTERS_AR = ["أ", "ب", "ج", "د", "هـ", "و"];
 const LETTERS_EN = ["a", "b", "c", "d", "e", "f"];
@@ -211,6 +211,8 @@ function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSecti
   const [inst, setInst] = useState(s.instruction);
   const [marks, setMarks] = useState(s.marks);
   const [manual, setManual] = useState(false);
+  const [editPassage, setEditPassage] = useState(false);
+  const [passage, setPassage] = useState(s.passage ?? "");
   const num = (x: number) => (lang === "EN" ? String(x) : x.toLocaleString("ar-EG"));
   const moveItem = (j: number, dir: -1 | 1) => {
     const ids = s.branches.map((b) => b.id);
@@ -232,6 +234,19 @@ function Section({ s, i, count, lang, t, showAnswers, onMove }: { s: EditorSecti
         )}
         <span className="rounded-full bg-paper px-2 py-0.5 text-xs text-muted">{t.qt[s.type] ?? s.type}</span>
       </div>
+      {s.type === "UNSEEN_PASSAGE" && s.passage != null && (
+        editPassage ? (
+          <div className="space-y-2">
+            <textarea className={`${inp} w-full`} dir="auto" rows={10} value={passage} onChange={(e) => setPassage(e.target.value)} />
+            <div className="flex gap-2">
+              <button className="rounded-lg bg-brand px-3 py-1 text-sm font-semibold text-white dark:text-paper" disabled={busy || passage.trim().length < 40} onClick={async () => { if (await run(call(`/api/v1/exams/sections/${s.id}`, "PATCH", { passage }))) setEditPassage(false); }}>{t.editor.save}</button>
+              <button className="rounded-lg border border-line px-3 text-sm" onClick={() => { setEditPassage(false); setPassage(s.passage ?? ""); }}>{t.editor.cancel}</button>
+            </div>
+          </div>
+        ) : (
+          <button className="block w-full whitespace-pre-line rounded-lg border border-line bg-paper p-3 text-start text-sm leading-7 hover:border-brand" dir="auto" title={t.editor.editPassage} onClick={() => setEditPassage(true)}>{s.passage}</button>
+        )
+      )}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <label className="flex items-center gap-1">{t.editor.sectionMarks}
           <input type="number" min={0.5} step={0.5} className={`${inp} w-20`} value={marks} onChange={(e) => setMarks(Number(e.target.value))} />
@@ -350,7 +365,7 @@ export function ExamEditor({ examId, title, duration, totalMarks, sectionsToAnsw
       )}
 
       {order.err && <p role="alert" className="text-xs text-danger">{order.err}</p>}
-      {sections.map((s, i) => <Section key={`${s.id}:${s.marks}:${s.instruction}:${s.answerCount}`} s={s} i={i} count={sections.length} lang={lang} t={t} showAnswers={showAnswers} onMove={(d) => moveSection(i, d)} />)}
+      {sections.map((s, i) => <Section key={`${s.id}:${s.marks}:${s.instruction}:${s.answerCount}:${s.passage ?? ""}`} s={s} i={i} count={sections.length} lang={lang} t={t} showAnswers={showAnswers} onMove={(d) => moveSection(i, d)} />)}
 
       {free.length > 0 && (
         <div className="space-y-2 rounded-xl border border-dashed border-line p-3 text-sm">

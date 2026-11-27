@@ -151,6 +151,7 @@ enum QuestionType {
   VERB_FORMS // صيغة الفعل
   WHO_SAID // من القائل؟ ولمن؟
   SURAH_RANGE // أكمل السورة من الآية .. إلى الآية .. (المحفوظ المقرر)
+  UNSEEN_PASSAGE // قطعة خارجية (نص جديد يكتبه النموذج) + أسئلة فهم عليه
 }
 
 enum Difficulty {
@@ -966,6 +967,8 @@ model ExamQuestion {
   sourcePages    Int[]
   /// للسؤال الرئيس: عدد الفروع التي يجيب عنها الطالب (null = كلها)
   answerCount    Int?
+  /// نص القطعة الخارجية (على السؤال الرئيس من النوع UNSEEN_PASSAGE فقط)
+  passage        String?
   /// صورة السؤال (TemplateAsset من نوع QUESTION_IMAGE)
   imageAssetId   String?
   /// جدول داخل السؤال {cells: string[][], header: boolean}

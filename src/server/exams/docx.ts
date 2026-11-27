@@ -201,6 +201,11 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
       ] })]));
       const pick = notes.sectionNote(s.answerCount, s.branches.length);
       if (pick) body.push(para(pick, { st: { bold: true }, keepNext: true, after: 60 }));
+      if (s.passage && (variant === "QUESTIONS_ONLY" || variant === "WITH_ANSWERS")) {
+        // القطعة الخارجية في إطار بخلية واحدة، وفقرات النص كما كتبها
+        body.push(table([new TableRow({ children: [cell(s.passage.split(/\n{2,}/).map((t) => para(t, { align: AlignmentType.JUSTIFIED, after: 80 })), contentW, { borders: true })] })]));
+        body.push(para("", { after: 60 }));
+      }
       if (isInlineSection(s, variant, tpl.answerLines)) {
         body.push(para(s.branches.map((b, j) => `${ar ? `${n(j + 1)}-` : `${j + 1}.`} ${b.prompt}`).join("          "), { start: 0, after: 80 }));
         return;

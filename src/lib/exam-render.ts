@@ -75,7 +75,7 @@ export function tableCells(t: RenderTable): string[][] {
 /** image: data URI لصورة السؤال؛ table: جدول داخل السؤال (خلايا فارغة يملؤها الطالب) */
 export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number; image?: string | null; table?: RenderTable | null };
 /** answerCount: عدد الفروع التي يجيب عنها الطالب (null = كلها) */
-export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; /** نوع السؤال (TRUE_FALSE يظهر في ورقة الإجابة بدائرتي صح/خطأ) */ type?: string | null; branches: RenderQuestion[] };
+export type RenderSection = { instruction: string; marks: number; answerCount?: number | null; /** نص القطعة الخارجية (يُطبع بين التعليمة والأسئلة في الأسئلة ومع الإجابات فقط) */ passage?: string | null; /** نوع السؤال (TRUE_FALSE يظهر في ورقة الإجابة بدائرتي صح/خطأ) */ type?: string | null; branches: RenderQuestion[] };
 export type RenderExam = {
   lang: "AR" | "EN";
   values: Partial<Record<HeaderKey, string>>;
@@ -216,6 +216,7 @@ export function keepTogether(s: RenderSection, variant: Variant, answerLines: nu
   if (variant === "ANSWER_SHEET") return false;
   if (isInlineSection(s, variant, answerLines)) return true;
   let lines = 2; // العنوان
+  if (s.passage && variant !== "ANSWER_KEY") lines += Math.ceil(s.passage.length / 85) + 1;
   for (const b of s.branches) {
     lines += Math.ceil((b.prompt.length || 1) / 80);
     if (variant !== "ANSWER_KEY" && b.options?.length) lines += Math.ceil(b.options.join("      ").length / 90);
@@ -273,7 +274,7 @@ export function renderExamHtml(exam: RenderExam, tpl: RenderTemplate, variant: V
     const inline = isInlineSection(s, variant, tpl.answerLines);
     const last = i === exam.sections.length - 1 && footer !== "" && rows.length > 0;
     const cls = inline ? ' class="inline"' : "";
-    const head = `<h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}`;
+    const head = `<h2><span>${ar ? `س${n(i + 1)}/` : `Q${i + 1}/`} ${richText(s.instruction)}</span><span class="mk">(${n(s.marks)} ${marks})</span></h2>${notes.sectionNote(s.answerCount, s.branches.length) ? `<div class="pick">${esc(notes.sectionNote(s.answerCount, s.branches.length))}</div>` : ""}${s.passage && (variant === "QUESTIONS_ONLY" || variant === "WITH_ANSWERS") ? `<div class="passage">${s.passage.split(/\n{2,}/).map((p) => `<p>${richText(p)}</p>`).join("")}</div>` : ""}`;
     if (last) footerPlaced = true;
     // آخر قسم: عبارة الختام تُحبس مع آخر فرع في كتلة لا تنقسم فلا تنفرد بصفحة
     // (المتصفح لا يلتزم دائماً بـ break-before: avoid). القسم الأفقي القصير يُحبس كله معها.
@@ -336,6 +337,8 @@ li:last-child { margin-bottom: 0; }
 .qt { border-collapse: collapse; margin: 0.55em 0 0.2em; margin-inline-start: 2.4em; max-width: calc(100% - 2.4em); break-inside: avoid; }
 .qt td, .qt th { border: 1px solid #000; padding: 0.2em 0.8em; min-width: 5.5em; height: 1.9em; text-align: center; line-height: 1.5; }
 .qt th { font-weight: 700; background: #eee; }
+.passage { border: 1px solid #000; padding: 0.55em 0.9em; margin: 0.4em 0 0.7em; text-align: justify; line-height: 1.75; break-inside: avoid; }
+.passage p { margin: 0 0 0.45em; } .passage p:last-child { margin-bottom: 0; }
 .qt.plain td, .qt.plain th { border: 0; text-align: start; background: none; min-width: 0; height: auto; padding: 0.15em 1.6em 0.15em 0; white-space: nowrap; }
 .qt.plain th { border-bottom: 1px solid #000; }
 .opts { display: flex; flex-wrap: wrap; gap: 0.35em 2.6em; margin-top: 0.4em; padding-inline-start: 2.4em; }

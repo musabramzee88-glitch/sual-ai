@@ -25,7 +25,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const s = exam.settings as { ocrPages?: number[]; imagePages?: number[]; truncated?: boolean; made?: number; sections?: { count: number }[] };
   const requested = (s.sections ?? []).reduce((n, x) => n + x.count, 0);
   const sections: EditorSection[] = exam.sections.map((p) => ({
-    id: p.id, type: p.type ?? "ESSAY", instruction: p.instruction ?? p.prompt, marks: p.marks, answerCount: p.answerCount,
+    id: p.id, type: p.type ?? "ESSAY", instruction: p.instruction ?? p.prompt, marks: p.marks, answerCount: p.answerCount, passage: p.passage ?? null,
     branches: p.branches.map((q) => ({ id: q.id, prompt: q.prompt, options: (q.options as string[] | null) ?? null, answer: q.answer ?? "", marks: q.marks, sourcePages: q.sourcePages, version: q.version, imageAssetId: q.imageAssetId, table: asTable(q.table) })),
   }));
   return (

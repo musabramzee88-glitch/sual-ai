@@ -292,3 +292,24 @@ describe("table styles", () => {
     expect(html("BLANKS", "ANSWER_KEY")).not.toContain("<table class=\"qt");
   });
 });
+
+describe("unseen passage in the paper", () => {
+  const passage = "First paragraph of the passage with <b>markup</b> & more.\n\nSecond paragraph.";
+  const exam: RenderExam = { lang: "EN", values: {}, sections: [{ instruction: "Read the passage, then answer:", marks: 6, type: "UNSEEN_PASSAGE", passage, branches: [{ prompt: "Who is the writer?", options: null, answer: "Ali", marks: 3 }, { prompt: "Where?", options: null, answer: "Home", marks: 3 }] }] };
+  const html = (v: "QUESTIONS_ONLY" | "WITH_ANSWERS" | "ANSWER_KEY" | "ANSWER_SHEET") => renderExamHtml(exam, DEFAULT_TEMPLATE, v);
+
+  it("prints the passage once, escaped, as paragraphs, before the questions", () => {
+    const h = html("QUESTIONS_ONLY");
+    expect(h).toContain('<div class="passage"><p>First paragraph');
+    expect(h).toContain("&lt;b&gt;markup&lt;/b&gt;");
+    expect(h).not.toContain("<b>markup</b>");
+    expect(h.match(/<p>Second paragraph\.<\/p>/g)).toHaveLength(1);
+    expect(h.indexOf('class="passage"')).toBeLessThan(h.indexOf("Who is the writer?"));
+    expect(html("WITH_ANSWERS")).toContain('class="passage"');
+  });
+
+  it("is absent from the answer key and the answer sheet", () => {
+    expect(html("ANSWER_KEY")).not.toContain('<div class="passage">');
+    expect(html("ANSWER_SHEET")).not.toContain('<div class="passage">');
+  });
+});

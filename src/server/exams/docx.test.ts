@@ -114,3 +114,14 @@ describe("table styles in Word", () => {
     expect(text(await grab("PLAIN"))).not.toMatch(/\(\s*\)\s*أ- ضخ الدم/);
   });
 });
+
+describe("unseen passage in Word", () => {
+  const exam: RenderExam = { lang: "EN", values: {}, sections: [{ instruction: "Read the passage:", marks: 4, type: "UNSEEN_PASSAGE", passage: "Alpha beta gamma passage line one.\n\nSecond paragraph delta.", branches: [{ prompt: "Question one?", options: null, answer: "A1", marks: 4 }] }] };
+  it("puts the passage paragraphs before the questions in the paper and with answers, not in the key", async () => {
+    const q = text(await xml(await renderExamDocx(exam, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")));
+    expect(q).toContain("Alpha beta gamma passage line one.");
+    expect(q).toContain("Second paragraph delta.");
+    expect(q.indexOf("Alpha beta")).toBeLessThan(q.indexOf("Question one?"));
+    expect(text(await xml(await renderExamDocx(exam, DEFAULT_TEMPLATE, "ANSWER_KEY")))).not.toContain("Alpha beta");
+  });
+});

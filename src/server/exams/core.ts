@@ -50,6 +50,8 @@ export type SourcePage = { pageNumber: number; text: string; isOcr: boolean; asI
 export function buildPrompt(opts: {
   subject: string; grade: string; lang: "AR" | "EN"; difficulty: (typeof DIFFICULTIES)[number]; useLatinSymbols: boolean;
   sections: Section[]; pages: SourcePage[]; avoid?: string[]; family?: string; samples?: string[];
+  /** قطعة خارجية مطبوعة أصلاً: يُكتب عنها أسئلة فقط (توليد المزيد/سؤال بديل) ولا تُكتب قطعة جديدة */
+  passage?: string;
 }): string {
   const ocrImg = opts.pages.filter((p) => p.asImage).map((p) => p.pageNumber);
   const ocrText = opts.pages.filter((p) => p.isOcr && !p.asImage).map((p) => p.pageNumber);
@@ -57,7 +59,7 @@ export function buildPrompt(opts: {
     `You are an experienced Iraqi school teacher writing an exam for: ${opts.subject} — ${opts.grade}.`,
     `Write every question and answer in ${opts.lang === "EN" ? "English" : "Modern Standard Arabic (فصحى) as used in Iraqi Ministry of Education exams"}.`,
     "STRICT RULES:",
-    "- Use ONLY content that appears in the source pages below. Never use outside knowledge or other grades' content.",
+    "- Use ONLY content that appears in the source pages below. Never use outside knowledge or other grades' content." + (opts.sections.some((x) => x.type === "UNSEEN_PASSAGE") ? " (The ONLY exception: the new passage of an UNSEEN_PASSAGE section, which you write yourself at the level of these pages.)" : ""),
     "- Every question MUST list in sourcePages the page number(s) (from the === صفحة N === markers / image labels) where its content appears.",
     "- Questions must be clear, unambiguous, age-appropriate, and each must have exactly one correct answer (for closed types).",
     "- Do not repeat or trivially rephrase the same idea in two questions. Spread questions across the source pages.",
@@ -74,6 +76,7 @@ export function buildPrompt(opts: {
     "",
     "SECTIONS TO WRITE (section index, type, number of questions):",
     ...opts.sections.map((s, i) => `  section ${i}: ${s.type} × ${s.count} — ${QT[s.type].hint}`),
+    opts.passage ? `\nTHE PASSAGE IS ALREADY PRINTED ON THE PAPER (do not write a new passage: leave the passages array empty; write questions ONLY about it, each answerable from it):\n${opts.passage.slice(0, 3000)}` : "",
     opts.avoid?.length ? `\nDo NOT repeat these existing questions:\n${opts.avoid.map((a) => `  - ${a.slice(0, 200)}`).join("\n")}` : "",
     "",
     ...(opts.samples?.length ? [
@@ -115,6 +118,8 @@ export const RESPONSE_SCHEMA = {
         required: ["section", "prompt", "answer", "sourcePages"],
       },
     },
+    // القطعة الخارجية لكل قسم من النوع UNSEEN_PASSAGE (نص جديد، لا من الكتاب)
+    passages: { type: "ARRAY", items: { type: "OBJECT", properties: { section: { type: "INTEGER" }, text: { type: "STRING" } }, required: ["section", "text"] } },
     // تعليمة كل قسم بصياغة المدرسين (تُستعمل حين توجد أوراق مرجع)
     sectionInstructions: { type: "ARRAY", items: { type: "OBJECT", properties: { section: { type: "INTEGER" }, instruction: { type: "STRING" } }, required: ["section", "instruction"] } },
   },
@@ -192,14 +197,17 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
   if (prompt.length < 3 || prompt.length > 1500 || answer.length < 1 || answer.length > 3000) return null;
   // لا سؤال بلا صفحة مصدر داخل النطاق
   const sourcePages = [...new Set((q.sourcePages ?? []).filter((n) => Number.isInteger(n) && allowedPages.has(n)))].sort((a, b) => a - b);
-  if (sourcePages.length === 0) return null;
+  // القطعة الخارجية نص جديد: أسئلتها عن القطعة لا عن صفحة من الكتاب
+  if (sourcePages.length === 0 && type !== "UNSEEN_PASSAGE") return null;
   // القرآن والحديث والشعر: النص المنقول (الجواب، ومعه بداية الآية في السؤال) يجب أن يطابق الكتاب
   if (VERBATIM_TYPES.includes(type) && allowedPages instanceof Map) {
     const quoted = type === "COMPLETE_VERSE" || type === "COMPLETE_POEM" ? `${prompt.replace(/[.…]{2,}/g, " ")} ${answer}` : answer;
     if (!verbatimOk(quoted, sourcePages, allowedPages)) return null;
   }
   let options: string[] | null = null;
-  if (type === "MCQ") {
+  // أسئلة القطعة الخارجية قد تكون اختياراً من متعدد (إن جاءت خيارات)، وإلا مفتوحة أو صح/خطأ
+  const mcqLike = type === "MCQ" || (type === "UNSEEN_PASSAGE" && (q.options?.length ?? 0) > 0);
+  if (mcqLike) {
     const opts = [...new Set((q.options ?? []).map((o) => String(o).trim()).filter(Boolean))];
     if (opts.length < 3 || opts.length > 5) return null;
     // الجواب يطابق خياراً (بعد التطبيع)، أو حرف الخيار (أ/ب/ج/د أو a/b/c/d)
@@ -233,6 +241,20 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
 }
 
 /** يوزّع رد النموذج على الأقسام: تنظيف، إزالة المكرر، والاقتصار على العدد المطلوب */
+/**
+ * القطعة الخارجية: نص جديد بطول معقول، وللإنكليزية أغلبه حروف لاتينية. null = غير صالحة فيسقط قسمها كله
+ * (أسئلة عن قطعة غائبة بلا معنى). تُطبَّع الفقرات (سطر فارغ بين فقرة وأخرى) وتُحذف الأسطر المترقّمة الزائدة.
+ */
+export function cleanPassage(text: unknown, lang: "AR" | "EN"): string | null {
+  const t = String(text ?? "").replace(/\r/g, "").split(/\n{2,}/).map((p) => p.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n\n");
+  const words = t.split(/\s+/).filter(Boolean).length;
+  if (t.length < 250 || t.length > 2800 || words < 40 || words > 450) return null;
+  const letters = t.match(/\p{L}/gu) ?? [];
+  const wanted = lang === "EN" ? /[A-Za-z]/ : /[\u0600-\u06FF]/;
+  if (letters.length === 0 || letters.filter((c) => wanted.test(c)).length / letters.length < 0.85) return null;
+  return t;
+}
+
 export function sortIntoSections(raw: RawQuestion[], sections: Section[], allowedPages: Set<number> | Map<number, PageRef>, lang: "AR" | "EN"): { bySection: CleanQuestion[][]; dropped: number } {
   const bySection: CleanQuestion[][] = sections.map(() => []);
   const seen = new Set<string>();

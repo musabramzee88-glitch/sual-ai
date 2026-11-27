@@ -47,9 +47,10 @@ const qTypes = <String, QType>{
   'VERB_FORMS': QType('VERB_FORMS', 'صيغة الفعل الصحيحة', 'Verb forms', 'اكتب الفعل بالصيغة الصحيحة:'),
   'WHO_SAID': QType('WHO_SAID', 'من القائل؟ ولمن؟', 'Who said it?', 'من القائل؟ ولمن قال؟ وفي أي مناسبة؟'),
   'SURAH_RANGE': QType('SURAH_RANGE', 'أكمل السورة من الآية … إلى الآية … (المحفوظ)', 'Complete the surah from verse … to verse … (memorisation)', 'أكمل السور الآتية من الآية إلى الآية المحدّدة:'),
+  'UNSEEN_PASSAGE': QType('UNSEEN_PASSAGE', 'القطعة الخارجية', 'Unseen passage', 'اقرأ القطعة الآتية ثم أجب عن الأسئلة التي تليها:'),
 };
 
-const generatableTypes = ['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'DEFINE', 'JUSTIFY', 'COMPARE', 'LIST', 'WHAT_IF', 'ESSAY', 'APPLIED', 'COMPREHENSION', 'COMPUTE', 'PROBLEM', 'PROOF', 'EQUATION_BALANCING', 'ALGORITHM', 'COMPLETE_VERSE', 'WRITE_VERSE', 'EXPLAIN_VERSE', 'WRITE_HADITH', 'TAJWEED', 'LESSONS', 'SITUATION', 'WORD_MEANINGS', 'WORD_FORMS', 'COMPLETE_POEM', 'GRAMMAR_PARSING', 'EXTRACT', 'CONVERT', 'CORRECT_ERROR', 'WRITING', 'REORDER', 'VERB_FORMS', 'WHO_SAID', 'SURAH_RANGE'];
+const generatableTypes = ['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'DEFINE', 'JUSTIFY', 'COMPARE', 'LIST', 'WHAT_IF', 'ESSAY', 'APPLIED', 'COMPREHENSION', 'COMPUTE', 'PROBLEM', 'PROOF', 'EQUATION_BALANCING', 'ALGORITHM', 'COMPLETE_VERSE', 'WRITE_VERSE', 'EXPLAIN_VERSE', 'WRITE_HADITH', 'TAJWEED', 'LESSONS', 'SITUATION', 'WORD_MEANINGS', 'WORD_FORMS', 'COMPLETE_POEM', 'GRAMMAR_PARSING', 'EXTRACT', 'CONVERT', 'CORRECT_ERROR', 'WRITING', 'REORDER', 'VERB_FORMS', 'WHO_SAID', 'SURAH_RANGE', 'UNSEEN_PASSAGE'];
 const verbatimTypes = ['COMPLETE_VERSE', 'WRITE_VERSE', 'WRITE_HADITH', 'COMPLETE_POEM', 'SURAH_RANGE'];
 const headerKeys = ['republic', 'ministry', 'directorate', 'school', 'title', 'subject', 'grade', 'examKind', 'round', 'yearTerm', 'teacher', 'time', 'total', 'model', 'student', 'section', 'date', 'examNumber'];
 const hiddenByDefault = ['teacher', 'round', 'date', 'model', 'examNumber'];

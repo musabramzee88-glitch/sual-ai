@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /** تعديل قسم: نص التعليمة و/أو درجته (تُقسم على فروعه) و/أو عدد الفروع التي يجيب عنها الطالب (null = كلها) */
-const patchSchema = z.object({ instruction: z.string().trim().min(1).max(400).optional(), marks: z.number().min(0.5).max(1000).optional(), answerCount: z.number().int().min(1).max(50).nullable().optional() });
+const patchSchema = z.object({ instruction: z.string().trim().min(1).max(400).optional(), marks: z.number().min(0.5).max(1000).optional(), answerCount: z.number().int().min(1).max(50).nullable().optional(), passage: z.string().trim().min(40).max(3000).optional() });
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await requireExamAccess();
   if ("res" in g) return g.res;

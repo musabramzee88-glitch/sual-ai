@@ -18,6 +18,8 @@ export const QUESTION_TYPES = [
   "WHO_SAID",
   // حفظ السور (المقرر)
   "SURAH_RANGE",
+  // قطعة خارجية: نص جديد لم يرد في الكتاب (يكتبه النموذج بمستوى الصف) ثم أسئلة فهم عليه
+  "UNSEEN_PASSAGE",
 ] as const;
 export type QType = (typeof QUESTION_TYPES)[number];
 
@@ -70,6 +72,7 @@ export const QT: Record<QType, Def> = {
     instAr: "أكمل السور الآتية من الآية إلى الآية المحدّدة:", instEn: "Complete each surah from the given verse to the given verse:",
     hint: "memorisation question in the Iraqi style «أكمل سورة (اسم السورة) من الآية (أ) إلى الآية (ب)». Use ONLY surahs/verse ranges that the source marks as required memorisation (المطلوب حفظه / احفظ / للحفظ / سورة … من الآية … إلى الآية …) and that are printed on the cited pages; never invent a range. prompt = «سورة (الاسم) من الآية (أ) إلى الآية (ب)» with the verse numbers as the book numbers them and nothing else (do NOT print the verses in the prompt); answer = the verses of that range in order, copied EXACTLY from the source page (words, spelling and order), without verse numbers. Keep each range within what the book requires; cite the page that prints those verses",
   },
+  UNSEEN_PASSAGE: { ar: "القطعة الخارجية", en: "Unseen passage", instAr: "اقرأ القطعة الآتية ثم أجب عن الأسئلة التي تليها:", instEn: "Read the following passage, then answer the questions below:", hint: "UNSEEN passage: do NOT use a passage from the book. Return ONE new passage in the top-level passages array for this section (about 90-140 words for primary grades, 140-220 for intermediate and preparatory; simple clear paragraphs; vocabulary, grammar and topics of the source pages so a student of this grade can read it; no copyrighted text, you write it yourself). Then the section's questions are comprehension questions about THAT passage only: a mix of wh-questions (short answer, the answer is a full sentence or phrase from or based on the passage), true/false, and multiple choice (with options), in increasing difficulty; every answer must be found in or directly inferable from the passage; sourcePages may be empty" },
   WHO_SAID: { ar: "من القائل؟ ولمن؟", en: "Who said it?", instAr: "من القائل؟ ولمن قال؟ وفي أي مناسبة؟", instEn: "Who said it, to whom and when?", hint: "quote a sentence said by a character in a lesson story/text of the source (in quotes); answer: who said it, to whom, and the occasion, per the book" },
   VERB_FORMS: { ar: "صيغة الفعل الصحيحة", en: "Verb forms", instAr: "اكتب الفعل بالصيغة الصحيحة:", instEn: "Correct the verbs between brackets:", hint: "a sentence with the base verb in (brackets) to put in the correct tense/form taught in the book; answer is the full correct sentence" },
 };
@@ -85,7 +88,7 @@ export const SUBJECT_TYPES: Record<string, QType[]> = {
   READING: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "WHO_SAID", "LESSONS", "JUSTIFY", "EXTRACT", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
   GRAMMAR: ["GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "MCQ", "TRUE_FALSE", "FILL_BLANK"],
   ARABIC: ["COMPREHENSION", "WORD_MEANINGS", "WORD_FORMS", "COMPLETE_POEM", "WHO_SAID", "GRAMMAR_PARSING", "EXTRACT", "CONVERT", "CORRECT_ERROR", "DEFINE", "JUSTIFY", "LESSONS", "MCQ", "TRUE_FALSE", "FILL_BLANK", "WRITING", "ESSAY"],
-  ENGLISH: LANG_CORE,
+  ENGLISH: [...LANG_CORE, "UNSEEN_PASSAGE"],
   FRENCH: LANG_CORE,
   KURDISH: LANG_CORE,
   MATH: ["COMPUTE", "PROBLEM", "MCQ", "TRUE_FALSE", "FILL_BLANK", "PROOF", "APPLIED", "DEFINE", "DIAGRAM"],
@@ -112,7 +115,7 @@ export const qtLabels = (lang: "ar" | "en") => Object.fromEntries(QUESTION_TYPES
 export const TYPE_WEIGHT: Record<QType, number> = {
   MCQ: 1, TRUE_FALSE: 1, FILL_BLANK: 1, MATCHING: 1, WORD_MEANINGS: 1, WORD_FORMS: 1, REORDER: 1, VERB_FORMS: 1,
   DEFINE: 2, JUSTIFY: 2, LIST: 2, WHAT_IF: 2, EXTRACT: 2, CONVERT: 2, CORRECT_ERROR: 2, TAJWEED: 2, LESSONS: 2, SITUATION: 2, COMPUTE: 2, WHO_SAID: 2,
-  EXPLAIN_VERSE: 3, SURAH_RANGE: 3, COMPARE: 3, GRAMMAR_PARSING: 3, COMPLETE_VERSE: 3, COMPLETE_POEM: 3, WRITE_HADITH: 3, COMPREHENSION: 3, EQUATION_BALANCING: 3, APPLIED: 3, DIAGRAM: 3,
+  EXPLAIN_VERSE: 3, SURAH_RANGE: 3, UNSEEN_PASSAGE: 4, COMPARE: 3, GRAMMAR_PARSING: 3, COMPLETE_VERSE: 3, COMPLETE_POEM: 3, WRITE_HADITH: 3, COMPREHENSION: 3, EQUATION_BALANCING: 3, APPLIED: 3, DIAGRAM: 3,
   WRITE_VERSE: 4, PROBLEM: 4, PROOF: 4, ALGORITHM: 4, ESSAY: 4, WRITING: 5,
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt, cleanQuestion, createExamSchema, expandRanges, pickImagePages, sortIntoSections } from "./core";
+import { buildPrompt, cleanPassage, cleanQuestion, createExamSchema, expandRanges, pickImagePages, sortIntoSections } from "./core";
 
 const pages = new Set([10, 11, 12]);
 
@@ -193,5 +193,45 @@ describe("matching questions become a two-column table", () => {
 
   it("other types never get a table", () => {
     expect(cleanQuestion(raw({ columnA: A, columnB: B, prompt: "Define it.", answer: "It is.", }), "DEFINE", pages, "EN")!.table).toBeNull();
+  });
+});
+
+describe("unseen passage (English)", () => {
+  const good = "Ali lives in a small village near a river. Every morning he walks to school with his sister Sara, and they talk about their lessons. After school he helps his father on the farm, where they grow tomatoes and cucumbers.\n\nOn Fridays the family visits the market in the nearby town. Ali likes to buy fresh bread and sweets for his little brother. In the evening they all sit together, eat dinner, and listen to his grandfather's old stories about the village.";
+  const pages = new Set([5]);
+
+  it("accepts a proper English passage and tidies paragraphs", () => {
+    expect(cleanPassage(good, "EN")).toBe(good);
+    expect(cleanPassage(good.replace("\n\n", "\n\n\n\n  "), "EN")).toBe(good);
+  });
+
+  it("rejects too short, too long, wrong language, and empty passages", () => {
+    expect(cleanPassage("Too short.", "EN")).toBeNull();
+    expect(cleanPassage(good.repeat(6), "EN")).toBeNull();
+    expect(cleanPassage(null, "EN")).toBeNull();
+    expect(cleanPassage("هذه قطعة عربية طويلة ".repeat(30), "EN")).toBeNull();
+    expect(cleanPassage("هذه قطعة عربية جميلة تتحدث عن القرية والنهر والمدرسة ".repeat(8), "AR")).not.toBeNull();
+  });
+
+  it("questions about the passage need no source page, and may be multiple choice", () => {
+    const q = cleanQuestion({ section: 0, prompt: "Where does Ali live?", answer: "He lives in a small village near a river.", sourcePages: [] }, "UNSEEN_PASSAGE", pages, "EN");
+    expect(q).toMatchObject({ prompt: "Where does Ali live?", options: null });
+    const mc = cleanQuestion({ section: 0, prompt: "Ali goes to school with:", options: ["his sister", "his brother", "his father"], answer: "his sister", sourcePages: [] }, "UNSEEN_PASSAGE", pages, "EN");
+    expect(mc!.options).toHaveLength(3);
+    expect(cleanQuestion({ section: 0, prompt: "Ali goes to school with:", options: ["a", "b"], answer: "a", sourcePages: [] }, "UNSEEN_PASSAGE", pages, "EN")).toBeNull(); // خياران لا يكفيان
+    // الأنواع الأخرى ما زالت تشترط صفحة مصدر
+    expect(cleanQuestion({ section: 0, prompt: "Define it.", answer: "It is.", sourcePages: [] }, "DEFINE", pages, "EN")).toBeNull();
+  });
+
+  it("the prompt asks for a new passage, or forbids one when it is already printed", () => {
+    const base = { subject: "English", grade: "Sixth Primary", lang: "EN" as const, difficulty: "MIXED" as const, useLatinSymbols: false, pages: [{ pageNumber: 5, text: "Unit 1 text", isOcr: false, asImage: false }] };
+    const sections = [{ type: "UNSEEN_PASSAGE" as const, count: 5, marksEach: 2 }];
+    const fresh = buildPrompt({ ...base, sections });
+    expect(fresh).toContain("UNSEEN passage");
+    expect(fresh).toContain("The ONLY exception");
+    expect(fresh).not.toContain("ALREADY PRINTED");
+    const more = buildPrompt({ ...base, sections, passage: good });
+    expect(more).toContain("ALREADY PRINTED");
+    expect(more).toContain("Ali lives in a small village");
   });
 });

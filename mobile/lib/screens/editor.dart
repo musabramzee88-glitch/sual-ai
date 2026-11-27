@@ -149,6 +149,9 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
       case 'instruction':
         final t = await promptText(context, 'نص التعليمة', initial: s['instruction'] as String? ?? s['prompt'] as String? ?? '', maxLines: 3);
         if (t != null && t.isNotEmpty) await _do(() => widget.api.sectionPatch(id, {'instruction': t}));
+      case 'passage':
+        final t = await promptText(context, 'القطعة الخارجية', initial: s['passage'] as String? ?? '', maxLines: 12);
+        if (t != null && t.trim().length >= 40) await _do(() => widget.api.sectionPatch(id, {'passage': t.trim()}));
       case 'marks':
         final t = await promptText(context, 'درجة السؤال (تُقسم على فروعه)', initial: '${_n(s['marks'])}', number: true);
         final m = num.tryParse(t ?? '');
@@ -360,6 +363,7 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
               onSelected: (v) => _sectionMenu(i, v),
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'instruction', child: Text('تعديل التعليمة')),
+                if (type == 'UNSEEN_PASSAGE' && s['passage'] != null) const PopupMenuItem(value: 'passage', child: Text('تعديل القطعة')),
                 const PopupMenuItem(value: 'marks', child: Text('درجة السؤال')),
                 if (branches.length > 1) const PopupMenuItem(value: 'answerCount', child: Text('فروع اختيارية')),
                 const PopupMenuItem(value: 'manual', child: Text('إضافة فرع يدوياً')),
@@ -371,6 +375,14 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
               ],
             ),
           ]),
+          if (type == 'UNSEEN_PASSAGE' && s['passage'] != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 6, bottom: 6, right: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: paper, border: Border.all(color: const Color(0xFFE5E0D4)), borderRadius: BorderRadius.circular(10)),
+              child: Text(s['passage'] as String, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 14, height: 1.7)),
+            ),
           if (ac != null) Text('أجب عن (${ar(ac)}) فروع فقط', style: const TextStyle(color: Color(0xFF8A6A1F))),
           if (type != null && verbatimTypes.contains(type))
             Container(
