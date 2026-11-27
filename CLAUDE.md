@@ -191,7 +191,8 @@ npm run typecheck && npm run lint && npm run build
 - تطبيق المدرس الكامل (الدخول والتسجيل، المعالج، المحرر بكل إجراءاته، الورقة PDF/Word/ZIP والطباعة، القوالب والشعارات، الحساب وحذفه) فوق `/api/v1` نفسها بجلسة `sual_session` يحفظها العميل (`mobile/lib/api/client.dart`). الموقع يبقى للدفع ولوحة الإدارة. التفاصيل: `mobile/README.md`.
 - **أي ميزة مدرس جديدة في الموقع تُضاف للتطبيق أيضاً**، وأي تغيير في شكل رد API يُحدَّث معه العميل واختباراته، ويُشغَّل `mobile/test/live_server_test.dart` على خادم حي.
 - القوائم المشتركة (أنواع الأسئلة، الترويسة، الخطوط، الأخطاء، حالات الحساب) تُولَّد: `npx tsx scripts/gen-mobile-catalog.ts` ← `mobile/lib/catalog.g.dart` (اختبار مزامنة `src/lib/mobile-catalog.test.ts`). لا تكتبها يدوياً في Dart.
-- **لا دفع ولا ذكر للاشتراك داخل التطبيق** (عمولة المتاجر): `errors.dart` يحوّل رموز SUBSCRIPTION_*/PAYMENT_* لرسالة محايدة، واختبار widget يتحقق.
+- **زر «الاشتراك»** (يفتح `/subscribe` بمتصفح الجهاز، الدفع نفسه بالموقع) خلف `--dart-define=SHOW_PAY_LINK=true` (`showPayLink` في client.dart) ومطفأ افتراضياً: متجرا آبل وغوغل قد يرفضان تطبيقاً يوجّه لدفع خارجي، فلا يُفعَّل في بناء المتاجر دون قرار صريح من المالك.
+- **لا دفع ولا ذكر للاشتراك داخل التطبيق افتراضياً** (عمولة المتاجر): `errors.dart` يحوّل رموز SUBSCRIPTION_*/PAYMENT_* لرسالة محايدة، واختبار widget يتحقق.
 - `POST /api/v1/account/delete` (`deleteAccount` في `src/server/auth/account.ts`): يمسح البيانات الشخصية والمحتوى ويُبقي سجلات الدفع (Restrict) ويغلق الحساب؛ لا يحذف الإداريين. مطلوب لآبل لأن التطبيق فيه إنشاء حساب.
 - أندرويد: `INTERNET` في `AndroidManifest.xml` الرئيسي، وترجمة `flutter_localizations` (بدونهما لا يتصل التطبيق أو يتعطل). اختبار `small_screen_test.dart` يمنع تجاوز العرض على هاتف 360 بكسل.
 

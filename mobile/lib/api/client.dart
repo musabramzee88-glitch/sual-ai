@@ -4,6 +4,10 @@ import 'package:http/http.dart' as http;
 /// عنوان الخادم: يُمرَّر عند البناء  --dart-define=API_BASE=https://النطاق
 const apiBase = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:3000');
 
+/// زر «اشترك/جدّد» الذي يفتح صفحة الدفع في الموقع. مطفأ افتراضياً لأن متجري آبل وغوغل قد يرفضان
+/// تطبيقاً يوجّه إلى دفع خارجي؛ شغّله عند الحاجة:  --dart-define=SHOW_PAY_LINK=true
+const showPayLink = bool.fromEnvironment('SHOW_PAY_LINK');
+
 class ApiError implements Exception {
   ApiError(this.status, this.code, [this.detail]);
   final int status;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api/client.dart';
 import 'editor.dart';
 import 'errors.dart';
@@ -42,6 +43,9 @@ class ExamsPageState extends State<ExamsPage> {
           if (s.hasError) {
             final e = s.error!;
             if (e is ApiError && e.unauthorized) WidgetsBinding.instance.addPostFrameCallback((_) => widget.onLogout());
+            if (e is ApiError && e.forbidden && showPayLink) {
+              return EmptyState(text: messageOf(e), action: 'الاشتراك', onTap: () => launchUrl(Uri.parse('$apiBase/subscribe'), mode: LaunchMode.externalApplication), icon: Icons.lock_outline);
+            }
             return EmptyState(text: messageOf(e), action: 'إعادة المحاولة', onTap: reload, icon: Icons.cloud_off);
           }
           final list = s.data!;

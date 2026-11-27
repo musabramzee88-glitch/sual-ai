@@ -77,6 +77,9 @@ class _AccountPageState extends State<AccountPage> {
               subtitle: active && current != null
                   ? Text('${(current['plan'] as Map?)?['nameAr'] ?? ''}${current['endsAt'] != null ? ' · ينتهي ${_date(current['endsAt'] as String?)}' : ''}')
                   : null,
+              trailing: !active && access != 'UNVERIFIED' && showPayLink
+                  ? FilledButton(onPressed: () => launchUrl(Uri.parse('$apiBase/subscribe'), mode: LaunchMode.externalApplication), child: const Text('الاشتراك'))
+                  : null,
             )),
             const SizedBox(height: 10),
             Card(child: Column(children: [
