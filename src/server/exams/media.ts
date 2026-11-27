@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { assetPath, assetsDir } from "./assets";
 import { sniff } from "./samples";
+import { TABLE_STYLES } from "@/lib/exam-render";
 
 /**
  * صورة وجدول داخل السؤال. الصورة TemplateAsset من نوع QUESTION_IMAGE (PNG/JPEG بالمحتوى، ≤ 2MB، مسار مولَّد داخل
@@ -19,6 +20,8 @@ const MAX_IMAGES_PER_USER = 300;
 export const tableSchema = z
   .object({
     header: z.boolean(),
+    // شكل العرض (اختياري، الافتراضي GRID): TABLE_STYLES في exam-render
+    style: z.enum(TABLE_STYLES).optional(),
     cells: z.array(z.array(z.string().trim().max(120)).min(1).max(8)).min(1).max(12),
   })
   .refine((t) => t.cells.every((r) => r.length === t.cells[0].length), { message: "ragged" });

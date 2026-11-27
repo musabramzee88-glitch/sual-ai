@@ -18,7 +18,7 @@ final cur = {
 };
 final tpl = {'id': 't1', 'preset': false, 'name': 'قالب مدرستي', 'layout': 'SCHOOL', 'pageSize': 'A4', 'orientation': 'PORTRAIT', 'fontFamily': 'Traditional Arabic', 'fontSizePt': 14, 'lineSpacing': 1.65, 'margins': {'top': 12, 'right': 14, 'bottom': 12, 'left': 14}, 'showPageNumbers': true, 'visible': {}, 'values': {}, 'answerLines': 0, 'footerNote': 'مع تمنياتنا لكم بالنجاح', 'signLine': true, 'accent': null, 'maxPages': 2, 'logoAssetId': null, 'isDefault': true};
 
-MockClient server() => MockClient((r) async {
+Future<http.Response> handle(http.Request r) async {
       final p = r.url.path.replaceFirst('/api/v1', '');
       if (p == '/auth/login') return http.Response(jsonEncode({'data': {'step': 'done'}}), 200, headers: {'set-cookie': 'sual_session=abc; Path=/'});
       if (p == '/exams') return j({'data': [exam]});
@@ -33,7 +33,9 @@ MockClient server() => MockClient((r) async {
       if (p == '/subscription') return j({'data': {'access': 'SUBSCRIPTION_ACTIVE', 'current': {'plan': {'nameAr': 'باقة سنوية'}, 'endsAt': '2027-06-30T00:00:00Z'}}});
       if (p == '/account/security') return j({'data': {'loginSecurity': 'SINGLE', 'emailVerified': true, 'phoneVerified': true}});
       return j({'data': {'ok': true}});
-    });
+}
+
+MockClient server() => MockClient(handle);
 
 void main() {
   setUp(() {
@@ -77,11 +79,70 @@ void main() {
     await t.pumpAndSettle();
   });
 
+  wizardTyping();
+  noChapters();
+
   testWidgets('register and template editor fit', (t) async {
     final api = SualApi(base: 'http://x', client: server());
     await t.pumpWidget(MaterialApp(home: RegisterPage(api: api, onDone: () {})));
     await t.pumpAndSettle();
     await t.pumpWidget(MaterialApp(home: TemplateEditor(api: api, initial: tpl)));
     await t.pumpAndSettle();
+  });
+}
+
+void wizardTyping() {
+  testWidgets('typing the total marks keeps the field focused for all digits', (t) async {
+    final api = SualApi(base: 'http://x', client: server());
+    await t.pumpWidget(SualApp(api: api));
+    await t.enterText(find.byType(TextField).first, 'a@b.co');
+    await t.enterText(find.byType(TextField).last, 'password1');
+    await t.tap(find.text('تسجيل الدخول'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('جديد').last);
+    await t.pumpAndSettle();
+    await t.tap(find.byTooltip('بنفس هيكل امتحان سابق'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('امتحان سابق').last);
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.text('٤ الإعدادات'), 300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    final total = find.widgetWithText(TextField, 'الدرجة الكلية');
+    await t.tap(total);
+    await t.pumpAndSettle();
+    final focus = FocusManager.instance.primaryFocus;
+    for (final text in ['1', '10', '100']) {
+      await t.enterText(total, text);
+      await t.pump();
+      expect(FocusManager.instance.primaryFocus, same(focus), reason: 'focus must survive typing "$text"');
+      expect((t.widget(total) as TextField).controller!.text, text);
+    }
+  });
+}
+
+void noChapters() {
+  testWidgets('a book without usable chapters switches to a page range with an explanation', (t) async {
+    final api = SualApi(base: 'http://x', client: MockClient((r) async {
+      if (r.url.path.endsWith('/exams/options')) return j({'data': [{...cur, 'chapters': [{'id': 'x', 'title': 'فصل بلا صفحات', 'pageStart': null, 'pageEnd': null}]}]});
+      return handle(r);
+    }));
+    await t.pumpWidget(SualApp(api: api));
+    await t.enterText(find.byType(TextField).first, 'a@b.co');
+    await t.enterText(find.byType(TextField).last, 'password1');
+    await t.tap(find.text('تسجيل الدخول'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('جديد').last);
+    await t.pumpAndSettle();
+    await t.tap(find.byType(DropdownButtonFormField<String>).first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('الثالث المتوسط').last);
+    await t.pumpAndSettle();
+    await t.tap(find.byType(DropdownButtonFormField<String>).at(1));
+    await t.pumpAndSettle();
+    await t.tap(find.text('الرياضيات').last);
+    await t.pumpAndSettle();
+    expect(find.textContaining('لم تُحدَّد له فصول بعد'), findsOneWidget);
+    expect(find.text('فصل بلا صفحات'), findsNothing);
+    expect(find.widgetWithText(TextField, 'من صفحة'), findsOneWidget);
   });
 }

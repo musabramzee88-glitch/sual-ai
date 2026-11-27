@@ -156,3 +156,42 @@ describe("surah-range memorisation question", async () => {
     expect(cleanQuestion({ prompt: "سورة (الكوثر) من الآية (٢) إلى الآية (٣)", answer: "إنا أعطيناك الكوثر فصل لربك وأنحر الذبائح وأطعم الفقراء", sourcePages: [3] }, "SURAH_RANGE", pages, "AR")).toBeNull();
   });
 });
+
+describe("matching questions become a two-column table", () => {
+  const pages = new Set([5]);
+  const raw = (extra: object) => ({ section: 0, prompt: "Match the jobs with their places of work.", answer: "1-c, 2-a, 3-b", sourcePages: [5], ...extra });
+  const A = ["Waiter", "IT programmer", "Doctor"], B = ["Farm", "Office", "Hospital"];
+
+  it("builds the table with numbered and lettered cells (English)", () => {
+    const q = cleanQuestion(raw({ columnA: A, columnB: B }), "MATCHING", pages, "EN")!;
+    expect(q.table).toEqual({ header: true, cells: [["Column A", "Column B"], ["1. Waiter", "a. Farm"], ["2. IT programmer", "b. Office"], ["3. Doctor", "c. Hospital"]] });
+    expect(q.prompt).toBe("Match the jobs with their places of work.");
+  });
+
+  it("Arabic uses Arabic-Indic digits and Arabic letters, and an extra distractor fits", () => {
+    const q = cleanQuestion(raw({ prompt: "صِل بين المصطلح وتعريفه.", columnA: ["أ", "ب", "ج"].map((x) => `مصطلح ${x}`), columnB: ["تعريف ١", "تعريف ٢", "تعريف ٣", "زائد"] }), "MATCHING", pages, "AR")!;
+    expect(q.table!.cells[0]).toEqual(["العمود (أ)", "العمود (ب)"]);
+    expect(q.table!.cells[1][0]).toBe("١- مصطلح أ");
+    expect(q.table!.cells[1][1]).toBe("أ- تعريف ١");
+    expect(q.table!.cells[4]).toEqual(["", "د- زائد"]);
+  });
+
+  it("strips numbering the model added anyway and cuts columns written inside the prompt", () => {
+    const q = cleanQuestion(raw({ prompt: "Match the jobs in Column A with places in Column B: Column A: 1. Waiter, 2. Doctor. Column B: a. Farm", columnA: ["1. Waiter", "2) IT programmer", "3- Doctor"], columnB: ["a. Farm", "b) Office", "c- Hospital"] }), "MATCHING", pages, "EN")!;
+    expect(q.table!.cells[1]).toEqual(["1. Waiter", "a. Farm"]);
+    expect(q.prompt).toBe("Match the jobs in Column A with places in Column B.");
+  });
+
+  it("without usable columns the old inline behaviour stays (no table)", () => {
+    const q = cleanQuestion(raw({ prompt: "Match: Column A: 1. x 2. y 3. z Column B: a. p b. q c. r" }), "MATCHING", pages, "EN")!;
+    expect(q.table).toBeNull();
+    expect(q.prompt).toContain("Column A");
+    for (const bad of [{ columnA: ["x", "y"], columnB: ["p", "q"] }, { columnA: A, columnB: ["p", "q"] }, { columnA: A, columnB: ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"] }]) {
+      expect(cleanQuestion(raw(bad), "MATCHING", pages, "EN")!.table).toBeNull();
+    }
+  });
+
+  it("other types never get a table", () => {
+    expect(cleanQuestion(raw({ columnA: A, columnB: B, prompt: "Define it.", answer: "It is.", }), "DEFINE", pages, "EN")!.table).toBeNull();
+  });
+});

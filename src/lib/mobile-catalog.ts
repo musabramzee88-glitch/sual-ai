@@ -37,6 +37,7 @@ const layouts = ['CLASSIC', 'SCHOOL', 'ACADEMIC', 'MINIMAL'];
 const layoutNamesAr = {'CLASSIC': 'كلاسيكي', 'SCHOOL': 'مدرسي', 'ACADEMIC': 'أكاديمي', 'MINIMAL': 'بسيط'};
 const examKinds = ${map(examDicts.ar.kinds)};
 const difficulties = ${map(examDicts.ar.difficulties)};
+const tableStyles = ${map(examDicts.ar.editor.media.tableStyles)};
 /** رسائل الأخطاء (الحساب + الامتحانات + القوالب) كما في الموقع */
 const errorsAr = ${map({ ...(templateDicts.ar.errors as Record<string, string>), ...dictionaries.ar.auth.errors, ...examDicts.ar.errors })};
 /** حالة الحساب (resolveAccess) */

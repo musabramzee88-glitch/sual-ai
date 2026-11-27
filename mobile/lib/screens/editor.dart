@@ -214,6 +214,7 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
     final t = q['table'] as Map<String, dynamic>?;
     var cells = ((t?['cells'] as List?) ?? [['', ''], ['', '']]).map((r) => (r as List).map((c) => '$c').toList()).toList();
     bool header = t?['header'] as bool? ?? true;
+    String style = t?['style'] as String? ?? 'GRID';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(builder: (c, set) {
@@ -222,6 +223,8 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
           title: const Text('جدول السؤال'),
           content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
             CheckboxListTile(contentPadding: EdgeInsets.zero, value: header, onChanged: (v) => set(() => header = v ?? true), title: const Text('الصف الأول عناوين')),
+            const Align(alignment: AlignmentDirectional.centerStart, child: Text('شكل العرض')),
+            Wrap(spacing: 6, children: [for (final e in tableStyles.entries) ChoiceChip(label: Text(e.value), selected: style == e.key, onSelected: (_) => set(() => style = e.key))]),
             for (var r = 0; r < cells.length; r++)
               Row(children: [for (var k = 0; k < cols; k++) Expanded(child: Padding(padding: const EdgeInsets.all(2), child: TextFormField(initialValue: cells[r][k], style: TextStyle(fontWeight: header && r == 0 ? FontWeight.bold : null), decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)), onChanged: (v) => cells[r][k] = v)))]),
             Wrap(spacing: 6, children: [
@@ -240,7 +243,7 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
       }),
     );
     if (ok == false) return;
-    await _do(() => widget.api.setTable(q['id'] as String, ok == null ? null : {'header': header, 'cells': cells}), ok: ok == null ? 'أُزيل الجدول.' : 'حُفظ الجدول.');
+    await _do(() => widget.api.setTable(q['id'] as String, ok == null ? null : {'header': header, 'cells': cells, if (style != 'GRID') 'style': style}), ok: ok == null ? 'أُزيل الجدول.' : 'حُفظ الجدول.');
   }
 
   Future<void> _pickImage(Map<String, dynamic> q) async {
@@ -435,16 +438,20 @@ class _ExamEditorPageState extends State<ExamEditorPage> {
   Widget _tableView(Map<String, dynamic> t) {
     final cells = (t['cells'] as List).map((r) => (r as List).map((c) => '$c').toList()).toList();
     final header = t['header'] as bool? ?? false;
+    final style = t['style'] as String? ?? 'GRID';
+    final grid = style == 'GRID';
+    final last = cells.first.length - 1;
+    String shown(int r, int c) => style == 'BLANKS' && c == last && cells[r][c].trim().isNotEmpty && !(header && r == 0) ? '(      ) ${cells[r][c]}' : cells[r][c];
     return Padding(
       padding: const EdgeInsets.only(top: 6, left: 8),
       child: Table(
-        border: TableBorder.all(color: Colors.black54),
+        border: grid ? TableBorder.all(color: Colors.black54) : null,
         defaultColumnWidth: const IntrinsicColumnWidth(),
         children: [
           for (var r = 0; r < cells.length; r++)
             TableRow(
-              decoration: header && r == 0 ? const BoxDecoration(color: Color(0xFFF0F0F0)) : null,
-              children: [for (final c in cells[r]) Padding(padding: const EdgeInsets.all(6), child: Text(prettyMath(c), style: TextStyle(fontWeight: header && r == 0 ? FontWeight.bold : null)))],
+              decoration: header && r == 0 ? BoxDecoration(color: grid ? const Color(0xFFF0F0F0) : null, border: grid ? null : const Border(bottom: BorderSide(color: Colors.black54))) : null,
+              children: [for (var c = 0; c < cells[r].length; c++) Padding(padding: EdgeInsets.symmetric(horizontal: grid ? 6 : 12, vertical: grid ? 6 : 3), child: Text(prettyMath(shown(r, c)), textAlign: grid ? TextAlign.center : TextAlign.start, style: TextStyle(fontWeight: header && r == 0 ? FontWeight.bold : null)))],
             ),
         ],
       ),

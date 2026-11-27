@@ -6,7 +6,8 @@ import type { ExamDict } from "@/lib/i18n/exams";
 import { MathText } from "./MathText";
 import { VERBATIM_TYPES, type QType } from "@/lib/question-types";
 
-export type EditorTable = { header: boolean; cells: string[][] };
+export type EditorTable = { header: boolean; cells: string[][]; style?: "GRID" | "PLAIN" | "BLANKS" };
+const STYLES = ["GRID", "PLAIN", "BLANKS"] as const;
 export type EditorQuestion = { id: string; prompt: string; options: string[] | null; answer: string; marks: number; sourcePages: number[]; version: number; imageAssetId: string | null; table: EditorTable | null };
 export type EditorSection = { id: string; type: string; instruction: string; marks: number; answerCount: number | null; branches: EditorQuestion[] };
 
@@ -33,6 +34,7 @@ async function upload(url: string, file: File) {
 /** محرر جدول السؤال: عدد الصفوف والأعمدة وخلاياه (الفارغة يملؤها الطالب) */
 function TableEditor({ initial, t, onSave, onCancel, busy }: { initial: EditorTable | null; t: ExamDict; onSave: (t: EditorTable) => void; onCancel: () => void; busy: boolean }) {
   const [header, setHeader] = useState(initial?.header ?? true);
+  const [style, setStyle] = useState<(typeof STYLES)[number]>(initial?.style ?? "GRID");
   const [cells, setCells] = useState<string[][]>(initial?.cells ?? [["", "", ""], ["", "", ""], ["", "", ""]]);
   const rows = cells.length, cols = cells[0].length;
   const resize = (r: number, c: number) => setCells(Array.from({ length: r }, (_, i) => Array.from({ length: c }, (_, j) => cells[i]?.[j] ?? "")));
@@ -44,6 +46,15 @@ function TableEditor({ initial, t, onSave, onCancel, busy }: { initial: EditorTa
         <label className="flex items-center gap-1.5">{t.editor.media.cols}<input type="number" min={1} max={8} className={num} value={cols} onChange={(e) => resize(rows, Math.min(8, Math.max(1, Number(e.target.value) || 1)))} /></label>
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={header} onChange={(e) => setHeader(e.target.checked)} />{t.editor.media.headerRow}</label>
       </div>
+      <fieldset className="flex flex-wrap items-center gap-2">
+        <legend className="sr-only">{t.editor.media.tableStyle}</legend>
+        <span>{t.editor.media.tableStyle}:</span>
+        {STYLES.map((k) => (
+          <label key={k} className={`cursor-pointer rounded-full border px-3 py-1 ${style === k ? "border-brand bg-brand-soft font-semibold text-brand" : "border-line"}`}>
+            <input type="radio" name="tstyle" className="sr-only" checked={style === k} onChange={() => setStyle(k)} />{t.editor.media.tableStyles[k]}
+          </label>
+        ))}
+      </fieldset>
       <div className="overflow-x-auto">
         <table className="border-collapse">
           <tbody>
@@ -56,7 +67,7 @@ function TableEditor({ initial, t, onSave, onCancel, busy }: { initial: EditorTa
         </table>
       </div>
       <div className="flex gap-2">
-        <button className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy} onClick={() => onSave({ header, cells })}>{t.editor.media.saveTable}</button>
+        <button className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white disabled:opacity-50 dark:text-paper" disabled={busy} onClick={() => onSave({ header, cells, ...(style === "GRID" ? {} : { style }) })}>{t.editor.media.saveTable}</button>
         <button className="rounded-lg border border-line px-3 py-1.5" onClick={onCancel}>{t.editor.cancel}</button>
       </div>
     </div>
@@ -121,7 +132,12 @@ function Question({ q, n, type, lang, t, showAnswer, first, last, onMove }: { q:
               )}
               {q.table && (
                 <table className="border-collapse text-sm">
-                  <tbody>{q.table.cells.map((r, i) => <tr key={i}>{r.map((c, j) => (q.table!.header && i === 0 ? <th key={j} className="border border-line bg-surface px-2 py-1">{c}</th> : <td key={j} className="min-w-16 border border-line px-2 py-1">{c || "\u00A0"}</td>))}</tr>)}</tbody>
+                  <tbody>{q.table.cells.map((r, i) => <tr key={i}>{r.map((c, j) => {
+                    const grid = !q.table!.style || q.table!.style === "GRID";
+                    const blank = q.table!.style === "BLANKS" && j === r.length - 1 && c.trim() && !(q.table!.header && i === 0);
+                    const cls = grid ? "border border-line px-2 py-1" : `px-2 py-0.5 text-start ${q.table!.header && i === 0 ? "border-b border-line" : ""}`;
+                    return q.table!.header && i === 0 ? <th key={j} className={`${cls} ${grid ? "bg-surface" : ""}`}>{c}</th> : <td key={j} className={`min-w-16 ${cls}`}>{blank ? `(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0) ${c}` : c || "\u00A0"}</td>;
+                  })}</tr>)}</tbody>
                 </table>
               )}
             </div>

@@ -28,6 +28,8 @@ class _WizardPageState extends State<WizardPage> {
   bool _byPages = false;
   final Set<String> _chapters = {};
   final _from = TextEditingController(), _to = TextEditingController(), _title = TextEditingController();
+  // متحكّمان ثابتان: حقل بمفتاح يتغير مع كل حرف يُعاد بناؤه فيفقد التركيز ويُغلق الكيبورد
+  final _durationCtl = TextEditingController(text: '60'), _totalCtl = TextEditingController();
   final List<_Sec> _secs = [];
   String _kind = 'MONTHLY', _difficulty = 'MIXED', _distribution = 'smart';
   int? _duration = 60, _total;
@@ -50,6 +52,9 @@ class _WizardPageState extends State<WizardPage> {
   }
 
   List<Map<String, dynamic>> get _all => _opts ?? [];
+  /// الفصول التي لها نطاق صفحات (الخادم يرفض غيرها)؛ إن لم يوجد منها شيء يُستعمل نطاق الصفحات تلقائياً مثل الموقع
+  List<Map<String, dynamic>> get _usable => ((_cur?['chapters'] as List?) ?? const []).cast<Map<String, dynamic>>().where((c) => c['pageStart'] != null && c['pageEnd'] != null).toList();
+  bool get _effByPages => _byPages || _usable.isEmpty;
   Map<String, dynamic>? get _cur => _all.where((c) => c['id'] == _curId).firstOrNull;
   List<String> get _allowed {
     final t = ((_cur?['subject'] as Map?)?['questionTypes'] as List?)?.cast<String>() ?? const [];
@@ -91,6 +96,8 @@ class _WizardPageState extends State<WizardPage> {
       _difficulty = st['difficulty'] as String? ?? _difficulty;
       _duration = st['durationMinutes'] as int?;
       _total = st['totalMarks'] as int?;
+      _durationCtl.text = _duration?.toString() ?? '';
+      _totalCtl.text = _total?.toString() ?? '';
     });
     toast(context, 'طُبّق الهيكل. اختر الفصول ثم ولّد.');
   }
@@ -99,7 +106,7 @@ class _WizardPageState extends State<WizardPage> {
 
   String? _problem() {
     if (_cur == null) return 'اختر المنهج.';
-    if (_byPages) {
+    if (_effByPages) {
       final a = int.tryParse(_from.text), b = int.tryParse(_to.text);
       if (a == null || b == null || b < a) return 'حدّد نطاق صفحات صحيح.';
       if (b > (_cur!['pageCount'] as int? ?? 0)) return 'الصفحات خارج نطاق الكتاب.';
@@ -120,7 +127,7 @@ class _WizardPageState extends State<WizardPage> {
     }
     final input = <String, dynamic>{
       'curriculumId': _curId,
-      if (_byPages) ...{'pageFrom': int.parse(_from.text), 'pageTo': int.parse(_to.text)} else 'chapterIds': _chapters.toList(),
+      if (_effByPages) ...{'pageFrom': int.parse(_from.text), 'pageTo': int.parse(_to.text)} else 'chapterIds': _chapters.toList(),
       if (_title.text.trim().isNotEmpty) 'title': _title.text.trim(),
       'kind': _kind,
       'difficulty': _difficulty,
@@ -153,7 +160,7 @@ class _WizardPageState extends State<WizardPage> {
     final grades = <String>{for (final c in _all) (c['grade'] as Map)['code'] as String}.toList();
     final subjects = <String, String>{for (final c in _all.where((c) => (c['grade'] as Map)['code'] == _grade)) (c['subject'] as Map)['code'] as String: (c['subject'] as Map)['nameAr'] as String};
     final books = _all.where((c) => (c['grade'] as Map)['code'] == _grade && (c['subject'] as Map)['code'] == _subject).toList();
-    final chapters = ((_cur?['chapters'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final chapters = _usable;
 
     return Scaffold(
       appBar: AppBar(
@@ -201,12 +208,12 @@ class _WizardPageState extends State<WizardPage> {
           _card('٢ المصدر', [
             SegmentedButton<bool>(
               segments: const [ButtonSegment(value: false, label: Text('فصول')), ButtonSegment(value: true, label: Text('نطاق صفحات'))],
-              selected: {_byPages},
-              onSelectionChanged: (s) => setState(() => _byPages = s.first),
+              selected: {_effByPages},
+              onSelectionChanged: chapters.isEmpty ? null : (s) => setState(() => _byPages = s.first),
             ),
             const SizedBox(height: 10),
-            if (!_byPages && chapters.isEmpty) const Text('هذا الكتاب بلا فصول محددة بعد؛ استعمل نطاق الصفحات.'),
-            if (!_byPages)
+            if (chapters.isEmpty) const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('هذا الكتاب لم تُحدَّد له فصول بعد (تُحدَّد من لوحة الإدارة)، فاكتب نطاق الصفحات التي تريد الأسئلة منها.', style: TextStyle(height: 1.6))),
+            if (!_effByPages)
               for (final ch in chapters)
                 CheckboxListTile(
                   dense: true,
@@ -217,7 +224,7 @@ class _WizardPageState extends State<WizardPage> {
                   title: Text(ch['title'] as String? ?? ''),
                   subtitle: ch['pageStart'] == null ? null : Text('ص ${ar(ch['pageStart'] as int)}–${ar(ch['pageEnd'] as int? ?? 0)}'),
                 ),
-            if (_byPages)
+            if (_effByPages)
               Row(children: [
                 Expanded(child: TextField(controller: _from, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'من صفحة'))),
                 const SizedBox(width: 10),
@@ -250,9 +257,9 @@ class _WizardPageState extends State<WizardPage> {
             ]),
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: TextFormField(initialValue: _duration?.toString() ?? '', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المدة (دقيقة)'), onChanged: (v) => _duration = int.tryParse(v))),
+              Expanded(child: TextField(controller: _durationCtl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المدة (دقيقة)'), onChanged: (v) => _duration = int.tryParse(v))),
               const SizedBox(width: 10),
-              Expanded(child: TextFormField(key: ValueKey('t$_total'), initialValue: _total?.toString() ?? '', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الدرجة الكلية', helperText: 'فارغ = درجة لكل سؤال'), onChanged: (v) => setState(() => _total = int.tryParse(v)))),
+              Expanded(child: TextField(controller: _totalCtl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الدرجة الكلية', helperText: 'فارغ = درجة لكل سؤال'), onChanged: (v) => setState(() => _total = int.tryParse(v)))),
             ]),
             if (_total != null) ...[
               const SizedBox(height: 10),

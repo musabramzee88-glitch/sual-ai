@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TEMPLATE, renderExamHtml, richText, type RenderExam, type RenderSection } from "./exam-render";
+import { DEFAULT_TEMPLATE, renderExamHtml, richText, tableCells, tableStyleOf, type RenderExam, type RenderSection } from "./exam-render";
 
 const exam: RenderExam = {
   lang: "AR",
@@ -263,5 +263,32 @@ describe("fit profiles (shrinking to fit a page limit)", () => {
     const e: RenderExam = { lang: "AR", values: {}, sections: [sec] };
     expect(renderExamHtml(e, DEFAULT_TEMPLATE, "QUESTIONS_ONLY")).toContain('<section class="keep">');
     expect(renderExamHtml(e, { ...DEFAULT_TEMPLATE, keepSections: false }, "QUESTIONS_ONLY")).not.toContain('<section class="keep">');
+  });
+});
+
+describe("table styles", () => {
+  const base = { header: true, cells: [["العمود (أ)", "العمود (ب)"], ["١- القلب", "أ- ضخ الدم"], ["٢- الرئتان", ""]] };
+  const exam = (style?: string): RenderExam => ({ lang: "AR", values: {}, sections: [{ instruction: "صِل:", marks: 5, type: "MATCHING", branches: [{ prompt: "صِل.", options: null, answer: "x", marks: 5, table: { ...base, ...(style ? { style } : {}) } as never }] }] });
+  const html = (style?: string, v: "QUESTIONS_ONLY" | "ANSWER_KEY" = "QUESTIONS_ONLY") => renderExamHtml(exam(style), DEFAULT_TEMPLATE, v);
+
+  it("an unknown or missing style is a bordered grid", () => {
+    expect(tableStyleOf(undefined)).toBe("GRID");
+    expect(tableStyleOf({ style: "SPARKLES" })).toBe("GRID");
+    expect(html()).toContain('<table class="qt">');
+    expect(html("SPARKLES")).toContain('<table class="qt">');
+  });
+
+  it("PLAIN drops the border class, BLANKS also adds brackets to the last column (not the header or empty cells)", () => {
+    expect(html("PLAIN")).toContain('<table class="qt plain">');
+    expect(html("PLAIN")).not.toContain("(\u00A0");
+    const b = html("BLANKS");
+    expect(b).toContain('<table class="qt plain">');
+    expect((b.match(/\(\u00A0{6}\)/g) ?? []).length).toBe(1); // الخلية الفارغة والعنوان بلا قوس
+    expect(tableCells({ ...base, style: "BLANKS" } as never)[1]).toEqual(["١- القلب", "(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)\u00A0أ- ضخ الدم"]);
+    expect(tableCells({ ...base, style: "PLAIN" } as never)).toBe(base.cells);
+  });
+
+  it("the style changes only the questions paper, never the answer key", () => {
+    expect(html("BLANKS", "ANSWER_KEY")).not.toContain("<table class=\"qt");
   });
 });

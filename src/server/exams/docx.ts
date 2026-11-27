@@ -5,7 +5,7 @@ import {
 } from "docx";
 import { mathTokens } from "@/lib/math-format";
 import {
-  LABELS, LETTERS, answerPlain, digits, field, isInlineSection, isOn, keepTogether, pickNotes, splitRuns,
+  LABELS, LETTERS, answerPlain, digits, field, isInlineSection, isOn, keepTogether, pickNotes, splitRuns, tableCells, tableStyleOf,
   type HeaderKey, type RenderExam, type RenderQuestion, type RenderTemplate, type Variant,
 } from "@/lib/exam-render";
 
@@ -166,12 +166,15 @@ export async function renderExamDocx(exam: RenderExam, tpl: RenderTemplate, vari
     }
     if (b.table?.cells.length) {
       const cols = b.table.cells[0].length;
+      const grid = tableStyleOf(b.table) === "GRID";
       const w = Math.floor((contentW - 567) / cols);
       out.push(new Table({
         visuallyRightToLeft: ar, width: { size: w * cols, type: WidthType.DXA }, indent: { size: 567, type: WidthType.DXA },
-        rows: b.table.cells.map((r, i) => new TableRow({
-          height: { value: 440, rule: "atLeast" },
-          children: r.map((c) => cell([para(c, { st: { bold: b.table!.header && i === 0 }, align: AlignmentType.CENTER })], w, { borders: true, fill: b.table!.header && i === 0 ? "EEEEEE" : undefined })),
+        // الشكلان بلا إطار: يُلغى إطار الجدول نفسه أيضاً (الافتراضي خطوط مفردة) وليس خلاياه فقط
+        borders: grid ? undefined : { ...NO_BORDERS, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
+        rows: tableCells(b.table).map((r, i) => new TableRow({
+          height: { value: grid ? 440 : 360, rule: "atLeast" },
+          children: r.map((c) => cell([para(c, { st: { bold: b.table!.header && i === 0 }, align: grid ? AlignmentType.CENTER : AlignmentType.START })], w, { borders: grid, fill: grid && b.table!.header && i === 0 ? "EEEEEE" : undefined })),
         })),
       }));
       out.push(para("", { after: 40 }));

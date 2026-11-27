@@ -87,3 +87,30 @@ describe("Word export: math", () => {
     expect(t).not.toContain("_");
   });
 });
+
+describe("table styles in Word", () => {
+  const table = (style?: "GRID" | "PLAIN" | "BLANKS"): RenderExam => ({
+    lang: "AR", values: {},
+    sections: [{ instruction: "صِل:", marks: 6, type: "MATCHING", branches: [{ prompt: "صِل بين العضو ووظيفته.", options: null, answer: "١-ب", marks: 6, table: { header: true, ...(style ? { style } : {}), cells: [["العمود (أ)", "العمود (ب)"], ["١- القلب", "أ- ضخ الدم"], ["٢- الرئتان", "ب- تبادل الغازات"]] } }] }],
+  });
+  const grab = async (s?: "GRID" | "PLAIN" | "BLANKS") => xml(await renderExamDocx(table(s), DEFAULT_TEMPLATE, "QUESTIONS_ONLY"));
+
+  it("GRID draws cell borders; PLAIN and BLANKS draw none", async () => {
+    // الخلية بلا إطار تكتب حدودها «nil»؛ المرسوم فعلاً هو w:val="single"
+    const lines = (x: string) => (x.match(/<w:(?:top|left|right|bottom|start|end) w:val="single"/g) ?? []).length;
+    const [none, grid, plain, blanks] = [lines(await grab()), lines(await grab("GRID")), lines(await grab("PLAIN")), lines(await grab("BLANKS"))];
+    expect(none).toBe(grid); // بلا شكل = GRID
+    expect(grid).toBeGreaterThan(plain);
+    expect(plain).toBe(blanks);
+    expect(plain).toBeLessThanOrEqual(grid - 4); // اختفت خطوط الجدول (إطاره الخارجي والداخلي)
+  });
+
+  it("BLANKS puts an answer bracket before the last column items only", async () => {
+    const t = text(await grab("BLANKS"));
+    expect(t).toMatch(/\(\s*\)\s*أ- ضخ الدم/);
+    expect(t).toMatch(/\(\s*\)\s*ب- تبادل الغازات/);
+    expect(t).not.toMatch(/\(\s*\)\s*١- القلب/);
+    expect(t).not.toMatch(/\(\s*\)\s*العمود \(ب\)/);
+    expect(text(await grab("PLAIN"))).not.toMatch(/\(\s*\)\s*أ- ضخ الدم/);
+  });
+});

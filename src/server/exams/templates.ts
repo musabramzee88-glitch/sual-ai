@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { modelDisplay, modelOf, type ModelLabel } from "@/lib/exam-models";
-import { DEFAULT_TEMPLATE, FONTS, HEADER_KEYS, type HeaderKey, type Layout, type RenderExam, type RenderTemplate } from "@/lib/exam-render";
+import { DEFAULT_TEMPLATE, FONTS, HEADER_KEYS, tableStyleOf, type HeaderKey, type Layout, type RenderExam, type RenderTemplate, type TableStyle } from "@/lib/exam-render";
 import { getExam } from "./service";
 import { imageDataUris } from "./media";
 import { sniff } from "./samples";
@@ -195,11 +195,11 @@ export async function setExamHeader(userId: string, examId: string, d: z.infer<t
 }
 
 /** جدول مخزَّن → جدول العارض (يتجاهل أي شكل غير سليم) */
-export function asTable(v: unknown): { header: boolean; cells: string[][] } | null {
-  const t = v as { header?: unknown; cells?: unknown } | null;
+export function asTable(v: unknown): { header: boolean; cells: string[][]; style?: TableStyle } | null {
+  const t = v as { header?: unknown; cells?: unknown; style?: unknown } | null;
   if (!t || !Array.isArray(t.cells) || t.cells.length === 0) return null;
   const cells = t.cells.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? "")) : []));
-  return cells.every((r) => r.length > 0) ? { header: t.header === true, cells } : null;
+  return cells.every((r) => r.length > 0) ? { header: t.header === true, cells, ...(tableStyleOf(t) !== "GRID" ? { style: tableStyleOf(t) } : {}) } : null;
 }
 
 type HeaderConfig = { preset?: string | null; values?: Partial<Record<HeaderKey, string>> };

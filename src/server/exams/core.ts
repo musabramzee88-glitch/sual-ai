@@ -104,6 +104,9 @@ export const RESPONSE_SCHEMA = {
           section: { type: "INTEGER" },
           prompt: { type: "STRING" },
           options: { type: "ARRAY", items: { type: "STRING" } },
+          // أسئلة الربط: العمودان قائمتان منفصلتان (يحوّلهما الخادم إلى جدول)
+          columnA: { type: "ARRAY", items: { type: "STRING" } },
+          columnB: { type: "ARRAY", items: { type: "STRING" } },
           answer: { type: "STRING" },
           sourcePages: { type: "ARRAY", items: { type: "INTEGER" } },
           difficulty: { type: "STRING", enum: ["EASY", "MEDIUM", "HARD"] },
@@ -118,8 +121,9 @@ export const RESPONSE_SCHEMA = {
   required: ["questions"],
 };
 
-export type RawQuestion = { section?: number; prompt?: string; options?: string[]; answer?: string; sourcePages?: number[]; difficulty?: string; cognitiveLevel?: string };
-export type CleanQuestion = { prompt: string; options: string[] | null; answer: string; sourcePages: number[]; difficulty: "EASY" | "MEDIUM" | "HARD" | null; cognitiveLevel: (typeof COGNITIVE)[number] | null };
+export type RawQuestion = { section?: number; prompt?: string; options?: string[]; columnA?: string[]; columnB?: string[]; answer?: string; sourcePages?: number[]; difficulty?: string; cognitiveLevel?: string };
+export type QuestionTableData = { header: boolean; cells: string[][]; style?: "GRID" | "PLAIN" | "BLANKS" };
+export type CleanQuestion = { prompt: string; options: string[] | null; table: QuestionTableData | null; answer: string; sourcePages: number[]; difficulty: "EASY" | "MEDIUM" | "HARD" | null; cognitiveLevel: (typeof COGNITIVE)[number] | null };
 
 /**
  * تطبيع للمقارنة: يزيل كل علامات التشكيل والعلامات القرآنية (\p{M} تشمل علامات الوقف والألف الخنجرية)،
@@ -154,6 +158,34 @@ export function verbatimOk(text: string, cited: number[], pages: Map<number, Pag
   });
 }
 
+const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+const LETTERS_AR = ["أ", "ب", "ج", "د", "هـ", "و", "ز", "ح"];
+const LETTERS_EN = ["a", "b", "c", "d", "e", "f", "g", "h"];
+/** يزيل ترقيماً كتبه النموذج رغم النهي («1.» «أ-» «a)») */
+const stripMark = (x: string) => x.replace(/^\s*(?:[0-9٠-٩]{1,2}|[a-hA-Hأ-ه]|هـ)\s*[.\-–—:)\]]\s+/u, "").trim();
+
+/**
+ * أسئلة الربط: العمودان يصيران جدولاً (العمود أ مرقَّم، والعمود ب بحروف) بدل نص واحد متصل.
+ * يعيد null إن لم يرسل النموذج عمودين صالحين، فيبقى السلوك القديم (الأعمدة داخل النص).
+ */
+export function matchingTable(q: { columnA?: unknown; columnB?: unknown }, lang: "AR" | "EN"): QuestionTableData | null {
+  const clean = (v: unknown) => (Array.isArray(v) ? v.map((x) => stripMark(String(x ?? ""))).filter((x) => x.length > 0 && x.length <= 100) : []);
+  const a = [...new Set(clean(q.columnA))], b = [...new Set(clean(q.columnB))];
+  if (a.length < 3 || a.length > 8 || b.length < a.length || b.length > Math.min(8, a.length + 2)) return null;
+  const n = Math.max(a.length, b.length);
+  const num = (i: number) => (lang === "EN" ? `${i + 1}.` : `${String(i + 1).replace(/\d/g, (d) => ARABIC_DIGITS[+d])}-`);
+  const let_ = (i: number) => (lang === "EN" ? `${LETTERS_EN[i]}.` : `${LETTERS_AR[i]}-`);
+  const rows = Array.from({ length: n }, (_, i) => [a[i] ? `${num(i)} ${a[i]}` : "", b[i] ? `${let_(i)} ${b[i]}` : ""]);
+  return { header: true, cells: [lang === "EN" ? ["Column A", "Column B"] : ["العمود (أ)", "العمود (ب)"], ...rows] };
+}
+
+/** التعليمة وحدها: يقطع أي قائمة أعمدة كتبها النموذج داخل النص رغم النهي */
+const instructionOnly = (prompt: string) => {
+  const cut = prompt.search(/\s*(?:Column\s*A|العمود\s*\(?\s*[أA]\s*\)?)\s*[:：]/i);
+  const p = (cut > 8 ? prompt.slice(0, cut) : prompt).trim();
+  return p.replace(/[:：]\s*$/, ".");
+};
+
 export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<number> | Map<number, PageRef>, lang: "AR" | "EN"): CleanQuestion | null {
   const prompt = String(q.prompt ?? "").trim();
   let answer = String(q.answer ?? "").trim();
@@ -187,11 +219,17 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
     const correction = answer.replace(/^[^-–—:]*[-–—:]\s*/, "").trim();
     answer = (lang === "EN" ? (isTrue ? "True" : "False") : isTrue ? "صح" : "خطأ") + (isFalse && correction && correction !== answer ? ` — ${correction}` : "");
   }
+  let table: QuestionTableData | null = null;
+  let text = prompt;
+  if (type === "MATCHING") {
+    table = matchingTable(q, lang);
+    if (table) text = instructionOnly(prompt);
+  }
   // الصيغ الكاملة للصلاة والترضّي، وحذف فعل التعليمة المكرر (بعد التحقق الحرفي)
-  const polished = polishQuestion(type, lang, { prompt, answer, options });
+  const polished = polishQuestion(type, lang, { prompt: text, answer, options });
   const difficulty = q.difficulty === "EASY" || q.difficulty === "MEDIUM" || q.difficulty === "HARD" ? q.difficulty : null;
   const cognitiveLevel = (COGNITIVE as readonly string[]).includes(q.cognitiveLevel ?? "") ? (q.cognitiveLevel as CleanQuestion["cognitiveLevel"]) : null;
-  return { prompt: polished.prompt, options: polished.options, answer: polished.answer, sourcePages, difficulty, cognitiveLevel };
+  return { prompt: polished.prompt, options: polished.options, table, answer: polished.answer, sourcePages, difficulty, cognitiveLevel };
 }
 
 /** يوزّع رد النموذج على الأقسام: تنظيف، إزالة المكرر، والاقتصار على العدد المطلوب */

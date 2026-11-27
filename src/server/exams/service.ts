@@ -167,7 +167,7 @@ export async function createExam(userId: string, input: CreateExamInput) {
 async function createChild(tx: Prisma.TransactionClient, modelId: string, parentId: string, order: number, s: Section, q: CleanQuestion, chapterId: string | null, userId: string) {
   const created = await tx.examQuestion.create({
     data: {
-      examModelId: modelId, parentId, sortOrder: order, type: s.type, prompt: q.prompt, options: q.options ?? Prisma.DbNull, answer: q.answer,
+      examModelId: modelId, parentId, sortOrder: order, type: s.type, prompt: q.prompt, options: q.options ?? Prisma.DbNull, table: q.table ?? Prisma.DbNull, answer: q.answer,
       marks: s.marksEach, difficulty: q.difficulty, cognitiveLevel: q.cognitiveLevel, sourcePages: q.sourcePages, chapterId,
     },
   });
@@ -345,7 +345,7 @@ export async function regenerateQuestion(userId: string, questionId: string) {
     if (!nq) return fail("NO_VALID_QUESTIONS");
     await db.$transaction(async (tx) => {
       await tx.examQuestionRevision.create({ data: { questionId: q.id, version: q.version + 1, reason: "REGENERATE", snapshot: snapshot(q), editedById: userId } });
-      await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: nq.prompt, imageAssetId: null, table: Prisma.DbNull, options: nq.options ?? Prisma.DbNull, answer: nq.answer, sourcePages: nq.sourcePages, difficulty: nq.difficulty, cognitiveLevel: nq.cognitiveLevel } });
+      await tx.examQuestion.update({ where: { id: q.id }, data: { version: q.version + 1, prompt: nq.prompt, imageAssetId: null, table: nq.table ?? Prisma.DbNull, options: nq.options ?? Prisma.DbNull, answer: nq.answer, sourcePages: nq.sourcePages, difficulty: nq.difficulty, cognitiveLevel: nq.cognitiveLevel } });
     });
     return { ok: true as const };
   } catch (e) {

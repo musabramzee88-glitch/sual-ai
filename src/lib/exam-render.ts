@@ -60,7 +60,18 @@ export type RenderTemplate = {
   keepSections?: boolean;
 };
 
-export type RenderTable = { header: boolean; cells: string[][] };
+/** شكل الجدول: GRID بإطار، PLAIN قائمتان بلا إطار، BLANKS بلا إطار مع قوس فارغ قبل خلايا العمود الأخير ليكتب الطالب فيه رقم العمود الأول */
+export const TABLE_STYLES = ["GRID", "PLAIN", "BLANKS"] as const;
+export type TableStyle = (typeof TABLE_STYLES)[number];
+export type RenderTable = { header: boolean; cells: string[][]; style?: TableStyle };
+export const tableStyleOf = (t: { style?: unknown } | null | undefined): TableStyle => ((TABLE_STYLES as readonly string[]).includes(t?.style as string) ? (t!.style as TableStyle) : "GRID");
+/** القوس الفارغ قبل خلايا العمود الأخير (نمط BLANKS)؛ الخلايا الفارغة والعناوين تبقى كما هي */
+export const BLANK_BRACKET = "(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)\u00A0";
+export function tableCells(t: RenderTable): string[][] {
+  if (tableStyleOf(t) !== "BLANKS") return t.cells;
+  const last = t.cells[0].length - 1;
+  return t.cells.map((r, i) => r.map((c, j) => (j === last && c.trim() && !(t.header && i === 0) ? `${BLANK_BRACKET}${c}` : c)));
+}
 /** image: data URI لصورة السؤال؛ table: جدول داخل السؤال (خلايا فارغة يملؤها الطالب) */
 export type RenderQuestion = { prompt: string; options: string[] | null; answer: string; marks: number; image?: string | null; table?: RenderTable | null };
 /** answerCount: عدد الفروع التي يجيب عنها الطالب (null = كلها) */
@@ -166,7 +177,7 @@ function media(b: RenderQuestion, variant: Variant) {
   if (variant === "ANSWER_KEY" || variant === "ANSWER_SHEET") return "";
   const img = b.image && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(b.image) ? `<div class="qimg"><img src="${b.image}" alt=""></div>` : "";
   const t = b.table && b.table.cells.length
-    ? `<table class="qt">${b.table.cells.map((r, i) => `<tr>${r.map((c) => (b.table!.header && i === 0 ? `<th>${richText(c)}</th>` : `<td>${richText(c)}</td>`)).join("")}</tr>`).join("")}</table>` : "";
+    ? `<table class="qt${tableStyleOf(b.table) === "GRID" ? "" : " plain"}">${tableCells(b.table).map((r, i) => `<tr>${r.map((c) => (b.table!.header && i === 0 ? `<th>${richText(c)}</th>` : `<td>${richText(c)}</td>`)).join("")}</tr>`).join("")}</table>` : "";
   return img + t;
 }
 
@@ -325,6 +336,8 @@ li:last-child { margin-bottom: 0; }
 .qt { border-collapse: collapse; margin: 0.55em 0 0.2em; margin-inline-start: 2.4em; max-width: calc(100% - 2.4em); break-inside: avoid; }
 .qt td, .qt th { border: 1px solid #000; padding: 0.2em 0.8em; min-width: 5.5em; height: 1.9em; text-align: center; line-height: 1.5; }
 .qt th { font-weight: 700; background: #eee; }
+.qt.plain td, .qt.plain th { border: 0; text-align: start; background: none; min-width: 0; height: auto; padding: 0.15em 1.6em 0.15em 0; white-space: nowrap; }
+.qt.plain th { border-bottom: 1px solid #000; }
 .opts { display: flex; flex-wrap: wrap; gap: 0.35em 2.6em; margin-top: 0.4em; padding-inline-start: 2.4em; }
 .opts span { break-inside: avoid; }
 .ans { margin-top: 0.35em; padding-inline-start: 2.4em; font-weight: 700; }
