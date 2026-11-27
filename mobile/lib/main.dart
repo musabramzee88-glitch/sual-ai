@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+// بادئة loc: في بعض نسخ Flutter تصدّر مكتبات المواد (material_ui) الأسماء نفسها فيحدث غموض عند الاستيراد المباشر
+import 'package:flutter_localizations/flutter_localizations.dart' as loc;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api/client.dart';
 import 'screens/account.dart';
@@ -41,7 +42,7 @@ class _SualAppState extends State<SualApp> {
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar')],
-      localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+      localizationsDelegates: [loc.GlobalMaterialLocalizations.delegate, loc.GlobalWidgetsLocalizations.delegate, loc.GlobalCupertinoLocalizations.delegate],
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: brand, primary: brand, secondary: amber, surface: Colors.white),
