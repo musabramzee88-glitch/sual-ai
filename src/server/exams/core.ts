@@ -237,6 +237,8 @@ export function cleanQuestion(q: RawQuestion, type: GenType, allowedPages: Set<n
   if (type === "MATCHING") {
     table = matchingTable(q, lang);
     if (table) text = instructionOnly(prompt);
+    // بلا عمودين صالحين وبلا أعمدة داخل النص = سؤال فارغ (تعليمة فقط) فيُسقط
+    else if ((prompt.match(/(?:^|[\s(])[1-6][.\-–)ـ]/g) ?? []).length < 3) return null;
   }
   // الصيغ الكاملة للصلاة والترضّي، وحذف فعل التعليمة المكرر (بعد التحقق الحرفي)
   const polished = polishQuestion(type, lang, { prompt: text, answer, options });

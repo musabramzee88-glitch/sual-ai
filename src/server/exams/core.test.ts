@@ -187,8 +187,13 @@ describe("matching questions become a two-column table", () => {
     expect(q.table).toBeNull();
     expect(q.prompt).toContain("Column A");
     for (const bad of [{ columnA: ["x", "y"], columnB: ["p", "q"] }, { columnA: A, columnB: ["p", "q"] }, { columnA: A, columnB: ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"] }]) {
-      expect(cleanQuestion(raw(bad), "MATCHING", pages, "EN")!.table).toBeNull();
+      expect(cleanQuestion(raw({ ...bad, prompt: "Match: Column A: 1. x 2. y 3. z Column B: a. p b. q c. r" }), "MATCHING", pages, "EN")!.table).toBeNull();
     }
+  });
+
+  it("an instruction with no columns anywhere is dropped (empty question on the paper)", () => {
+    expect(cleanQuestion(raw({ prompt: "Match the words in Column A with the words in Column B to make compound words." }), "MATCHING", pages, "EN")).toBeNull();
+    expect(cleanQuestion(raw({ prompt: "صِل بين المصطلح وتعريفه.", answer: "١-ب" }), "MATCHING", pages, "AR")).toBeNull();
   });
 
   it("other types never get a table", () => {
